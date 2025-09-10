@@ -5,7 +5,6 @@
 
 
 enum Operation {
-    HLT,
     MOV, ADD, SUB, MUL, DIV, MOD, AND, ORE, CMP, TST,
     NEG,
     JLT, JLE, JGT, JGE, JEQ, JNE, JMP, JSR,
@@ -24,8 +23,6 @@ struct Opcode {
 };
 
 constexpr Opcode OPCODE_TABLE[] = {
-    { HLT },
-
     { MOV, ABS, ABS },
     { MOV, ABS, IND },
     { MOV, ABS, IMM },
@@ -111,7 +108,6 @@ constexpr Opcode OPCODE_TABLE[] = {
 };
 
 
-
 int32_t VM::next() {
     if (pc < 0 || pc >= int32_t(code.size())) {
         printf("ERROR: bad pc %d\n", pc);
@@ -128,16 +124,12 @@ int32_t& VM::mem_at(int32_t addr) {
     return mem[addr];
 }
 
-
 void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
     pc = start;
     std::vector<int32_t> stack;
     int32_t res = 0;
-    size_t step_counter = 0;
-    while (step_counter < STEP_LIMIT) {
+    for (size_t steps = 0; steps < STEP_LIMIT; ++steps) {
         auto oc = OPCODE_TABLE[next()];
-        if (oc.o == HLT) break;
-
         int32_t* a = nullptr;
         int32_t  b = 0;
         if (oc.a == ABS) a = &mem_at(next());
@@ -145,7 +137,6 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
         if (oc.b == ABS) b = mem_at(next());
         if (oc.b == IND) b = mem_at(mem_at(next()));
         if (oc.b == IMM) b = next();
-
         switch (oc.o) {
         case MOV: res = *a = b; break;
         case ADD: res = *a += b; break;
@@ -165,21 +156,16 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
         case JNE: if (res != 0) pc = b; break;
         case JMP: pc = b; break;
         case JSR: stack.push_back(pc); pc = b; break;
-        case RET: pc = stack.back(); stack.pop_back(); break;
+        case RET:
+            if (stack.empty()) return;
+            pc = stack.back();
+            stack.pop_back();
+            break;
         case INT: interrupt(b); break;
         default: assert(0);
         }
-
-        ++step_counter;
     }
-
-    // printf("%4zu |", step_counter);
-    // for (size_t i = 0; i < 10; ++i) printf("%6d", mem[i]);
-    // printf("\n");
-
-    if (step_counter >= STEP_LIMIT) {
-        printf("ERROR: step limit reached\n");
-        exit(1);
-    }
+    printf("ERROR: step limit reached\n");
+    exit(1);
 }
 

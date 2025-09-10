@@ -1,7 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import argparse
-import re
 import pathlib
+import re
+import sys
 import struct
 
 
@@ -20,8 +21,8 @@ def load_opcode_table():
         OPCODE_TABLE.append(tuple(m))
         o, a, b = m
     if not OPCODE_TABLE:
-        print("no opcode table")
-        exit(1)
+        sys.exit("no opcode table")
+
 
 load_opcode_table()
 
@@ -53,10 +54,7 @@ line      = None
 
 
 def bad_line():
-    print(f"{nr}: bad line:")
-    print(line)
-    exit(1)
-
+    sys.exit(f"{nr}: bad line:\n{line}")
 
 def expect(ts, t, v):
     match ts:
@@ -73,7 +71,7 @@ PRECEDENCE = {
     "%": 2,
 }
 
-def eval_expression(ts, min_p=0):
+def eval_expression(ts, min_p=1):
     match ts:
         case [("sym", "-"), *rest]:
             a, ts = eval_expression(rest, 99)
@@ -92,7 +90,7 @@ def eval_expression(ts, min_p=0):
 
     while 1:
         match ts:
-            case [("sym", o), *rest] if o in PRECEDENCE and PRECEDENCE[o] >= min_p:
+            case [("sym", o), *rest] if PRECEDENCE.get(o, 0) >= min_p:
                 b, ts = eval_expression(rest, PRECEDENCE[o] + 1)
                 match o:
                     case "+": a += b
@@ -104,7 +102,7 @@ def eval_expression(ts, min_p=0):
     return a, ts
 
 
-DATA_OFFSET = 100
+DATA_BASE = 100
 
 
 def asm(args):
@@ -143,11 +141,10 @@ def asm(args):
                 ts = rest
                 if section == "code":
                     if name in labels:
-                        print(f"{nr}: label '{name}' already used")
-                        exit(1)
+                        sys.exit(f"{nr}: label '{name}' already used")
                     labels[name] = len(bin_cmds)
                 if section == "data":
-                    variables[name] = len(data) + DATA_OFFSET
+                    variables[name] = len(data) + DATA_BASE
 
         if section == "data":
             while ts:
@@ -228,34 +225,35 @@ def asm(args):
         return sum(len(cmd) for cmd in bin_cmds[:labels[label]])
     for pos, label in jumps:
         if label not in labels:
-            print(f"undefined label '{label}'")
-            exit(1)
+            sys.exit(f"undefined label '{label}'")
         bin_cmd = bin_cmds[pos]
         bin_cmd[1] = get_label_addr(label)
 
 
     # print assembled code
-    pos = 0
-    for bin_cmd in bin_cmds:
-        o, a, b = OPCODE_TABLE[bin_cmd[0]]
-        q = " ".join(map(str, bin_cmd))
-        l = f"{pos:6} : {q:<16} {o}"
-        if o.startswith("j"):
-            l += f" {bin_cmd[1]}"
-        else:
-            if a == "abs": l += f" {bin_cmd[1]}"
-            if a == "ind": l += f" [{bin_cmd[1]}]"
-            if a != "nil" and b != "nil": l += ","
-            if b == "abs": l += f" {bin_cmd[-1]}"
-            if b == "ind": l += f" [{bin_cmd[-1]}]"
-            if b == "imm": l += f" #{bin_cmd[-1]}"
-        print(l)
-        pos += len(bin_cmd)
+    if args.print:
+        pos = 0
+        for bin_cmd in bin_cmds:
+            o, a, b = OPCODE_TABLE[bin_cmd[0]]
+            q = " ".join(map(str, bin_cmd))
+            l = f"{pos:6} : {q:<16} {o}"
+            if o.startswith("j"):
+                l += f" {bin_cmd[1]}"
+            else:
+                if a == "abs": l += f" {bin_cmd[1]}"
+                if a == "ind": l += f" [{bin_cmd[1]}]"
+                if a != "nil" and b != "nil": l += ","
+                if b == "abs": l += f" {bin_cmd[-1]}"
+                if b == "ind": l += f" [{bin_cmd[-1]}]"
+                if b == "imm": l += f" #{bin_cmd[-1]}"
+            print(l)
+            pos += len(bin_cmd)
 
     # write binary
     out = args.out or pathlib.Path(args.src).parent / "code"
     code = []
     for cmd in bin_cmds: code += cmd
+    print("ints:", len(code))
     with open(out, "wb") as f:
         f.write(struct.pack(f"i", len(data)))
         f.write(struct.pack(f"{len(data)}i", *data))
@@ -267,5 +265,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("src")
     parser.add_argument("out", nargs="?")
+    parser.add_argument("--print", action="store_true")
     args = parser.parse_args()
     asm(args)

@@ -9,7 +9,7 @@ class VM {
 public:
     enum {
         MEM_SIZE = 1 << 20,
-        STEP_LIMIT = 100000,
+        STEP_LIMIT = 1000000,
     };
 
     void set_code(std::vector<int32_t> c) { code = std::move(c); }

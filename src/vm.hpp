@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <array>
 #include <vector>
+#include <string>
 #include <functional>
 
 
@@ -12,7 +13,7 @@ public:
         STEP_LIMIT = 1000000,
     };
 
-    void set_code(std::vector<int32_t> c) { code = std::move(c); }
+    bool load(std::string const& path);
     void run(int32_t start, std::function<void(int32_t)> interrupt = [](int32_t){});
     int32_t& mem_at(int32_t addr);
 

@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <fstream>
 #include <string>
 #include <random>
 #include <SDL2/SDL.h>
@@ -24,9 +23,6 @@ enum {
     IO_RAND_HI,
     IO_RAND_RESULT,
 
-    // data segment base
-    DATA_BASE = 100,
-
     // interrupts
     INT_SPRITE = 0,
     INT_RAND,
@@ -45,16 +41,10 @@ enum {
 };
 
 
-template <class T>
-bool read(std::istream& f, T& t) {
-    return !!f.read((char*) &t, sizeof(T));
-}
-
-
 SDL_Texture* load_texture(SDL_Renderer* renderer, std::string file) {
     SDL_Surface* surf = IMG_Load(file.c_str());
     if (!surf) {
-        printf("ERROR: IMG_Load: %s\n", SDL_GetError());
+        printf("ERROR: cannot load '%s'\n", file.c_str());
         return nullptr;
     }
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
@@ -100,10 +90,6 @@ void interrupt(int32_t n) {
 }
 
 
-void print_mem() {
-    for (size_t i = 0; i < 10; ++i) printf("%6d", vm.mem_at(i));
-    printf("\n");
-}
 
 int main(int argc, char** argv) {
     if (argc != 2) {
@@ -112,29 +98,8 @@ int main(int argc, char** argv) {
     std::string dir = argv[1];
     dir += "/";
 
-
-    std::ifstream file(dir + "code", std::ios::binary);
-    if (!file.is_open()) {
-        printf("ERROR: no file 'code'\n");
-        return 1;
-    }
-
-    int32_t data_size;
-
-    read(file, data_size);
-    file.read((char*) &vm.mem_at(DATA_BASE), data_size * sizeof(int32_t));
-
-
-    int32_t code_size;
-    read(file, code_size);
-    std::vector<int32_t> code(code_size);
-    file.read((char*) code.data(), code_size * sizeof(int32_t));
-
-    vm.set_code(std::move(code));
-
-    // init
-    vm.run(0, interrupt);
-    // print_mem();
+    if (!vm.load(dir + "code")) return 1;
+    vm.run(0, interrupt); // init
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow(
@@ -176,10 +141,7 @@ int main(int argc, char** argv) {
         vm.mem_at(IO_BTN) = button_bits;
 
         SDL_RenderClear(renderer);
-
-        vm.run(2, interrupt);
-        // print_mem();
-
+        vm.run(2, interrupt); // update
         SDL_RenderPresent(renderer);
     }
 

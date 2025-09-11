@@ -1,7 +1,8 @@
-const SCREEN_W   = 320
-const SCREEN_H   = 180
+func preamble()
+    asm "    jmp init"
+    asm "    jmp update"
+end
 
-# button map
 const BTN_UP    = 1
 const BTN_DOWN  = 2
 const BTN_LEFT  = 4
@@ -9,9 +10,24 @@ const BTN_RIGHT = 8
 const BTN_A     = 16
 const BTN_B     = 32
 
-const BALL_COUNT = 2082 + 100
+var btn @ 0
 
-const Q = 16
+func sprite(x @ 1, y @ 2, w @ 3, h @ 4, s @ 5, t @ 6, f @ 7)
+    asm "    int #0"
+end
+func rand(lo @ 8, hi @ 9)
+    asm "    int #1"
+    asm "    mov _R, 10"
+end
+
+const SCREEN_W = 320
+const SCREEN_H = 180
+
+################################################################################
+
+
+const BALL_COUNT = 1000
+const Q = 256
 
 var i
 var ball_x[BALL_COUNT]
@@ -22,18 +38,15 @@ var ball_vy[BALL_COUNT]
 var x
 var y
 
-var btn @ 0
-
 func init()
 
     i = 0
     while i < BALL_COUNT do
         ball_x[i] = rand(0, SCREEN_W-1) * Q
         ball_y[i] = rand(0, SCREEN_H-1) * Q
-
-        ball_vx[i] = rand(-10, 10)
-        ball_vy[i] = rand(-10, 10)
-        i = i + 1
+        ball_vx[i] = rand(-100, 100)
+        ball_vy[i] = rand(-100, 100)
+        i += 1
     end
 
     x = 100
@@ -41,32 +54,20 @@ func init()
 end
 
 
-func sprite(
-    x @ 1,
-    y @ 2,
-    w @ 3,
-    h @ 4,
-    s @ 5,
-    t @ 6,
-    f @ 6)
-
-end
-
 
 func update_ball(n)
 
-#    ball_x[n] += ball_vx[n]
-#    ball_y[n] += ball_vy[n]
-#
-#    if ball_x[n] < 0 or ball_x[b] >= (SCREEN_W) * Q then
-#        ball_vx[n] *= -1
-#    end
-#    if ball_y[n] < 0 or ball_y[n] >= (SCREEN_H) * Q then
-#        ball_vy[n] *= -1
-#    end
-#
-#    sprite(ball_x[n] / Q, ball_y[n] / Q, 1, 1, 32 + 16, 0, 0)
+    ball_x[n] += ball_vx[n]
+    ball_y[n] += ball_vy[n]
 
+    if ball_x[n] < 0 or ball_x[n] >= (SCREEN_W) * Q then
+        ball_vx[n] *= -1
+    end
+    if ball_y[n] < 0 or ball_y[n] >= (SCREEN_H) * Q then
+        ball_vy[n] *= -1
+    end
+
+    sprite(ball_x[n] / Q, ball_y[n] / Q, 1, 1, 32 + 16, 0, 0)
 
 end
 
@@ -75,19 +76,8 @@ func update()
 
     i = 0
     while i < BALL_COUNT do
-        ball_x[i] += ball_vx[i]
-        ball_y[i] += ball_vy[i]
-
-        if ball_x[i] < 0 or ball_x[i] >= (SCREEN_W) * Q then
-            ball_vx[i] *= -1
-        end
-        if ball_y[i] < 0 or ball_y[i] >= (SCREEN_H) * Q then
-            ball_vy[i] *= -1
-        end
-
-        sprite(ball_x[i] / Q, ball_y[i] / Q, 1, 1, 32 + 16, 0, 0)
-
-        i = i + 1
+        update_ball(i)
+        i += 1
     end
 
     if btn & BTN_LEFT  then x -= 2 end

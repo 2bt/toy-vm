@@ -1,49 +1,31 @@
 #!/usr/bin/env python3
-import sys
-import re
-import pathlib
+import sys, re
+import ast
+from pathlib import Path
 import argparse
 from collections import namedtuple
 
-# io memory locations
-IO_BTN          = 0
-IO_SPRITE_X     = 1
-IO_SPRITE_Y     = 2
-IO_SPRITE_W     = 3
-IO_SPRITE_H     = 4
-IO_SPRITE_S     = 5
-IO_SPRITE_T     = 6
-IO_SPRITE_FLAGS = 7
-IO_RAND_LO      = 8
-IO_RAND_HI      = 9
-IO_RAND_RESULT  = 10
 
-# interrupts
-INT_SPRITE = 0
-INT_RAND   = 1
+Token   = namedtuple("Token",  "k v file line")
 
-DATA_BASE = 100
+Imm     = namedtuple("Imm",    "value")
+VarRef  = namedtuple("VarRef", "name")
+Index   = namedtuple("Index",  "name idx")
+Neg     = namedtuple("Neg",    "expr")
+BinOp   = namedtuple("BinOp",  "op a b")
+Call    = namedtuple("Call",   "name args")
 
-# -------- tokens & AST nodes --------
-Token   = namedtuple("Token",   "k v line")
-Imm     = namedtuple("Imm",     "value")
-VarRef  = namedtuple("VarRef",  "name")
-Index   = namedtuple("Index",   "name idx")
-Neg     = namedtuple("Neg",     "expr")
-BinOp   = namedtuple("BinOp",   "op a b")
-Call    = namedtuple("Call",    "name args")
+Var     = namedtuple("Var",    "name addr")
+VarArr  = namedtuple("VarArr", "name size addr")
+Func    = namedtuple("Func",   "name args body")
 
-Var     = namedtuple("Var",     "name addr")
-VarArr  = namedtuple("VarArr",  "name size addr")
-Func    = namedtuple("Func",    "name args body")
+Assign  = namedtuple("Assign", "lhs op rhs")
+While   = namedtuple("While",  "cond body")
+If      = namedtuple("If",     "cond then else_")
+Ret     = namedtuple("Ret",    "expr")
+Asm     = namedtuple("Asm",    "asm")
 
-Assign  = namedtuple("Assign",  "lhs op rhs")
-While   = namedtuple("While",   "cond body")
-If      = namedtuple("If",      "cond then else_")
-Ret     = namedtuple("Ret",     "expr")
-
-KEYWORDS = set("const var func end while do if then else elif and or return".split())
-
+KEYWORDS = set("const var func end while do if then else elif and or return asm".split())
 
 token_regex = re.compile(r"""
     [ \t]*(?P<nl>      \n                          )|
@@ -51,11 +33,12 @@ token_regex = re.compile(r"""
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z_][A-Za-z0-9_]*      )|
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|[+\-*/%()<>\[\]=,:&|@])|
+    [ \t]*(?P<string>  "(?:[^"]|\\.)[^"]*"         )|
     [ \t]*(?P<other>   [^ \t]+                     )
-
 """, re.VERBOSE)
 
-def lex(src):
+def tokenize(path):
+    src = path.read_text(encoding="utf-8")
     out = []
     i, line, = 0, 1
     while m := token_regex.match(src, i):
@@ -63,12 +46,11 @@ def lex(src):
         k = m.lastgroup
         v = m.group(k)
         if k == "comment": continue
-        if k == "nl":
-            line += 1
-            continue
+        if k == "nl": line += 1; continue
+        if k == "string": line += v.count("\n")
         if k == "id" and v in KEYWORDS: k = v
-        out.append(Token(k, v, line))
-    out.append(Token("eof", "", line))
+        out.append(Token(k, v, path, line))
+    out.append(Token("eof", "", path, line))
     return out
 
 
@@ -89,7 +71,6 @@ PRECEDENCE = {
     "/": 7,
     "%": 7,
 }
-
 ARITH_OPS = {
     "|": "ore",
     "&": "and",
@@ -100,16 +81,35 @@ ARITH_OPS = {
     "%": "mod",
 }
 ASSIGN_OPS = { "=": "mov" } | { f"{k}=": v for k, v in ARITH_OPS.items() }
-
+CMP_TO_JMP = {
+    "<":  ("jlt", "jge"),
+    "<=": ("jle", "jgt"),
+    ">":  ("jgt", "jle"),
+    ">=": ("jge", "jlt"),
+    "==": ("jeq", "jne"),
+    "!=": ("jne", "jeq"),
+}
+JMP_SWAP = {
+    "jlt": "jgt",
+    "jle": "jge",
+    "jgt": "jlt",
+    "jge": "jle",
+    "jeq": "jeq",
+    "jne": "jne",
+}
 
 
 class Parser:
-    def __init__(self, toks):
-        self.toks   = toks
-        self.i      = 0
-        self.consts = {}
-        self.decls  = {}
-        self.funcs  = {}
+    def __init__(self):
+        self.included = set()
+        self.inc_stack = []
+        self.consts    = {}
+        self.decls     = {}
+        self.funcs     = {}
+
+    def error(self, msg):
+        t = self.peek()
+        sys.exit(f"{t.file}:{t.line}: parse error: {msg}")
 
     def peek(self, k=None, v=None):
         tok = self.toks[self.i]
@@ -117,24 +117,20 @@ class Parser:
         if v and tok.v != v: return None
         return tok
 
-    def error(self, line, msg):
-        if not line:
-            line = self.peek().line
-        sys.exit(f"{line}: parse error: {msg}")
 
     def eat(self, k=None, v=None):
         tok = self.peek(k, v)
         if not tok:
             here = self.toks[self.i]
             need = f"{k or ''} {v or ''}".strip()
-            self.error(here.line, f"expected {need}")
+            self.error(f"expected {need}")
         self.i += 1
         return tok
 
     def const_expr(self):
         n = self.expr()
         if not isinstance(n, Imm):
-            self.error(None, "const expression expected")
+            self.error("const expression expected")
         return n.value
 
     def var_address(self):
@@ -146,11 +142,16 @@ class Parser:
 
     def add_decl(self, v):
         if v.name in self.decls:
-            self.error(None, f"variable '{v.name}' already exists")
+            self.error(f"variable '{v.name}' already exists")
         self.decls[v.name] = v
 
 
-    def program(self):
+    def program(self, path):
+
+        self.toks = tokenize(path)
+        self.i = 0
+
+
         while self.peek("const") or self.peek("var") or self.peek("func"):
             tok = self.eat()
             name = self.eat("id").v
@@ -169,10 +170,11 @@ class Parser:
 
             else:
                 # function definition
+                self.local_var_prefix = f"_{name}_"
                 self.eat("sym", "(")
                 args = []
                 def add_arg():
-                    arg = name + "_" + self.eat("id").v
+                    arg = self.local_var_prefix + self.eat("id").v
                     self.add_decl(Var(arg, self.var_address()))
                     args.append(arg)
 
@@ -228,6 +230,9 @@ class Parser:
             self.eat()
             expr = self.expr()
             return Ret(expr)
+        if self.peek("asm"):
+            self.eat()
+            return Asm(self.eat("string").v)
 
         # assignment or call
         lhs = self.primary()
@@ -239,7 +244,7 @@ class Parser:
         if isinstance(lhs, Call):
             return lhs
 
-        self.error(None, "expected assignment or call")
+        self.error("expected assignment or call")
 
 
     def expr(self, minp=1):
@@ -294,18 +299,20 @@ class Parser:
                     args.append(self.expr())
             self.eat("sym", ")")
 
-            # TODO: check
-            # f = self.funcs.get(name)
-            # if not f:
-            #     self.error(None, "unknown function")
-            # if len(args) != len(f.args):
-            #     self.error(None, "wrong number of arguments")
+            f = self.funcs.get(name)
+            if not f:
+                self.error("unknown function")
+            if len(args) != len(f.args):
+                self.error("wrong number of arguments")
 
 
             return Call(name, args)
 
         if name not in self.decls:
-            self.error(None, "unknown variable")
+            old = name
+            name = self.local_var_prefix + name
+            if name not in self.decls:
+                self.error(f"unknown variable '{old}'")
 
         # indexing
         if self.peek("sym", "["):
@@ -316,22 +323,8 @@ class Parser:
 
         return VarRef(name)
 
-CMP_TO_JMP = {
-    "<":  ("jlt", "jge"),
-    "<=": ("jle", "jgt"),
-    ">":  ("jgt", "jle"),
-    ">=": ("jge", "jlt"),
-    "==": ("jeq", "jne"),
-    "!=": ("jne", "jeq"),
-}
-JMP_SWAP = {
-    "jlt": "jgt",
-    "jle": "jge",
-    "jgt": "jlt",
-    "jge": "jle",
-    "jeq": "jeq",
-    "jne": "jne",
-}
+
+
 
 
 class Codegen:
@@ -349,7 +342,7 @@ class Codegen:
 
     def label(self, base):
         self.label_i += 1
-        return f"{base}_{self.label_i}"
+        return f"_{base}_{self.label_i}"
 
 
     def emit_label(self, l):
@@ -474,6 +467,14 @@ class Codegen:
         sys.exit("unsupported expression node")
 
 
+    def call(self, node):
+        name, args = node.name, node.args
+        f = self.funcs[name]
+        for a, b in zip(args, f.args):
+            t = self.value(a)
+            self.emit(f"    mov {b}, {t}")
+        self.emit(f"    jsr {f.name}")
+        return "_R"
 
     def stmt(self, node):
         self.tmp_i = 0 # reuse temporary variables
@@ -518,44 +519,12 @@ class Codegen:
 
         elif isinstance(node, Call):
             self.call(node)
+
+        elif isinstance(node, Asm):
+            self.lines += ast.literal_eval(node.asm.replace("\n","\\n")).rstrip().split("\n")
+
         else:
             sys.exit("unsupported statement")
-
-    def call(self, node):
-        # TODO: don't store result if not needed
-        name, args = node.name, node.args
-        if name == "_sprite":
-            x = self.value(args[0])
-            y = self.value(args[1])
-            w = self.value(args[2])
-            h = self.value(args[3])
-            s = self.value(args[4])
-            t = self.value(args[5])
-            flags = self.value(args[6])
-            self.emit(f"    mov {IO_SPRITE_X}, {x}")
-            self.emit(f"    mov {IO_SPRITE_Y}, {y}")
-            self.emit(f"    mov {IO_SPRITE_W}, {w}")
-            self.emit(f"    mov {IO_SPRITE_H}, {h}")
-            self.emit(f"    mov {IO_SPRITE_S}, {s}")
-            self.emit(f"    mov {IO_SPRITE_T}, {t}")
-            self.emit(f"    mov {IO_SPRITE_FLAGS}, {flags}")
-            self.emit(f"    int #{INT_SPRITE}")
-            return "#0"
-        elif name == "rand":
-            lo = self.value(args[0])
-            hi = self.value(args[1])
-            self.emit(f"    mov {IO_RAND_LO}, {lo}")
-            self.emit(f"    mov {IO_RAND_HI}, {hi}")
-            self.emit(f"    int #{INT_RAND}")
-            self.emit(f"    cmp {IO_RAND_RESULT}, #0")
-            return f"{IO_RAND_RESULT}"
-
-        else:
-            f = self.funcs[name]
-            for a, b in zip(args, f.args):
-                t = self.value(a)
-                self.emit(f"    mov {b}, {t}")
-            self.emit(f"    jsr {f.name}")
 
 
     def compile(self, decls, funcs):
@@ -566,13 +535,8 @@ class Codegen:
         self.funcs     = funcs
         self.tmp_vars  = {} # use dict to keep original order
 
-
-
         # functions
         for f in funcs.values():
-            # for a in f.args:
-
-
             self.emit("")
             self.emit(f"    ; function {f.name}")
             self.emit(f"{f.name}:")
@@ -580,13 +544,9 @@ class Codegen:
                 self.stmt(st)
             self.emit("    ret")
 
-        lines = self.lines
-        self.lines = [
-            "    jmp init",     # cpp: vm.run(0)
-            "    jmp update",   # cpp: vm.run(2)
-        ]
+        lines, self.lines = self.lines, []
 
-        addr = DATA_BASE
+        addr = 30 # TODO
         for name in ["_R"] + list(self.tmp_vars):
             self.emit(f"{name} = {addr}")
             addr += 1
@@ -604,16 +564,14 @@ class Codegen:
 
 
 def main(args):
-    src = open(args.src, "r", encoding="utf-8").read()
-    toks = lex(src)
-    decls, funcs = Parser(toks).program()
+    decls, funcs = Parser().program(Path(args.src))
 
     asm = Codegen().compile(decls, funcs)
-    print("lines:", asm.count("\n"))
-
-    out = args.out or pathlib.Path(args.src).with_suffix(".asm")
+    out = args.out or Path(args.src).with_suffix(".asm")
     with open(out, "w") as f:
         f.write(asm)
+
+    print("lines:", asm.count("\n"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

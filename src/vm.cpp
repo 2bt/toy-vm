@@ -1,7 +1,9 @@
 #include "vm.hpp"
+#include <cstdint>
 #include <cstdlib>
 #include <cstdio>
 #include <cassert>
+#include <fstream>
 
 
 enum Operation {
@@ -107,6 +109,32 @@ constexpr Opcode OPCODE_TABLE[] = {
     { INT, NIL, IMM },
 };
 
+template <class T>
+bool read(std::istream& f, T& t) {
+    return !! f.read((char*) &t, sizeof(T));
+}
+
+bool VM::load(std::string const& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        printf("ERROR: cannot open file '%s'\n", path.c_str());
+        return false;
+    }
+
+    int32_t base;
+    int32_t size;
+
+    read(file, base);
+    read(file, size);
+    file.read((char*) &mem[base], size * sizeof(int32_t));
+
+    read(file, size);
+    code.resize(size);
+    file.read((char*) code.data(), size * sizeof(int32_t));
+
+    return true;
+}
+
 
 int32_t VM::next() {
     if (pc < 0 || pc >= int32_t(code.size())) {
@@ -127,11 +155,11 @@ int32_t& VM::mem_at(int32_t addr) {
 void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
     pc = start;
     std::vector<int32_t> stack;
-    int32_t res = 0;
+    int32_t* a   = nullptr;
+    int32_t  b   = 0;
+    int32_t  res = 0;
     for (size_t steps = 0; steps < STEP_LIMIT; ++steps) {
         auto oc = OPCODE_TABLE[next()];
-        int32_t* a = nullptr;
-        int32_t  b = 0;
         if (oc.a == ABS) a = &mem_at(next());
         if (oc.a == IND) a = &mem_at(mem_at(next()));
         if (oc.b == ABS) b = mem_at(next());

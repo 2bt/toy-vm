@@ -29,7 +29,7 @@ load_opcode_table()
 
 token_regex = re.compile(r"""
     \s*(?P<comment> ;.*                    )|
-    \s*(?P<name>    [A-Za-z_][A-Za-z0-9_]* )|
+    \s*(?P<name>    [A-Za-z_][A-Za-z0-9_@]*)|
     \s*(?P<number>  [0-9]+|\$[A-Fa-f0-9]*  )|
     \s*(?P<sym>     [\[\]():,\.#=+\-*/%]   )|
     \s*(?P<other>   [^\s]+                 )
@@ -102,15 +102,13 @@ def eval_expression(ts, min_p=1):
     return a, ts
 
 
-DATA_BASE = 100
-
-
 def asm(args):
-    labels   = {}
-    jumps    = []
-    data     = []
-    bin_cmds = []
-    section  = "code"
+    labels    = {}
+    jumps     = []
+    bin_cmds  = []
+    section   = "code"
+    data_base = 0
+    data      = []
 
     for l in open(args.src):
         global line
@@ -128,6 +126,7 @@ def asm(args):
             # code section
             case [("sym", "."), ("name", "data")]:
                 section = "data"
+                # data_base = base
                 continue
 
             # variable
@@ -144,7 +143,7 @@ def asm(args):
                         sys.exit(f"{nr}: label '{name}' already used")
                     labels[name] = len(bin_cmds)
                 if section == "data":
-                    variables[name] = len(data) + DATA_BASE
+                    variables[name] = len(data) + data_base
 
         if section == "data":
             while ts:
@@ -253,12 +252,15 @@ def asm(args):
     out = args.out or pathlib.Path(args.src).parent / "code"
     code = []
     for cmd in bin_cmds: code += cmd
-    print("ints:", len(code))
     with open(out, "wb") as f:
+        f.write(struct.pack(f"i", data_base))
         f.write(struct.pack(f"i", len(data)))
         f.write(struct.pack(f"{len(data)}i", *data))
         f.write(struct.pack(f"i", len(code)))
         f.write(struct.pack(f"{len(code)}i", *code))
+
+    print("ints:", len(code))
+    print(code)
 
 
 if __name__ == "__main__":

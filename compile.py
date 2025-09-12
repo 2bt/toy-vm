@@ -4,28 +4,38 @@ import ast
 from pathlib import Path
 import argparse
 from collections import namedtuple
+from types import SimpleNamespace
+
+Token    = namedtuple("Token",    "k v file line")
+
+Imm      = namedtuple("Imm",      "value")
+VarRef   = namedtuple("VarRef",   "name")
+Index    = namedtuple("Index",    "name idx")
+Neg      = namedtuple("Neg",      "expr")
+BinOp    = namedtuple("BinOp",    "op a b")
+Call     = namedtuple("Call",     "name args")
+
+Var      = namedtuple("Var",      "name addr")
+VarArr   = namedtuple("VarArr",   "name size addr")
+Func     = namedtuple("Func",     "name args body")
+
+Assign   = namedtuple("Assign",   "lhs op rhs")
+While    = namedtuple("While",    "cond body")
+Break    = namedtuple("Break",    "")
+Continue = namedtuple("Continue", "")
+If       = namedtuple("If",       "cond then else_")
+Ret      = namedtuple("Ret",      "expr")
+Asm      = namedtuple("Asm",      "asm")
 
 
-Token   = namedtuple("Token",  "k v file line")
+KEYWORDS = {
+    "include",
+    "var", "const",
+    "if", "then", "elif", "else", "while", "do", "end", "break", "continue",
+    "or", "and",
+    "func", "return", "asm",
+}
 
-Imm     = namedtuple("Imm",    "value")
-VarRef  = namedtuple("VarRef", "name")
-Index   = namedtuple("Index",  "name idx")
-Neg     = namedtuple("Neg",    "expr")
-BinOp   = namedtuple("BinOp",  "op a b")
-Call    = namedtuple("Call",   "name args")
-
-Var     = namedtuple("Var",    "name addr")
-VarArr  = namedtuple("VarArr", "name size addr")
-Func    = namedtuple("Func",   "name args body")
-
-Assign  = namedtuple("Assign", "lhs op rhs")
-While   = namedtuple("While",  "cond body")
-If      = namedtuple("If",     "cond then else_")
-Ret     = namedtuple("Ret",    "expr")
-Asm     = namedtuple("Asm",    "asm")
-
-KEYWORDS = set("const var func end while do if then else elif and or return asm".split())
 
 token_regex = re.compile(r"""
     [ \t]*(?P<nl>      \n                          )|
@@ -33,7 +43,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z_][A-Za-z0-9_]*      )|
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|[+\-*/%()<>\[\]=,:&|@])|
-    [ \t]*(?P<string>  "(?:[^"]|\\.)[^"]*"         )|
+    [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
 
@@ -101,18 +111,21 @@ JMP_SWAP = {
 
 class Parser:
     def __init__(self):
+        self.consts   = {}
+        self.decls    = {}
+        self.funcs    = {}
+        # for includes
         self.included = set()
-        self.inc_stack = []
-        self.consts    = {}
-        self.decls     = {}
-        self.funcs     = {}
+        self.stack    = []
 
-    def error(self, msg):
-        t = self.peek()
-        sys.exit(f"{t.file}:{t.line}: parse error: {msg}")
+
+    def error(self, msg, t=None):
+        t = t or self.peek()
+        line = t.file.read_text().split("\n")[t.line - 1]
+        sys.exit(f"parse error: {msg}\n{t.file}:{t.line}:{line}")
 
     def peek(self, k=None, v=None):
-        tok = self.toks[self.i]
+        tok = self.head.toks[self.head.i]
         if k and tok.k != k: return None
         if v and tok.v != v: return None
         return tok
@@ -121,10 +134,9 @@ class Parser:
     def eat(self, k=None, v=None):
         tok = self.peek(k, v)
         if not tok:
-            here = self.toks[self.i]
             need = f"{k or ''} {v or ''}".strip()
             self.error(f"expected {need}")
-        self.i += 1
+        self.head.i += 1
         return tok
 
     def const_expr(self):
@@ -147,19 +159,25 @@ class Parser:
 
 
     def program(self, path):
+        self.included.add(path)
+        self.head = SimpleNamespace(toks = tokenize(path), i = 0)
 
-        self.toks = tokenize(path)
-        self.i = 0
-
-
-        while self.peek("const") or self.peek("var") or self.peek("func"):
+        while any(self.peek(k) for k in ["include", "const", "var", "func"]):
             tok = self.eat()
-            name = self.eat("id").v
-            if tok.k == "const":
+            if tok.k == "include":
+                incl = path.parent / ast.literal_eval(self.eat("string").v)
+                if incl in self.included: continue
+                self.stack.append(self.head)
+                self.program(incl)
+                self.head = self.stack.pop()
+
+            elif tok.k == "const":
+                name = self.eat("id").v
                 self.eat("sym", "=")
                 self.consts[name] = self.const_expr()
 
             elif tok.k == "var":
+                name = self.eat("id").v
                 if self.peek("sym", "["):
                     self.eat()
                     n = self.const_expr()
@@ -170,6 +188,8 @@ class Parser:
 
             else:
                 # function definition
+                name = self.eat("id").v
+                if name in self.funcs: self.error("function already exists")
                 self.local_var_prefix = f"_{name}_"
                 self.eat("sym", "(")
                 args = []
@@ -177,7 +197,6 @@ class Parser:
                     arg = self.local_var_prefix + self.eat("id").v
                     self.add_decl(Var(arg, self.var_address()))
                     args.append(arg)
-
                 if not self.peek("sym", ")"):
                     add_arg()
                     while self.peek("sym", ","):
@@ -186,13 +205,11 @@ class Parser:
                 self.eat("sym", ")")
                 body = self.block()
                 self.eat("end")
-
-                if name in self.funcs:
-                    sys.exit(f"{tok.line}: function already exists")
                 self.funcs[name] = Func(name, args, body)
 
         self.eat("eof")
         return self.decls, self.funcs
+
 
     def block(self):
         stmts = []
@@ -234,17 +251,24 @@ class Parser:
             self.eat()
             return Asm(self.eat("string").v)
 
-        # assignment or call
+        if self.peek("break"):
+            self.eat()
+            return Break()
+        if self.peek("continue"):
+            self.eat()
+            return Break()
+
         lhs = self.primary()
-        if self.peek("sym") and self.peek().v in ASSIGN_OPS:
+        if isinstance(lhs, Call):
+            return lhs
+
+        op = self.peek("sym")
+        if (isinstance(lhs, VarRef) or isinstance(lhs, Index)) and op.v in ASSIGN_OPS:
             op = self.eat().v
             rhs = self.expr()
             return Assign(lhs, op, rhs)
 
-        if isinstance(lhs, Call):
-            return lhs
-
-        self.error("expected assignment or call")
+        self.error("invalid statement")
 
 
     def expr(self, minp=1):
@@ -356,7 +380,6 @@ class Codegen:
     def addr_of_lvalue(self, node):
         if isinstance(node, VarRef): return node.name
         if isinstance(node, Index):
-            # base = self.vars[node.name]
             v = self.value(node.idx)
             t = self.newtmp(v)
             if t != v: self.emit(f"    mov {t}, {v}")
@@ -414,11 +437,8 @@ class Codegen:
 
 
     def value(self, node):
-        """Return a location holding the value of node."""
-        if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, VarRef): return node.name
         if isinstance(node, Index):
-            # base = self.decls[node.name]
             v = self.value(node.idx)
             t = self.newtmp(v)
             if t != v: self.emit(f"    mov {t}, {v}")
@@ -431,6 +451,7 @@ class Codegen:
             self.emit(f"    mul {t}, #-1")
             return t
 
+        if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, BinOp):
             if op := ARITH_OPS.get(node.op):
                 a = self.value(node.a)
@@ -438,7 +459,7 @@ class Codegen:
                 t = self.newtmp(a, b)
                 if t == a:
                     self.emit(f"    {op} {t}, {b}")
-                elif t == b and node.op not in {"/", "%"}:
+                elif t == b and node.op not in {"-", "/", "%"}:
                     self.emit(f"    {op} {t}, {a}")
                 else:
                     self.emit(f"    mov {t}, {a}")
@@ -492,9 +513,19 @@ class Codegen:
             self.emit_label(L)
             self.branch(node.cond, T, E)
             self.emit_label(T)
+            self.loop_stack.append((L, E))
             for st in node.body: self.stmt(st)
+            self.loop_stack.pop()
             self.emit(f"    jmp {L}")
             self.emit_label(E)
+
+        elif isinstance(node, Continue):
+            l = self.loop_stack[-1][0]
+            self.emit(f"    jmp {l}")
+
+        elif isinstance(node, Break):
+            l = self.loop_stack[-1][1]
+            self.emit(f"    jmp {l}")
 
         elif isinstance(node, If):
             T = self.label("if_true")
@@ -528,12 +559,13 @@ class Codegen:
 
 
     def compile(self, decls, funcs):
-        self.lines     = []
-        self.tmp_i     = 0
-        self.label_i   = 0
-        self.decls     = decls
-        self.funcs     = funcs
-        self.tmp_vars  = {} # use dict to keep original order
+        self.lines      = []
+        self.tmp_i      = 0
+        self.label_i    = 0
+        self.decls      = decls
+        self.funcs      = funcs
+        self.tmp_vars   = {} # use dict to keep original order
+        self.loop_stack = []
 
         # functions
         for f in funcs.values():

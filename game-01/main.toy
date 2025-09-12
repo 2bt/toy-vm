@@ -1,30 +1,4 @@
-func preamble()
-    asm "    jmp init"
-    asm "    jmp update"
-end
-
-const BTN_UP    = 1
-const BTN_DOWN  = 2
-const BTN_LEFT  = 4
-const BTN_RIGHT = 8
-const BTN_A     = 16
-const BTN_B     = 32
-
-var btn @ 0
-
-func sprite(x @ 1, y @ 2, w @ 3, h @ 4, s @ 5, t @ 6, f @ 7)
-    asm "    int #0"
-end
-func rand(lo @ 8, hi @ 9)
-    asm "    int #1"
-    asm "    mov _R, 10"
-end
-
-const SCREEN_W = 320
-const SCREEN_H = 180
-
-################################################################################
-
+include "prelude.toy"
 
 const BALL_COUNT = 1000
 const Q = 256
@@ -47,12 +21,12 @@ func init()
         ball_vx[i] = rand(-100, 100)
         ball_vy[i] = rand(-100, 100)
         i += 1
+
     end
 
     x = 100
     y = 100
 end
-
 
 
 func update_ball(n)
@@ -72,7 +46,6 @@ func update_ball(n)
 end
 
 func update()
-
 
     i = 0
     while i < BALL_COUNT do

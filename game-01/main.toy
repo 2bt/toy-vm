@@ -3,55 +3,92 @@ include "prelude.toy"
 const BALL_COUNT = 1000
 const Q = 256
 
-var i
-var ball_x[BALL_COUNT]
-var ball_y[BALL_COUNT]
-var ball_vx[BALL_COUNT]
-var ball_vy[BALL_COUNT]
+var px: int*
+var py: int*
+var pvx: int*
+var pvy: int*
 
 var x
 var y
 
+
+var i
+var ball_x: int [BALL_COUNT]
+var ball_y: int [BALL_COUNT]
+var ball_vx: int [BALL_COUNT]
+var ball_vy: int [BALL_COUNT]
+
+
+struct Point
+    x: int
+    y: int
+end
+var q: Point
+
+
 func init()
 
-    i = 0
+    #q.x = 4
+
+    i   = 0
+    px  = &ball_x[0]
+    py  = &ball_y[0]
+    pvx = &ball_vx[0]
+    pvy = &ball_vy[0]
+
     while i < BALL_COUNT do
-        ball_x[i] = rand(0, SCREEN_W-1) * Q
-        ball_y[i] = rand(0, SCREEN_H-1) * Q
-        ball_vx[i] = rand(-100, 100)
-        ball_vy[i] = rand(-100, 100)
-        i += 1
+#        ball_x[i] = rand(0, SCREEN_W-1) * Q
+#        ball_y[i] = rand(0, SCREEN_H-1) * Q
+#        ball_vx[i] = rand(-100, 100)
+#        ball_vy[i] = rand(-100, 100)
 
+        px@  = rand(0, SCREEN_W-1) * Q
+        py@  = rand(0, SCREEN_H-1) * Q
+        pvx@ = rand(-100, 100)
+        pvy@ = rand(-100, 100)
+        px  += 1
+        py  += 1
+        pvx += 1
+        pvy += 1
+        i   += 1
     end
 
-    x = 100
-    y = 100
+    x = SCREEN_W/2 - 16
+    y = SCREEN_H/2 - 16
 end
 
 
-func update_ball(n)
-
-    ball_x[n] += ball_vx[n]
-    ball_y[n] += ball_vy[n]
-
-    if ball_x[n] < 0 or ball_x[n] >= (SCREEN_W) * Q then
-        ball_vx[n] *= -1
-    end
-    if ball_y[n] < 0 or ball_y[n] >= (SCREEN_H) * Q then
-        ball_vy[n] *= -1
-    end
-
-    sprite(ball_x[n] / Q, ball_y[n] / Q, 1, 1, 32 + 16, 0, 0)
-
-end
 
 func update()
 
-    i = 0
+#    i = 0
+#    while i < BALL_COUNT do
+#        ball_x[i] += ball_vx[i]
+#        ball_y[i] += ball_vy[i]
+#        if ball_x[i] < 0 or ball_x[i] >= (SCREEN_W) * Q then ball_vx[i] *= -1 end
+#        if ball_y[i] < 0 or ball_y[i] >= (SCREEN_H) * Q then ball_vy[i] *= -1 end
+#        sprite(ball_x[i] / Q, ball_y[i] / Q, 1, 1, 32 + 16, 0, 0)
+#        i += 1
+#    end
+
+    i   = 0
+    px  = &ball_x[0]
+    py  = &ball_y[0]
+    pvx = &ball_vx[0]
+    pvy = &ball_vy[0]
     while i < BALL_COUNT do
-        update_ball(i)
-        i += 1
+        px@ += pvx@
+        if px@ < 0 or px@ >= (SCREEN_W) * Q then pvx@ *= -1 end
+        py@ += pvy@
+        if py@ < 0 or py@ >= (SCREEN_H) * Q then pvy@ *= -1 end
+        sprite(px@ / Q, py@ / Q, 1, 1, 32 + 16, 0, 0)
+        px  += 1
+        py  += 1
+        pvx += 1
+        pvy += 1
+        i   += 1
     end
+
 
     if btn & BTN_LEFT  then x -= 2 end
     if btn & BTN_RIGHT then x += 2 end

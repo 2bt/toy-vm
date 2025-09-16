@@ -95,7 +95,6 @@ constexpr Opcode OPCODE_TABLE[] = {
     { TST, IND, IND },
     { TST, IND, IMM },
 
-
     { JLT, NIL, IMM },
     { JLE, NIL, IMM },
     { JGT, NIL, IMM },

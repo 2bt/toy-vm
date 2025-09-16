@@ -6,36 +6,6 @@ import argparse
 from collections import namedtuple
 from types import SimpleNamespace
 
-"""
-idea: transform ast
-
-    var a: int[4]
-    a[2] = 4    -->     *(a + 2) = 4
-
-    var q: int*
-    q = &a[3]   -->     q = a + 3
-    *q = 4
-    q += 1
-
-    mov q, #a + 3
-    mov [q], #4
-    add q, 1
-
-    &a[3]
-
-
-    &:
-    + works on lvalues: VarRef, Index, Deref, Field
-    + inc ptr
-
-    *:
-    + works on pointers
-    + ptr > 0 --> dec ptr
-
-"""
-
-
-
 
 Token    = namedtuple("Token",    "k v loc")
 
@@ -45,15 +15,13 @@ TyField  = namedtuple("TyField",  "type offset")
 
 Imm      = namedtuple("Imm",      "value")
 VarRef   = namedtuple("VarRef",   "name")
-Index    = namedtuple("Index",    "base idx")
-Field    = namedtuple("Field",    "base name")
 AddrOf   = namedtuple("AddrOf",   "lv")
 Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
 Call     = namedtuple("Call",     "name args")
 
-Var      = namedtuple("Var",      "name type addr")
-Func     = namedtuple("Func",     "name args type body")
+Var      = namedtuple("Var",      "type addr")
+Func     = namedtuple("Func",     "args type body")
 
 Assign   = namedtuple("Assign",   "lhs op rhs")
 While    = namedtuple("While",    "cond body")
@@ -63,20 +31,33 @@ If       = namedtuple("If",       "cond then els")
 Ret      = namedtuple("Ret",      "expr")
 Asm      = namedtuple("Asm",      "asm")
 
-
 KEYWORDS = {
     "include", "var", "const", "func", "struct",
     "if", "then", "elif", "else", "while", "do", "end", "break", "continue",
     "return", "asm", "or", "and",
 }
 
+TYPE_INT = Type("int", 0, None)
+
+def is_int(t): return t == TYPE_INT
+def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
+def is_ptr(t): return t.array == None and t.ptr > 0
+def is_array(t): return t.array != None
+def is_cond(t): return is_int(t) or is_ptr(t)
+
+def addr_of(e):
+    if isinstance(e, Deref): return e.expr
+    return AddrOf(e)
+
+
 
 token_regex = re.compile(r"""
     [ \t]*(?P<nl>      \n                          )|
     [ \t]*(?P<comment> \#.*                        )|
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
-    [ \t]*(?P<id>      [A-Za-z_][A-Za-z0-9_]*      )|
-    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|[+\-*/%{}()<>\[\]=,.:&|@])|
+    [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
+    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
+                       [+\-*/%{}()<>\[\]=,.:&|@]   )|
     [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
@@ -149,14 +130,15 @@ class Parser:
         self.decls    = {}
         self.funcs    = {}
         self.structs  = {}
+        self.loop     = 0
         # for includes
         self.included = set()
         self.stack    = []
 
-    def error(self, msg, loc=None):
-        file, nr = loc or self.peek().loc
+    def error(self, msg, tok=None):
+        file, nr = (tok or self.last_tok).loc
         line = file.read_text().split("\n")[nr - 1]
-        sys.exit(f"{msg}\n{file.name}:{nr}:{line}")
+        sys.exit(f"{file.name}:{nr}: {msg}\n{line}")
 
     def peek(self, k=None, v=None):
         tok = self.head.toks[self.head.i]
@@ -167,6 +149,7 @@ class Parser:
 
     def eat(self, k=None, v=None):
         tok = self.peek(k, v)
+        self.last_tok = tok
         if not tok:
             need = f"{k or ''} {v or ''}".strip()
             self.error(f"expected {need}")
@@ -174,12 +157,12 @@ class Parser:
         return tok
 
     def const_expr(self):
-        n = self.expr()
+        n, _ = self.expr()
         if not isinstance(n, Imm): self.error("const expression expected")
         return n.value
 
     def type(self):
-        if not self.peek("sym", ":"): return Type("int", 0, None)
+        if not self.peek("sym", ":"): return TYPE_INT
         self.eat()
         base = self.eat("id").v
         ptr = 0
@@ -194,8 +177,9 @@ class Parser:
     def type_size(self, t):
         if t.ptr > 0: return 1
         n = t.array or 1
-        e = 1 if t.base == "int" else self.structs[t.base].size
-        return n * e
+        if t.base == "int": return n
+        if t.base not in self.structs: self.error(f"unknown struct '{t.base}'")
+        return n * self.structs[t.base].size
 
     def add_decl(self, prefix=""):
         name = prefix + self.eat("id").v
@@ -205,7 +189,7 @@ class Parser:
         if self.peek("sym", "@"):
             self.eat()
             addr = self.const_expr()
-        self.decls[name] = Var(name, type, addr)
+        self.decls[name] = Var(type, addr)
         return name
 
     def program(self, path):
@@ -254,10 +238,10 @@ class Parser:
                         self.eat()
                         args.append(self.add_decl(self.local_var_prefix))
                 self.eat("sym", ")")
-                type = self.type()
+                self.return_type = self.type()
                 body = self.block()
                 self.eat("end")
-                self.funcs[name] = Func(name, args, type, body)
+                self.funcs[name] = Func(args, self.return_type, body)
 
             else: assert False
         self.eat("eof")
@@ -269,7 +253,8 @@ class Parser:
         return stmts
 
     def after_if(self):
-        cond = self.expr()
+        cond, t = self.expr()
+        if not is_cond(t): self.error("bad type")
         self.eat("then")
         then = self.block()
         if self.peek("elif"):
@@ -286,68 +271,98 @@ class Parser:
     def stmt(self):
         if self.peek("while"):
             self.eat()
-            cond = self.expr()
+            cond, t = self.expr()
+            if not is_cond(t): self.error("bad type")
             self.eat("do")
+            self.loop += 1
             body = self.block()
+            self.loop -= 1
             self.eat("end")
             return While(cond, body)
         if self.peek("break"):
             self.eat()
+            if self.loop == 0: self.error("break outside loop")
             return Break()
         if self.peek("continue"):
             self.eat()
-            return Break()
+            if self.loop == 0: self.error("continue outside loop")
+            return Continue()
         if self.peek("if"):
             self.eat()
             return self.after_if()
         if self.peek("return"):
             self.eat()
-            expr = self.expr()
+            expr, type = self.expr()
+            if type != self.return_type: self.error("return type mismatch")
             return Ret(expr)
         if self.peek("asm"):
             self.eat()
             return Asm(self.eat("string").v)
 
-        lhs = self.primary()
-        if isinstance(lhs, Call): return lhs
+        a, ta = self.primary()
+        if isinstance(a, Call): return a
 
-        op = self.peek("sym")
-        if isinstance(lhs, (VarRef, Deref, Index, Field)) and op.v in ASSIGN_OPS:
+        if isinstance(a, (VarRef, Deref)) and self.peek("sym") and self.peek().v in ASSIGN_OPS:
             op = self.eat().v
-            rhs = self.expr()
-            return Assign(lhs, op, rhs)
+            b, tb = self.expr()
+            if op == "=" and ta == tb: pass
+            elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
+                # pointer arithmetic
+                elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
+                if elem_size > 1:
+                    if isinstance(b, Imm): b = Imm(b.value * elem_size)
+                    else: b = BinOp("*", b, Imm(elem_size))
+            else:
+                if not (is_int(ta) and is_int(tb)): self.error("type mismatch")
+            return Assign(a, op, b)
 
         self.error("invalid statement")
 
 
     def expr(self, minp=1):
-        left = self.unary()
+        a, ta = self.unary()
         while tok := self.peek():
             p = PRECEDENCE.get(tok.v, 0)
             if p < minp: break
             self.eat()
-            right = self.expr(p + 1)
+            b, tb = self.expr(p + 1)
             op = tok.v
-            if isinstance(left, Imm) and isinstance(right, Imm):
-                left = Imm(int(eval(f"{left.value} {op} {right.value}")))
+            if isinstance(a, Imm) and isinstance(b, Imm):
+                # fold constant
+                a = Imm(int(eval(f"{a.value} {op} {b.value}")))
+                ta = TYPE_INT
+                continue
+            if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = TYPE_INT
+            elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = TYPE_INT
+            elif op in ("+", "-") and is_ptr(ta) and is_int(tb):
+                # pointer arithmetic
+                elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
+                if elem_size > 1:
+                    if isinstance(b, Imm): b = Imm(b.value * elem_size)
+                    else: b = BinOp("*", b, Imm(elem_size))
             else:
-                left = BinOp(op, left, right)
-        return left
+                if not (is_int(ta) and is_int(tb)): self.error("type mismatch", tok)
+            a = BinOp(op, a, b)
+        return a, ta
 
     def unary(self):
         if self.peek("sym", "&"):
             self.eat()
-            return AddrOf(self.primary())
+            a, ta = self.primary()
+            if not isinstance(a, (VarRef, Deref)): self.error("& operand must be lvalue")
+            if is_array(ta): self.error("address of array not allowed")
+            return addr_of(a), Type(ta.base, ta.ptr + 1, None)
         if self.peek("sym", "("):
             self.eat()
-            e = self.expr()
+            e, t = self.expr()
             self.eat("sym", ")")
-            return e
+            return e, t
         if self.peek("sym", "-"):
             self.eat()
-            u = self.unary()
-            if isinstance(u, Imm): return Imm(-u.value)
-            return BinOp("*", u, Imm(-1))
+            a, t = self.unary()
+            if not is_int(t): self.error("bad type")
+            if isinstance(a, Imm): return Imm(-a.value), TYPE_INT
+            return BinOp("*", a, Imm(-1)), TYPE_INT
         return self.primary()
 
     def primary(self):
@@ -356,92 +371,134 @@ class Parser:
             v = self.eat().v
             if v.startswith("$"): n = int(v[1:], 16)
             else: n = int(v)
-            return Imm(n)
+            return Imm(n), TYPE_INT
 
         # constant
         name = self.eat("id").v
         if name in self.consts:
-            return Imm(self.consts[name])
+            return Imm(self.consts[name]), TYPE_INT
 
         # function call
         if self.peek("sym", "("):
-            self.eat()
-            args = []
-            if not self.peek("sym", ")"):
-                args.append(self.expr())
-                while self.peek("sym", ","): self.eat(); args.append(self.expr())
-            self.eat("sym", ")")
             f = self.funcs.get(name)
             if not f: self.error(f"unknown function '{name}'")
+            self.eat()
+            args = []
+            types = []
+            if not self.peek("sym", ")"):
+                e, t = self.expr()
+                args.append(e)
+                types.append(t)
+                while self.peek("sym", ","):
+                    self.eat()
+                    e, t = self.expr()
+                    args.append(e)
+                    types.append(t)
+            self.eat("sym", ")")
             if len(args) != len(f.args): self.error("wrong number of function arguments")
-            return Call(name, args)
+            for t, n in zip(types, f.args):
+                if t != self.decls[n].type: self.error("type mismatch")
+            return Call(name, args), f.type
 
         # resolve name
-        if name not in self.decls:
-            old = name
-            name = self.local_var_prefix + name
-            if name not in self.decls: self.error(f"unknown variable '{old}'")
+        local_name = self.local_var_prefix + name
+        if local_name in self.decls: name = local_name
+        elif name not in self.decls: self.error(f"unknown variable '{name}'")
 
         node = VarRef(name)
+        type = self.decls[name].type
         while True:
             if self.peek("sym", "["):
                 self.eat()
-                node = Index(node, self.expr())
+                idx, tidx = self.expr()
                 self.eat("sym", "]")
+                if not is_array(type): self.error("cannot index non-array")
+                if not is_int(tidx): self.error("index must be int")
+                type = Type(type.base, type.ptr, None)
+                elem_size = self.type_size(type)
+                if idx != Imm(0):
+                    if elem_size > 1:
+                        if isinstance(idx, Imm): idx = Imm(idx.value * elem_size)
+                        else: idx = BinOp("*", idx, Imm(elem_size))
+                    node = Deref(BinOp("+", addr_of(node), idx))
+
             elif self.peek("sym", "@"):
                 self.eat()
+                if not is_ptr(type): self.error("non-pointer deref")
                 node = Deref(node)
+                type = Type(type.base, type.ptr - 1, None)
+
+            elif self.peek("sym", "->"):
+                self.eat()
+                if not is_ptr(type): self.error("non-pointer deref")
+                type = Type(type.base, type.ptr - 1, None)
+                if not is_struct(type): self.error("request for member of non-struct")
+                field = self.eat("id").v
+                struct = self.structs[type.base]
+                f = struct.fields.get(field)
+                if not f: self.error(f"struct '{type.base}' has no field '{field}'")
+                type = f.type
+                if f.offset > 0:node = BinOp("+", node, Imm(f.offset))
+                node = Deref(node)
+
             elif self.peek("sym", "."):
                 self.eat()
-                node = Field(node, self.eat("id").v)
-            else: return node
+                if not is_struct(type): self.error("request for member of non-struct")
+                field = self.eat("id").v
+                struct = self.structs[type.base]
+                f = struct.fields.get(field)
+                if not f: self.error(f"struct '{type.base}' has no field '{field}'")
+                type = f.type
+                if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
+            else: return node, type
 
 
+def const_addr_plus(e):
+    """
+    Try to interpret e as &name + C (C integer).
+    Returns (name, C) or None.
+    Accepts nested (+) with immediates; rejects anything with registers.
+    """
+    total = 0
+    name = None
+    def walk(x):
+        nonlocal total, name
+        match x:
+            case Imm(v): total += v; return True
+            case AddrOf(VarRef(n)): assert name == None; name = n; return True
+            case BinOp("+", a, b): return walk(a) and walk(b)
+        return False
 
+    if walk(e) and name: return name, total
+    return None
 
 
 class Codegen:
 
-    def emit(self, s):
-        self.lines.append(s)
 
     def newtmp(self, *ts):
         for t in ts:
             if t in self.tmp_vars: return t
             if t.startswith("[") and t[1:-1] in self.tmp_vars: return t[1:-1]
-        t = f"_T{self.tmp_i}"
+        t = f"_{self.current_func}_T{self.tmp_i}"
         self.tmp_i += 1
-        if t not in self.tmp_vars: self.tmp_vars[t] = ()
+        self.tmp_vars[t] = ()
         return t
 
     def label(self, base):
         self.label_i += 1
         return f"_{base}_{self.label_i}"
 
+    def emit(self, s):
+        self.lines.append(s)
 
     def emit_label(self, l):
         # remove useless jump
         i = len(self.lines) - 1
-        while i > 0 and (m := re.match(f"    j.. ([^ ]+)", self.lines[i])):
+        while i > 0 and (m := re.match(f"    j[^m]. ([^ ]+)", self.lines[i])):
             if m[1] == l: self.lines.pop(i)
             i -= 1
         self.emit(f"{l}:")
-
-
-    def get_type(self, expr):
-        i = id(expr)
-        if t := self.expr_types.get(i): return t
-        if isinstance(expr, Imm): t = ("int", 0, None)
-        elif isinstance(expr, VarRef): t = self.decls[expr.name].type
-        elif isinstance(expr, Index):
-            s = self.get_type(expr.base)
-            assert s.array
-            assert s.ptr == 0
-            return s.base
-
-
-        self.expr_types[i] = t
-        return t
 
 
     def branch(self, node, T, F):
@@ -492,52 +549,26 @@ class Codegen:
             self.emit(f"    jeq {F}")
 
 
+
     def value(self, node):
         if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, VarRef): return node.name
-        if isinstance(node, Index):
-            # t = self.get_type(node.base)
-            base = node.base
-            if isinstance(base, VarRef):
-                type = self.decls[base.name].type
-                assert type.array, "must be array"
-                elem_size = self.ast.type_size(Type(type.base, type.ptr, None))
-                if isinstance(node.idx, Imm):
-                    return f"{base.name}+{node.idx.value * elem_size}"
-                v = self.value(node.idx)
-                t = self.newtmp(v)
-                if t != v: self.emit(f"    mov {t}, {v}")
-                if elem_size > 0: self.emit(f"    mul {t}, #{elem_size}")
-                self.emit(f"    add {t}, #{lv.name}")
-                return f"[{t}]"
-
-            else: assert False, f"TODO: support Deref, Field (type is {type(node).__name__})"
-
-        # if isinstance(node, Field):
-        #     t = self.get_type(node.base)
-        #     assert t.base in self.structs
-        #     assert t.ptr == 0
-        #     assert t.array == None
-        #     v = self.value(node.base)
-        #     field = self.structs[t.base].fields[node.name]
-        #     print("######", field)
-        #     exit(1)
 
         if isinstance(node, AddrOf):
-            if isinstance(node.lv, Index):
-                v = self.value(node.lv)
-                if v.startswith("["): return v[1:-1]
-                return f"#{v}"
-
-            else: assert False
+            assert isinstance(node.lv, (VarRef, Deref))
+            v = self.value(node.lv)
+            if v.startswith("["): return v[1:-1]
+            return f"#{v}"
 
         if isinstance(node, Deref):
+            if sp := const_addr_plus(node.expr):
+                name, off = sp
+                return f"{name}+{off}"
             v = self.value(node.expr)
             if not v.startswith("["): return f"[{v}]"
             t = self.newtmp(v)
             if t != v: self.emit(f"    mov {t}, {v}")
             return f"[{t}]"
-
 
         if isinstance(node, BinOp):
             if op := ARITH_OPS.get(node.op):
@@ -573,12 +604,11 @@ class Codegen:
 
 
     def call(self, node):
-        name, args = node.name, node.args
-        f = self.funcs[name]
-        for a, b in zip(args, f.args):
+        f = self.funcs[node.name]
+        for a, b in zip(node.args, f.args):
             t = self.value(a)
             self.emit(f"    mov {b}, {t}")
-        self.emit(f"    jsr {f.name}")
+        self.emit(f"    jsr {node.name}")
         return "_R"
 
 
@@ -586,7 +616,7 @@ class Codegen:
         self.tmp_i = 0 # reuse temporary variables
 
         if isinstance(node, Assign):
-            assert isinstance(node.lhs, (VarRef, Index, Deref, Field))
+            assert isinstance(node.lhs, (VarRef, Deref))
             dst = self.value(node.lhs)
             v = self.value(node.rhs)
             op = ASSIGN_OPS[node.op]
@@ -657,10 +687,11 @@ class Codegen:
         self.ast        = ast
 
         # functions
-        for f in self.funcs.values():
+        for name, f in self.funcs.items():
+            self.current_func = name
             self.emit("")
-            self.emit(f"    ; function {f.name}")
-            self.emit(f"{f.name}:")
+            self.emit(f"    ; function {name}")
+            self.emit(f"{name}:")
             for st in f.body:
                 self.stmt(st)
             self.emit("    ret")
@@ -672,11 +703,11 @@ class Codegen:
             self.emit(f"{name} = {addr}")
             addr += 1
 
-        for v in self.decls.values():
+        for name, v in self.decls.items():
             if v.addr != None:
-                self.emit(f"{v.name} = {v.addr}")
+                self.emit(f"{name} = {v.addr}")
             else:
-                self.emit(f"{v.name} = {addr}")
+                self.emit(f"{name} = {addr}")
                 addr += ast.type_size(v.type)
 
         return "\n".join(self.lines + lines) + "\n"

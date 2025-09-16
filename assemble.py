@@ -58,9 +58,8 @@ def bad_line():
 
 def expect(ts, t, v):
     match ts:
-        case [(tt, vv), *rest] if tt == t and vv == v:
-            return rest
-        case _: bad_line()
+        case [(tt, vv), *rest] if tt == t and vv == v: return rest
+    bad_line()
 
 
 PRECEDENCE = {

@@ -452,14 +452,14 @@ class Parser:
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
             else: return node, type
 
-def split_addr(e):
+def split_add(e):
     match e:
         case Imm(v): return (None, None, v)
         case AddrOf(VarRef(n)): return (None, n, 0)
-        case AddrOf(Deref(exepr)): assert False, "WOOT" #return split_addr(e)
+        case AddrOf(Deref(e)): assert False, "WOOT"
         case BinOp("+", a, b):
-            d1, s1, k1 = split_addr(a)
-            d2, s2, k2 = split_addr(b)
+            d1, s1, k1 = split_add(a)
+            d2, s2, k2 = split_add(b)
             if d1 and d2: d = BinOp("+", d1, d2)
             else: d = d1 or d2
             if s1 and s2: assert False, "WOOT"
@@ -542,27 +542,28 @@ class Codegen:
             self.emit(f"    jeq {F}")
 
 
-
     def value(self, node):
         if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, VarRef): return node.name
-
         if isinstance(node, AddrOf):
-            assert isinstance(node.lv, (VarRef, Deref))
             v = self.value(node.lv)
             if v.startswith("["): return v[1:-1]
             return f"#{v}"
 
         if isinstance(node, Deref):
-            dyn, sym, off = split_addr(node.expr)
+            dyn, sym, off = split_add(node.expr)
             if not dyn: return f"{sym}+{off}"
-            base = self.value(dyn)
-            base = f"[{base}]"
-            if sym: base += f"+{sym}"
-            if off: base += f"+{off}"
-            return base
+            a = self.value(dyn)
+            a = f"[{a}]"
+            if sym: a += f"+{sym}"
+            if off: a += f"+{off}"
+            return a
 
         if isinstance(node, BinOp):
+            if node.op == "+":
+                dyn, sym, off = split_add(node)
+                if not dyn: return f"#{sym}+{off}"
+
             if op := ARITH_OPS.get(node.op):
                 a = self.value(node.a)
                 b = self.value(node.b)
@@ -588,7 +589,7 @@ class Codegen:
                 self.emit(f"    mov {t}, #1")
                 self.emit_label(D)
                 return t
-            assert False, "unsupported binop {node.op}"
+            assert False, f"unsupported binop {node.op}"
 
         if isinstance(node, Call): return self.call(node)
 
@@ -662,7 +663,7 @@ class Codegen:
             self.lines += ast.literal_eval(node.asm.replace("\n","\\n")).rstrip().split("\n")
 
         else:
-            sys.exit("unsupported statement")
+            assert False, f"unsupported statement {node}"
 
 
     def compile(self, ast):

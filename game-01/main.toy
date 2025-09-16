@@ -21,15 +21,12 @@ var i
 
 
 func init()
-
-    i = 0
     p = &balls[0]
-    while i < BALL_COUNT do
+    while p < &balls[BALL_COUNT] do
         p->x  = rand(0, SCREEN_W-1) * Q
         p->y  = rand(0, SCREEN_H-1) * Q
         p->vx = rand(-100, 100)
         p->vy = rand(-100, 100)
-        i += 1
         p += 1
     end
 

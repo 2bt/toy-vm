@@ -14,7 +14,7 @@ def load_opcode_table():
         if "OPCODE_TABLE" in l: break
     while l := f.readline():
         l = l.strip()
-        if not l: continue
+        if not l or l.startswith("//"): continue
         if not l.startswith("{"): break
         m = list(map(str.lower, re.findall(r'[A-Z]+', l)))
         m += ["nil"] * (3 - len(m))
@@ -160,11 +160,13 @@ def asm(args):
                 ts = rest
             case _: bad_line()
 
-        is_jump = op.startswith("j")
-        mode_a  = "nil"
-        value_a = 0
-        mode_b  = "nil"
-        value_b = 0
+        is_jump  = op.startswith("j")
+        mode_a   = "nil"
+        value_a  = 0
+        offset_a = 0
+        mode_b   = "nil"
+        value_b  = 0
+        offset_b = 0
 
         # operand a
         match ts:
@@ -184,6 +186,11 @@ def asm(args):
                 mode_a = "ind"
                 value_a, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
+                # offset
+                match ts:
+                    case [("sym", "+"), *rest]:
+                        mode_a = "idx"
+                        offset_a, ts = eval_expression(rest)
 
             # absolute
             case []: pass
@@ -203,6 +210,11 @@ def asm(args):
                 mode_b = "ind"
                 value_b, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
+                # offset
+                match ts:
+                    case [("sym", "+"), *rest]:
+                        mode_b = "idx"
+                        offset_b, ts = eval_expression(rest)
 
             # absolute
             case [("sym", ","), *rest]:
@@ -212,10 +224,14 @@ def asm(args):
         if ts: bad_line()
 
         try: opc = OPCODE_TABLE.index((op, mode_a, mode_b))
-        except ValueError: bad_line()
+        except ValueError:
+            print(op, mode_a, mode_b)
+            bad_line()
         bin_cmd = [opc]
         if mode_a != "nil": bin_cmd.append(value_a)
+        if mode_a == "idx": bin_cmd.append(offset_a)
         if mode_b != "nil": bin_cmd.append(value_b)
+        if mode_b == "idx": bin_cmd.append(offset_b)
         bin_cmds.append(bin_cmd)
 
 
@@ -232,19 +248,21 @@ def asm(args):
     # print assembled code
     if args.print:
         pos = 0
-        for bin_cmd in bin_cmds:
-            o, a, b = OPCODE_TABLE[bin_cmd[0]]
-            q = " ".join(map(str, bin_cmd))
-            l = f"{pos:6} : {q:<16} {o}"
+        for bin in bin_cmds:
+            q = " ".join(map(str, bin))
+            o, a, b = OPCODE_TABLE[bin.pop(0)]
+            l = f"{pos:6} : {q:<24} {o}"
             if o.startswith("j"):
-                l += f" {bin_cmd[1]}"
+                l += f" {bin.pop(0)}"
             else:
-                if a == "abs": l += f" {bin_cmd[1]}"
-                if a == "ind": l += f" [{bin_cmd[1]}]"
+                if a == "abs": l += f" {bin.pop(0)}"
+                if a == "ind": l += f" [{bin.pop(0)}]"
+                if a == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
                 if a != "nil" and b != "nil": l += ","
-                if b == "abs": l += f" {bin_cmd[-1]}"
-                if b == "ind": l += f" [{bin_cmd[-1]}]"
-                if b == "imm": l += f" #{bin_cmd[-1]}"
+                if b == "abs": l += f" {bin.pop(0)}"
+                if b == "ind": l += f" [{bin.pop(0)}]"
+                if b == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
+                if b == "imm": l += f" #{bin.pop(0)}"
             print(l)
             pos += len(bin_cmd)
 

@@ -19,12 +19,12 @@ var p: Ball*
 var i
 
 
+
 func init()
 
     i = 0
     p = &balls[0]
     while i < BALL_COUNT do
-        p->x  = rand(0, SCREEN_W-1) * Q
         p->x  = rand(0, SCREEN_W-1) * Q
         p->y  = rand(0, SCREEN_H-1) * Q
         p->vx = rand(-100, 100)

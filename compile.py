@@ -452,29 +452,22 @@ class Parser:
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
             else: return node, type
 
-
-def const_addr_plus(e):
-    """
-    Try to interpret e as &name + C (C integer).
-    Returns (name, C) or None.
-    Accepts nested (+) with immediates; rejects anything with registers.
-    """
-    total = 0
-    name = None
-    def walk(x):
-        nonlocal total, name
-        match x:
-            case Imm(v): total += v; return True
-            case AddrOf(VarRef(n)): assert name == None; name = n; return True
-            case BinOp("+", a, b): return walk(a) and walk(b)
-        return False
-
-    if walk(e) and name: return name, total
-    return None
+def split_addr(e):
+    match e:
+        case Imm(v): return (None, None, v)
+        case AddrOf(VarRef(n)): return (None, n, 0)
+        case AddrOf(Deref(exepr)): assert False, "WOOT" #return split_addr(e)
+        case BinOp("+", a, b):
+            d1, s1, k1 = split_addr(a)
+            d2, s2, k2 = split_addr(b)
+            if d1 and d2: d = BinOp("+", d1, d2)
+            else: d = d1 or d2
+            if s1 and s2: assert False, "WOOT"
+            return (d, s1 or s2, k1 + k2)
+    return (e, None, 0)
 
 
 class Codegen:
-
 
     def newtmp(self, *ts):
         for t in ts:
@@ -561,14 +554,13 @@ class Codegen:
             return f"#{v}"
 
         if isinstance(node, Deref):
-            if sp := const_addr_plus(node.expr):
-                name, off = sp
-                return f"{name}+{off}"
-            v = self.value(node.expr)
-            if not v.startswith("["): return f"[{v}]"
-            t = self.newtmp(v)
-            if t != v: self.emit(f"    mov {t}, {v}")
-            return f"[{t}]"
+            dyn, sym, off = split_addr(node.expr)
+            if not dyn: return f"{sym}+{off}"
+            base = self.value(dyn)
+            base = f"[{base}]"
+            if sym: base += f"+{sym}"
+            if off: base += f"+{off}"
+            return base
 
         if isinstance(node, BinOp):
             if op := ARITH_OPS.get(node.op):

@@ -19,10 +19,10 @@ var p: Ball*
 func init()
     p = balls.ptr
     while p < balls.limit do
-        p->x  = rand(0, SCREEN_W-1) * Q
-        p->y  = rand(0, SCREEN_H-1) * Q
-        p->vx = rand(-100, 100)
-        p->vy = rand(-100, 100)
+        p.x  = rand(0, SCREEN_W-1) * Q
+        p.y  = rand(0, SCREEN_H-1) * Q
+        p.vx = rand(-100, 100)
+        p.vy = rand(-100, 100)
         p += 1
     end
 end
@@ -32,11 +32,11 @@ end
 func update()
     p = balls.ptr
     while p < balls.limit do
-        p->x += p->vx
-        p->y += p->vy
-        if p->x < 0 or p->x >= (SCREEN_W) * Q then p->vx *= -1 end
-        if p->y < 0 or p->y >= (SCREEN_H) * Q then p->vy *= -1 end
-        sprite(p->x / Q, p->y / Q, 1, 1, 32 + 16, 0, 0)
+        p.x += p.vx
+        p.y += p.vy
+        if p.x < 0 or p.x >= (SCREEN_W) * Q then p.vx *= -1 end
+        if p.y < 0 or p.y >= (SCREEN_H) * Q then p.vy *= -1 end
+        sprite(p.x / Q, p.y / Q, 1, 1, 32 + 16, 0, 0)
         p += 1
     end
 

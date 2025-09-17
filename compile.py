@@ -56,7 +56,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<comment> \#.*                        )|
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
-    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
+    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|
                        [+\-*/%{}()<>\[\]=,.:&|@]   )|
     [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
     [ \t]*(?P<other>   [^ \t]+                     )
@@ -485,19 +485,6 @@ class Parser:
                 node = Deref(node)
                 type = Type(type.base, type.ptr - 1, None)
 
-            elif self.peek("sym", "->"):
-                self.eat()
-                if not is_ptr(type): self.error("non-pointer deref")
-                type = Type(type.base, type.ptr - 1, None)
-                if not is_struct(type): self.error("request for member of non-struct")
-                field = self.eat("id").v
-                struct = self.structs[type.base]
-                f = struct.fields.get(field)
-                if not f: self.error(f"struct '{type.base}' has no field '{field}'")
-                type = f.type
-                if f.offset > 0:node = BinOp("+", node, Imm(f.offset))
-                node = Deref(node)
-
             elif self.peek("sym", "."):
                 self.eat()
                 field = self.eat("id").v
@@ -512,6 +499,12 @@ class Parser:
                         node = BinOp("+", AddrOf(node), Imm(offset))
                         type = Type(type.base, type.ptr + 1, None)
                         continue
+
+                if is_ptr(type):
+                    # auto pointer deref
+                    node = Deref(node)
+                    type = Type(type.base, type.ptr - 1, None)
+
                 if not is_struct(type): self.error("request for member of non-struct")
                 struct = self.structs[type.base]
                 f = struct.fields.get(field)

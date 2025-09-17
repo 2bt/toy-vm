@@ -1,6 +1,5 @@
 include "prelude.toy"
 
-const BALL_COUNT = 1000
 const Q = 256
 
 var x = SCREEN_W/2 - 16
@@ -13,28 +12,26 @@ struct Ball
     vy: int
 end
 
-var balls: Ball[BALL_COUNT]
+var balls: Ball[1000]
 var p: Ball*
 
 
 func init()
-    p = &balls[0]
-    while p < &balls[BALL_COUNT] do
+    p = balls.ptr
+    while p < balls.limit do
         p->x  = rand(0, SCREEN_W-1) * Q
         p->y  = rand(0, SCREEN_H-1) * Q
         p->vx = rand(-100, 100)
         p->vy = rand(-100, 100)
         p += 1
     end
-
-
 end
 
 
 
 func update()
-    p = &balls[0]
-    while p < &balls[BALL_COUNT] do
+    p = balls.ptr
+    while p < balls.limit do
         p->x += p->vx
         p->y += p->vy
         if p->x < 0 or p->x >= (SCREEN_W) * Q then p->vx *= -1 end

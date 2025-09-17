@@ -37,9 +37,9 @@ KEYWORDS = {
     "return", "asm", "or", "and",
 }
 
-TYPE_INT = Type("int", 0, None)
+INT = Type("int", 0, None)
 
-def is_int(t): return t == TYPE_INT
+def is_int(t): return t == INT
 def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
 def is_ptr(t): return t.array == None and t.ptr > 0
 def is_array(t): return t.array != None
@@ -163,7 +163,7 @@ class Parser:
         return n.value
 
     def type(self):
-        if not self.peek("sym", ":"): return TYPE_INT
+        if not self.peek("sym", ":"): return INT
         self.eat()
         base = self.eat("id").v
         ptr = 0
@@ -386,10 +386,10 @@ class Parser:
             if isinstance(a, Imm) and isinstance(b, Imm):
                 # fold constant
                 a = Imm(int(eval(f"{a.value} {op} {b.value}")))
-                ta = TYPE_INT
+                ta = INT
                 continue
-            if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = TYPE_INT
-            elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = TYPE_INT
+            if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = INT
+            elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = INT
             elif op in ("+", "-") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -417,8 +417,8 @@ class Parser:
             self.eat()
             a, t = self.unary()
             if not is_int(t): self.error("bad type")
-            if isinstance(a, Imm): return Imm(-a.value), TYPE_INT
-            return BinOp("*", a, Imm(-1)), TYPE_INT
+            if isinstance(a, Imm): return Imm(-a.value), INT
+            return BinOp("*", a, Imm(-1)), INT
         return self.primary()
 
     def primary(self):
@@ -427,12 +427,12 @@ class Parser:
             v = self.eat().v
             if v.startswith("$"): n = int(v[1:], 16)
             else: n = int(v)
-            return Imm(n), TYPE_INT
+            return Imm(n), INT
 
         # constant
         name = self.eat("id").v
         if name in self.consts:
-            return Imm(self.consts[name]), TYPE_INT
+            return Imm(self.consts[name]), INT
 
         # function call
         if self.peek("sym", "("):
@@ -457,9 +457,10 @@ class Parser:
             return Call(name, args), f.type
 
         # resolve name
-        local_name = self.var_prefix + name
-        if local_name in self.decls: name = local_name
-        elif name not in self.decls: self.error(f"unknown variable '{name}'")
+        if self.var_prefix:
+            local_name = self.var_prefix + name
+            if local_name in self.decls: name = local_name
+        if name not in self.decls: self.error(f"unknown variable '{name}'")
 
         node = VarRef(name)
         type = self.decls[name].type
@@ -499,8 +500,19 @@ class Parser:
 
             elif self.peek("sym", "."):
                 self.eat()
-                if not is_struct(type): self.error("request for member of non-struct")
                 field = self.eat("id").v
+                if is_array(type):
+                    if field == "len": return Imm(type.array), INT
+                    if field == "ptr":
+                        node = AddrOf(node)
+                        type = Type(type.base, type.ptr + 1, None)
+                        continue
+                    if field == "limit":
+                        offset = self.type_size(Type(type.base, type.ptr, None)) * type.array
+                        node = BinOp("+", AddrOf(node), Imm(offset))
+                        type = Type(type.base, type.ptr + 1, None)
+                        continue
+                if not is_struct(type): self.error("request for member of non-struct")
                 struct = self.structs[type.base]
                 f = struct.fields.get(field)
                 if not f: self.error(f"struct '{type.base}' has no field '{field}'")

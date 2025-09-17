@@ -595,6 +595,12 @@ class Codegen:
             self.emit(f"    jeq {F}")
             self.emit(f"    jne {T}")
 
+        elif isinstance(node, Deref):
+            a = self.value(node.expr)
+            self.emit(f"    cmp [{a}], #0")
+            self.emit(f"    jeq {F}")
+            self.emit(f"    jne {T}")
+
         elif isinstance(node, BinOp) and node.op == "&":
             a = self.value(node.a)
             b = self.value(node.b)

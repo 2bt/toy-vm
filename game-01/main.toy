@@ -18,12 +18,6 @@ var p: Ball*
 
 
 var line1: int[] = "hello world\0"
-var line2: int[] = "how are you doing?\0"
-
-var lines: int*[2] = { line1.ptr, line2.ptr }
-
-
-
 
 
 func init()
@@ -39,6 +33,15 @@ end
 
 
 
+func print(x, y, msg: int*)
+    while msg@ do
+        sprite(x, y, 8, 8, msg@ % 32 * 8, (msg@ / 32 - 1) * 8, 0)
+        x += 8
+        msg += 1
+    end
+end
+
+
 func update()
     p = balls.ptr
     while p < balls.limit do
@@ -46,7 +49,7 @@ func update()
         p.y += p.vy
         if p.x < 0 or p.x >= (SCREEN_W) * Q then p.vx *= -1 end
         if p.y < 0 or p.y >= (SCREEN_H) * Q then p.vy *= -1 end
-        sprite(p.x / Q, p.y / Q, 1, 1, 32 + 16, 0, 0)
+        sprite(p.x / Q, p.y / Q, 1, 1, 0, 64, 0)
         p += 1
     end
 
@@ -56,6 +59,8 @@ func update()
     if btn & BTN_DOWN  then y += 2 end
 
 
-    sprite(x, y, 32, 32, 0, 0, 0)
+    sprite(x, y, 32, 32, 0, 32, 0)
 
+
+    print(0, 0, line1.ptr)
 end

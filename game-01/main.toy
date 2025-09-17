@@ -15,9 +15,7 @@ end
 var balls: Ball[1000]
 var p: Ball*
 
-
-
-var line1: int[] = "hello world\0"
+var line1: int[] = "hello world"
 
 
 func init()
@@ -62,5 +60,5 @@ func update()
     sprite(x, y, 32, 32, 0, 32, 0)
 
 
-    print(0, 0, line1.ptr)
+    print(0, 0, "hello")
 end

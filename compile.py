@@ -56,7 +56,9 @@ def tokenize(path):
         v = m.group(k)
         if k == "comment": continue
         if k == "nl": line += 1; continue
-        if k == "string": line += v.count("\n")
+        if k == "string":
+            line += v.count("\n")
+            v = ast.literal_eval(v)
         if k == "id" and v in KEYWORDS: k = v
         out.append(Token(k, v, (path, line)))
     out.append(Token("eof", "", (path, line)))
@@ -240,8 +242,7 @@ class Parser:
                     self.eat("sym", "}")
                     return data
                 if self.peek("string"):
-                    string = ast.literal_eval(self.eat("string").v)
-                    return list(map(ord, string))
+                    return list(map(ord, self.eat("string").v)) + [0]
                 return self.const_int_or_addr()
 
             data = parse()
@@ -298,7 +299,7 @@ class Parser:
         while any(self.peek(k) for k in ["include", "const", "var", "func", "struct"]):
             tok = self.eat()
             if tok.k == "include":
-                incl = path.parent / ast.literal_eval(self.eat("string").v)
+                incl = path.parent / self.eat("string").v
                 if incl in self.included: continue
                 self.stack.append(self.head)
                 self.program(incl)
@@ -473,6 +474,13 @@ class Parser:
             else: n = int(v)
             return Imm(n), INT
 
+        # string literal -> int*
+        if self.peek("string"):
+            data = list(map(ord, self.eat().v)) + [0]
+            name = f"_str_{id(data)}"
+            self.decls[name] = Var(Type("int", 0, len(data)), None, data)
+            return AddrOf(VarRef(name)), Type("int", 1, None)
+
         # constant
         name = self.eat("id").v
         if name in self.consts:
@@ -511,10 +519,10 @@ class Parser:
         while True:
             if self.peek("sym", "["):
                 self.eat()
-                idx, tidx = self.expr()
-                self.eat("sym", "]")
                 if not is_array(type): self.error("cannot index non-array")
+                idx, tidx = self.expr()
                 if not is_int(tidx): self.error("index must be int")
+                self.eat("sym", "]")
                 type = Type(type.base, type.ptr, None)
                 elem_size = self.type_size(type)
                 if idx != Imm(0):
@@ -757,7 +765,7 @@ class Codegen:
             self.call(node)
 
         elif isinstance(node, Asm):
-            self.lines += ast.literal_eval(node.asm.replace("\n","\\n")).rstrip().split("\n")
+            self.lines += node.asm.rstrip().split("\n")
 
         else:
             assert False, f"unsupported statement {node}"

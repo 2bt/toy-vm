@@ -19,10 +19,8 @@ AddrOf   = namedtuple("AddrOf",   "lv")
 Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
 Call     = namedtuple("Call",     "name args")
-
 Var      = namedtuple("Var",      "type addr data")
 Func     = namedtuple("Func",     "args type body")
-
 Assign   = namedtuple("Assign",   "lhs op rhs")
 While    = namedtuple("While",    "cond body")
 Break    = namedtuple("Break",    "")
@@ -36,20 +34,6 @@ KEYWORDS = {
     "if", "then", "elif", "else", "while", "do", "end", "break", "continue",
     "return", "asm", "or", "and",
 }
-
-INT = Type("int", 0, None)
-
-def is_int(t): return t == INT
-def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
-def is_ptr(t): return t.array == None and t.ptr > 0
-def is_array(t): return t.array != None
-def is_cond(t): return is_int(t) or is_ptr(t)
-
-def addr_of(e):
-    if isinstance(e, Deref): return e.expr
-    return AddrOf(e)
-
-
 
 token_regex = re.compile(r"""
     [ \t]*(?P<nl>      \n                          )|
@@ -77,6 +61,33 @@ def tokenize(path):
         out.append(Token(k, v, (path, line)))
     out.append(Token("eof", "", (path, line)))
     return out
+
+
+INT = Type("int", 0, None)
+
+def is_int(t): return t == INT
+def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
+def is_ptr(t): return t.array == None and t.ptr > 0
+def is_array(t): return t.array != None
+def is_cond(t): return is_int(t) or is_ptr(t)
+
+def addr_of(e):
+    if isinstance(e, Deref): return e.expr
+    return AddrOf(e)
+
+def split_add(e):
+    match e:
+        case Imm(v): return (None, None, v)
+        case AddrOf(VarRef(n)): return (None, n, 0)
+        case AddrOf(Deref(e)): assert False, "WOOT"
+        case BinOp("+", a, b):
+            d1, s1, k1 = split_add(a)
+            d2, s2, k2 = split_add(b)
+            if d1 and d2: d = BinOp("+", d1, d2)
+            else: d = d1 or d2
+            if s1 and s2: assert False, "WOOT"
+            return (d, s1 or s2, k1 + k2)
+    return (e, None, 0)
 
 
 PRECEDENCE = {
@@ -162,7 +173,14 @@ class Parser:
         if not isinstance(n, Imm): self.error("const expression expected")
         return n.value
 
-    def type(self):
+    def const_int_or_addr(self):
+        n, t = self.expr()
+        dyn, sym, off = split_add(n)
+        if dyn: self.error("const expression expected")
+        if sym: return f"{sym}+{off}" if off else sym
+        return off
+
+    def type(self, auto_array_size=False):
         if not self.peek("sym", ":"): return INT
         self.eat()
         base = self.eat("id").v
@@ -171,7 +189,11 @@ class Parser:
         array = None
         if self.peek("sym", "["):
             self.eat()
-            array = self.const_expr()
+            if auto_array_size and self.peek("sym", "]"):
+                array = -1
+            else:
+                array = self.const_expr()
+                if array <= 0: self.error("invalid array size")
             self.eat("sym", "]")
         return Type(base, ptr, array)
 
@@ -179,73 +201,95 @@ class Parser:
         if t.ptr > 0: return 1
         n = t.array or 1
         if t.base == "int": return n
-        if t.base not in self.structs: self.error(f"unknown struct '{t.base}'")
-        return n * self.structs[t.base].size
+        return n * self.get_struct(t.base).size
 
-    def add_decl(self):
-        name = self.eat("id").v
-        if self.var_prefix:
-            name = self.var_prefix + name
-        if name in self.decls: self.error(f"variable '{name}' already exists")
+    def func_arg(self):
+        short = self.eat("id").v
+        name = self.var_prefix + short
+        if name in self.decls: self.error(f"variable '{short}' already exists")
         type = self.type()
+        if is_array(type): self.error("no local arrays allowed")
         addr = None
         if self.peek("sym", "@"):
             self.eat()
             addr = self.const_expr()
+        self.decls[name] = Var(type, addr, None)
+        return name
 
+    def global_var(self):
+        name = self.eat("id").v
+        if name in self.decls: self.error(f"variable '{name}' already exists")
+        type = self.type(True)
+        addr = None
         data = None
-        if not self.var_prefix and self.peek("sym", "="):
-            # parse data
+        if self.peek("sym", "@"):
             self.eat()
+            addr = self.const_expr()
+
+        elif self.peek("sym", "="):
+            self.eat()
+
+            def parse():
+                if self.peek("sym", "{"):
+                    self.eat()
+                    data = []
+                    while not self.peek("sym", "}"):
+                        data.append(parse())
+                        if not self.peek("sym", ","): break
+                        self.eat()
+                    self.eat("sym", "}")
+                    return data
+                if self.peek("string"):
+                    string = ast.literal_eval(self.eat("string").v)
+                    return list(map(ord, string))
+                return self.const_int_or_addr()
+
+            data = parse()
+            if type.array == -1:
+                if not isinstance(data, list):
+                    self.error("data doesn't match type")
+                type = Type(type.base, type.ptr, len(data))
+
             def null_obj(t):
                 if is_array(t):
                     return null_obj(Type(t.base, t.ptr, None)) * t.array
                 if is_struct(t):
                     data = []
-                    for f in self.structs[t.base].fields.values():
+                    for f in self.get_struct(t.base).fields.values():
                         data += null_obj(f.type)
                     return data
                 return [0]
-            def parse(t):
-                if is_array(t):
-                    self.eat("sym", "{")
-                    data = []
-                    l = t.array
+
+            def unroll(t, d):
+                res = []
+                if is_array(t) and isinstance(d, list):
+                    l = type.array
                     t = Type(t.base, t.ptr, None)
-                    n = 0
-                    while not self.peek("sym", "}"):
-                        if is_int(t) and self.peek("string"):
-                            string = ast.literal_eval(self.eat("string").v)
-                            data += list(map(ord, string))
-                            n += len(string)
-                        else:
-                            data += parse(t)
-                            n += 1
-                        if n > l: self.error("too too many initializers")
-                        if not self.peek("sym", ","): break
-                        self.eat()
-                    self.eat("sym", "}")
-                    data += null_obj(t) * (l - n)
-                    return data
-                if is_struct(t):
-                    self.eat("sym", "{")
-                    data = []
-                    parsing = True
-                    for f in self.structs[t.base].fields.values():
-                        if self.peek("sym", "}"): parsing = False
-                        if parsing:
-                            data += parse(f.type)
-                            if not self.peek("sym", ","): parsing = False
-                            else: self.eat()
-                        else:
-                            data += null_obj(f.type)
-                    self.eat("sym", "}")
-                    return data
-                return [self.const_expr()]
-            data = parse(type)
+                    if len(d) > l: self.error("too too many initializers")
+                    for x in d: res += unroll(t, x)
+                    res += null_obj(t) * (l - len(d))
+                    return res
+                if is_struct(t) and isinstance(d, list):
+                    res = []
+                    fields = self.get_struct(t.base).fields
+                    if len(d) > len(fields): self.error("too too many initializers")
+                    for i, f in enumerate(fields.values()):
+                        if i < len(d): res += unroll(f.type, d[i])
+                        else: res += null_obj(f.type)
+                    return res
+                if is_ptr(t) and isinstance(d, str) or d == 0:
+                    return [d]
+                if is_int(t) and isinstance(d, int):
+                    return [d]
+                self.error("data doesn't match type")
+
+            data = unroll(type, data)
 
         self.decls[name] = Var(type, addr, data)
-        return name
+
+    def get_struct(self, name):
+        if name not in self.structs: self.error(f"unknown struct '{name}'")
+        return self.structs[name]
 
     def program(self, path):
         self.included.add(path)
@@ -266,7 +310,7 @@ class Parser:
                 self.consts[name] = self.const_expr()
 
             elif tok.k == "var":
-                self.add_decl()
+                self.global_var()
 
             elif tok.k == "struct":
                 name = self.eat("id").v
@@ -288,10 +332,10 @@ class Parser:
                 self.eat("sym", "(")
                 args = []
                 if not self.peek("sym", ")"):
-                    args.append(self.add_decl())
+                    args.append(self.func_arg())
                     while self.peek("sym", ","):
                         self.eat()
-                        args.append(self.add_decl())
+                        args.append(self.func_arg())
                 self.eat("sym", ")")
                 self.return_type = self.type()
                 body = self.block()
@@ -506,26 +550,12 @@ class Parser:
                     type = Type(type.base, type.ptr - 1, None)
 
                 if not is_struct(type): self.error("request for member of non-struct")
-                struct = self.structs[type.base]
-                f = struct.fields.get(field)
+                f = self.get_struct(type.base).fields.get(field)
                 if not f: self.error(f"struct '{type.base}' has no field '{field}'")
                 type = f.type
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
             else: return node, type
 
-def split_add(e):
-    match e:
-        case Imm(v): return (None, None, v)
-        case AddrOf(VarRef(n)): return (None, n, 0)
-        case AddrOf(Deref(e)): assert False, "WOOT"
-        case BinOp("+", a, b):
-            d1, s1, k1 = split_add(a)
-            d2, s2, k2 = split_add(b)
-            if d1 and d2: d = BinOp("+", d1, d2)
-            else: d = d1 or d2
-            if s1 and s2: assert False, "WOOT"
-            return (d, s1 or s2, k1 + k2)
-    return (e, None, 0)
 
 
 class Codegen:

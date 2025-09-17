@@ -16,6 +16,16 @@ var balls: Ball[1000]
 var p: Ball*
 
 
+
+var line1: int[] = "hello world\0"
+var line2: int[] = "how are you doing?\0"
+
+var lines: int*[2] = { line1.ptr, line2.ptr }
+
+
+
+
+
 func init()
     p = balls.ptr
     while p < balls.limit do

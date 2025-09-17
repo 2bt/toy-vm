@@ -1,0 +1,52 @@
+
+
+func min(a, b)
+    if a < b then return a end
+    return b
+end
+func max(a, b)
+    if a > b then return a end
+    return b
+end
+
+
+var int_to_str_buf: int[10]
+
+func int_to_str(n): int*
+    if n == 0 then
+        int_to_str_buf[0] = 48
+        int_to_str_buf[1] = 0
+    else
+        var p: int* = int_to_str_buf.ptr
+        if n < 0 then
+            p@ = 45     # sign
+            p += 1
+            n *= -1
+        end
+        var q = p
+        while n do
+            p@ = n % 10 + 48
+            n /= 10
+            p += 1
+        end
+        p@ = 0
+        p -= 1
+        while q < p do
+            n = p@
+            p@ = q@
+            q@ = n
+            p -= 1
+            q += 1
+        end
+    end
+    return int_to_str_buf.ptr
+end
+
+
+func print(x, y, msg: int*)
+    while msg@ do
+        sprite(x, y, 8, 8, msg@ % 32 * 8, (msg@ / 32 - 1) * 8, 0)
+        x += 8
+        msg += 1
+    end
+end

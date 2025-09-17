@@ -279,8 +279,8 @@ def asm(args):
         f.write(struct.pack(f"i", len(code)))
         f.write(struct.pack(f"{len(code)}i", *code))
 
-    print("ints:", len(code))
-    print(code)
+    print("size:", len(code))
+    # print(code)
 
 
 if __name__ == "__main__":

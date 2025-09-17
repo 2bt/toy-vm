@@ -393,12 +393,33 @@ class Parser:
             return self.after_if()
         if self.peek("return"):
             self.eat()
+            # TODO: add void return type to functions
+            if self.peek() and self.peek().k in KEYWORDS:
+                return Ret(None)
             expr, type = self.expr()
             if type != self.return_type: self.error("return type mismatch")
             return Ret(expr)
         if self.peek("asm"):
             self.eat()
             return Asm(self.eat("string").v)
+
+        if self.peek("var"):
+            self.eat()
+            short = self.eat("id").v
+            name = self.var_prefix + short
+            if name in self.decls: self.error(f"variable '{short}' already exists")
+            a = VarRef(name)
+            ta = None
+            if self.peek("sym", ":"):
+                ta = self.type()
+                if is_array(ta): self.error("no local arrays allowed")
+            if self.peek("sym", "=") or ta == None:
+                # assign
+                self.eat("sym", "=")
+                b, tb = self.expr()
+                if ta != None and ta != tb: self.error("type mismatch")
+            self.decls[name] = Var(tb, None, None)
+            return Assign(a, "=", b)
 
         a, ta = self.primary()
         if isinstance(a, Call): return a
@@ -477,45 +498,46 @@ class Parser:
         # string literal -> int*
         if self.peek("string"):
             data = list(map(ord, self.eat().v)) + [0]
-            name = f"_str_{id(data)}"
+            name = f"_str_{len(self.decls)}"
             self.decls[name] = Var(Type("int", 0, len(data)), None, data)
-            return AddrOf(VarRef(name)), Type("int", 1, None)
+            node = AddrOf(VarRef(name))
+            type = Type("int", 1, None)
 
-        # constant
-        name = self.eat("id").v
-        if name in self.consts:
-            return Imm(self.consts[name]), INT
+        else:
+            # constant
+            name = self.eat("id").v
+            if name in self.consts: return Imm(self.consts[name]), INT
 
-        # function call
-        if self.peek("sym", "("):
-            f = self.funcs.get(name)
-            if not f: self.error(f"unknown function '{name}'")
-            self.eat()
-            args = []
-            types = []
-            if not self.peek("sym", ")"):
-                e, t = self.expr()
-                args.append(e)
-                types.append(t)
-                while self.peek("sym", ","):
-                    self.eat()
+            # function call
+            if self.peek("sym", "("):
+                f = self.funcs.get(name)
+                if not f: self.error(f"unknown function '{name}'")
+                self.eat()
+                args = []
+                types = []
+                if not self.peek("sym", ")"):
                     e, t = self.expr()
                     args.append(e)
                     types.append(t)
-            self.eat("sym", ")")
-            if len(args) != len(f.args): self.error("wrong number of function arguments")
-            for t, n in zip(types, f.args):
-                if t != self.decls[n].type: self.error("type mismatch")
-            return Call(name, args), f.type
+                    while self.peek("sym", ","):
+                        self.eat()
+                        e, t = self.expr()
+                        args.append(e)
+                        types.append(t)
+                self.eat("sym", ")")
+                if len(args) != len(f.args): self.error("wrong number of function arguments")
+                for t, n in zip(types, f.args):
+                    if t != self.decls[n].type: self.error("type mismatch")
+                return Call(name, args), f.type
 
-        # resolve name
-        if self.var_prefix:
-            local_name = self.var_prefix + name
-            if local_name in self.decls: name = local_name
-        if name not in self.decls: self.error(f"unknown variable '{name}'")
+            # resolve name
+            if self.var_prefix:
+                local_name = self.var_prefix + name
+                if local_name in self.decls: name = local_name
+            if name not in self.decls: self.error(f"unknown variable '{name}'")
+            node = VarRef(name)
+            type = self.decls[name].type
 
-        node = VarRef(name)
-        type = self.decls[name].type
         while True:
             if self.peek("sym", "["):
                 self.eat()
@@ -552,16 +574,15 @@ class Parser:
                         type = Type(type.base, type.ptr + 1, None)
                         continue
 
-                if is_ptr(type):
-                    # auto pointer deref
+                if is_ptr(type): # auto pointer deref
                     node = Deref(node)
                     type = Type(type.base, type.ptr - 1, None)
-
                 if not is_struct(type): self.error("request for member of non-struct")
                 f = self.get_struct(type.base).fields.get(field)
                 if not f: self.error(f"struct '{type.base}' has no field '{field}'")
                 type = f.type
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
+
             else: return node, type
 
 
@@ -672,14 +693,20 @@ class Codegen:
             if op := ARITH_OPS.get(node.op):
                 a = self.value(node.a)
                 b = self.value(node.b)
-                t = self.newtmp(a, b)
-                if t == a:
+                if node.op in {"-", "/", "%"}:
+                    t = self.newtmp(a)
+                    if t != a:
+                        self.emit(f"    mov {t}, {a}")
                     self.emit(f"    {op} {t}, {b}")
-                elif t == b and node.op not in {"-", "/", "%"}:
-                    self.emit(f"    {op} {t}, {a}")
                 else:
-                    self.emit(f"    mov {t}, {a}")
-                    self.emit(f"    {op} {t}, {b}")
+                    t = self.newtmp(a, b)
+                    if t == a:
+                        self.emit(f"    {op} {t}, {b}")
+                    elif t == b:
+                        self.emit(f"    {op} {t}, {a}")
+                    else:
+                        self.emit(f"    mov {t}, {a}")
+                        self.emit(f"    {op} {t}, {b}")
                 return t
             if node.op in CMP_TO_JMP or node.op in {"and", "or"}:
                 t = self.newtmp()
@@ -757,8 +784,9 @@ class Codegen:
                 self.emit_label(F)
 
         elif isinstance(node, Ret):
-            v = self.value(node.expr)
-            self.emit(f"    mov _R, {v}")
+            if node.expr:
+                v = self.value(node.expr)
+                self.emit(f"    mov _R, {v}")
             self.emit(f"    ret")
 
         elif isinstance(node, Call):
@@ -847,8 +875,6 @@ def main(args):
     out = args.out or Path(args.src).with_suffix(".asm")
     with open(out, "w") as f:
         f.write(asm)
-
-    print("lines:", asm.count("\n"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

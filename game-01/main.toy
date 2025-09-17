@@ -3,8 +3,8 @@ include "prelude.toy"
 const BALL_COUNT = 1000
 const Q = 256
 
-var x
-var y
+var x = SCREEN_W/2 - 16
+var y = SCREEN_H/2 - 16
 
 struct Ball
     x: int
@@ -14,10 +14,7 @@ struct Ball
 end
 
 var balls: Ball[BALL_COUNT]
-
 var p: Ball*
-var i
-
 
 
 func init()
@@ -30,23 +27,20 @@ func init()
         p += 1
     end
 
-    x = SCREEN_W/2 - 16
-    y = SCREEN_H/2 - 16
+
 end
 
 
 
 func update()
-    i = 0
     p = &balls[0]
-    while i < BALL_COUNT do
+    while p < &balls[BALL_COUNT] do
         p->x += p->vx
         p->y += p->vy
         if p->x < 0 or p->x >= (SCREEN_W) * Q then p->vx *= -1 end
         if p->y < 0 or p->y >= (SCREEN_H) * Q then p->vy *= -1 end
         sprite(p->x / Q, p->y / Q, 1, 1, 32 + 16, 0, 0)
         p += 1
-        i += 1
     end
 
     if btn & BTN_LEFT  then x -= 2 end

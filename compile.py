@@ -20,7 +20,7 @@ Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
 Call     = namedtuple("Call",     "name args")
 
-Var      = namedtuple("Var",      "type addr")
+Var      = namedtuple("Var",      "type addr data")
 Func     = namedtuple("Func",     "args type body")
 
 Assign   = namedtuple("Assign",   "lhs op rhs")
@@ -126,14 +126,15 @@ JMP_SWAP = {
 
 class Parser:
     def __init__(self):
-        self.consts   = {}
-        self.decls    = {}
-        self.funcs    = {}
-        self.structs  = {}
-        self.loop     = 0
+        self.consts     = {}
+        self.decls      = {}
+        self.funcs      = {}
+        self.structs    = {}
+        self.loop       = 0
+        self.var_prefix = None
         # for includes
-        self.included = set()
-        self.stack    = []
+        self.included   = set()
+        self.stack      = []
 
     def error(self, msg, tok=None):
         file, nr = (tok or self.last_tok).loc
@@ -148,8 +149,8 @@ class Parser:
 
 
     def eat(self, k=None, v=None):
+        self.last_tok = self.head.toks[self.head.i]
         tok = self.peek(k, v)
-        self.last_tok = tok
         if not tok:
             need = f"{k or ''} {v or ''}".strip()
             self.error(f"expected {need}")
@@ -181,15 +182,69 @@ class Parser:
         if t.base not in self.structs: self.error(f"unknown struct '{t.base}'")
         return n * self.structs[t.base].size
 
-    def add_decl(self, prefix=""):
-        name = prefix + self.eat("id").v
+    def add_decl(self):
+        name = self.eat("id").v
+        if self.var_prefix:
+            name = self.var_prefix + name
         if name in self.decls: self.error(f"variable '{name}' already exists")
         type = self.type()
         addr = None
         if self.peek("sym", "@"):
             self.eat()
             addr = self.const_expr()
-        self.decls[name] = Var(type, addr)
+
+        data = None
+        if not self.var_prefix and self.peek("sym", "="):
+            # parse data
+            self.eat()
+            def null_obj(t):
+                if is_array(t):
+                    return null_obj(Type(t.base, t.ptr, None)) * t.array
+                if is_struct(t):
+                    data = []
+                    for f in self.structs[t.base].fields.values():
+                        data += null_obj(f.type)
+                    return data
+                return [0]
+            def parse(t):
+                if is_array(t):
+                    self.eat("sym", "{")
+                    data = []
+                    l = t.array
+                    t = Type(t.base, t.ptr, None)
+                    n = 0
+                    while not self.peek("sym", "}"):
+                        if is_int(t) and self.peek("string"):
+                            string = ast.literal_eval(self.eat("string").v)
+                            data += list(map(ord, string))
+                            n += len(string)
+                        else:
+                            data += parse(t)
+                            n += 1
+                        if n > l: self.error("too too many initializers")
+                        if not self.peek("sym", ","): break
+                        self.eat()
+                    self.eat("sym", "}")
+                    data += null_obj(t) * (l - n)
+                    return data
+                if is_struct(t):
+                    self.eat("sym", "{")
+                    data = []
+                    parsing = True
+                    for f in self.structs[t.base].fields.values():
+                        if self.peek("sym", "}"): parsing = False
+                        if parsing:
+                            data += parse(f.type)
+                            if not self.peek("sym", ","): parsing = False
+                            else: self.eat()
+                        else:
+                            data += null_obj(f.type)
+                    self.eat("sym", "}")
+                    return data
+                return [self.const_expr()]
+            data = parse(type)
+
+        self.decls[name] = Var(type, addr, data)
         return name
 
     def program(self, path):
@@ -229,19 +284,20 @@ class Parser:
             elif tok.k == "func":
                 name = self.eat("id").v
                 if name in self.funcs: self.error(f"function '{name}' already exists")
-                self.local_var_prefix = f"_{name}_"
+                self.var_prefix = f"_{name}_"
                 self.eat("sym", "(")
                 args = []
                 if not self.peek("sym", ")"):
-                    args.append(self.add_decl(self.local_var_prefix))
+                    args.append(self.add_decl())
                     while self.peek("sym", ","):
                         self.eat()
-                        args.append(self.add_decl(self.local_var_prefix))
+                        args.append(self.add_decl())
                 self.eat("sym", ")")
                 self.return_type = self.type()
                 body = self.block()
                 self.eat("end")
                 self.funcs[name] = Func(args, self.return_type, body)
+                self.var_prefix = None
 
             else: assert False
         self.eat("eof")
@@ -305,7 +361,7 @@ class Parser:
         if isinstance(a, (VarRef, Deref)) and self.peek("sym") and self.peek().v in ASSIGN_OPS:
             op = self.eat().v
             b, tb = self.expr()
-            if op == "=" and ta == tb: pass
+            if op == "=" and (ta == tb or is_ptr(ta) and is_int(tb) and b == Imm(0)): pass
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -401,7 +457,7 @@ class Parser:
             return Call(name, args), f.type
 
         # resolve name
-        local_name = self.local_var_prefix + name
+        local_name = self.var_prefix + name
         if local_name in self.decls: name = local_name
         elif name not in self.decls: self.error(f"unknown variable '{name}'")
 
@@ -689,22 +745,49 @@ class Codegen:
                 self.stmt(st)
             self.emit("    ret")
 
+
+        # variables and data
         lines, self.lines = self.lines, []
 
-        addr = 30 # TODO
+        # API variables
+        addr = 0
+        for name, v in self.decls.items():
+            if v.addr != None:
+                assert v.data == None
+                self.emit(f"{name} = {v.addr}")
+                addr = max(addr, v.addr + 1)
+
+        # temp variables
         for name in ["_R"] + list(self.tmp_vars):
             self.emit(f"{name} = {addr}")
             addr += 1
 
+        # BSS
         for name, v in self.decls.items():
-            if v.addr != None:
-                self.emit(f"{name} = {v.addr}")
-            else:
+            if v.addr == None and not v.data:
                 self.emit(f"{name} = {addr}")
                 addr += ast.type_size(v.type)
 
-        return "\n".join(self.lines + lines) + "\n"
+        # data
+        self.emit(f"")
+        self.emit(f"    .data {addr}")
+        for name, v in self.decls.items():
+            if v.data:
+                assert v.addr == None
+                self.emit(f"{name}:")
+                ln = "   "
+                for d in v.data:
+                    lo = ln
+                    ln += f" {d},"
+                    if len(ln) > 80:
+                        self.emit(lo[:-1])
+                        ln = f"    {d},"
+                self.emit(ln[:-1])
 
+        # code
+        self.emit(f"")
+        self.emit(f"    .code")
+        return "\n".join(self.lines + lines) + "\n"
 
 
 def main(args):

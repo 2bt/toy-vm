@@ -106,7 +106,7 @@ def asm(args):
     jumps     = []
     bin_cmds  = []
     section   = "code"
-    data_base = 0
+    data_base = None
     data      = []
 
     for l in open(args.src):
@@ -122,14 +122,16 @@ def asm(args):
                 section = "code"
                 continue
 
-            # code section
-            case [("sym", "."), ("name", "data")]:
+            # data section
+            case [("sym", "."), ("name", "data"), ("number", base)]:
                 section = "data"
-                # data_base = base
+                if data_base != None: bad_line()
+                data_base = int(base)
                 continue
 
             # variable
             case [("name", name), ("sym", "="), *rest]:
+                if name in variables: bad_line()
                 variables[name], rest = eval_expression(rest)
                 if rest: bad_line()
                 continue
@@ -142,6 +144,7 @@ def asm(args):
                         sys.exit(f"{nr}: label '{name}' already used")
                     labels[name] = len(bin_cmds)
                 if section == "data":
+                    if name in variables: bad_line()
                     variables[name] = len(data) + data_base
 
         if section == "data":
@@ -270,7 +273,7 @@ def asm(args):
     code = []
     for cmd in bin_cmds: code += cmd
     with open(out, "wb") as f:
-        f.write(struct.pack(f"i", data_base))
+        f.write(struct.pack(f"i", data_base or 0))
         f.write(struct.pack(f"i", len(data)))
         f.write(struct.pack(f"{len(data)}i", *data))
         f.write(struct.pack(f"i", len(code)))

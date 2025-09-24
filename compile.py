@@ -23,15 +23,17 @@ Var      = namedtuple("Var",      "type addr data")
 Func     = namedtuple("Func",     "args type body")
 Assign   = namedtuple("Assign",   "lhs op rhs")
 While    = namedtuple("While",    "cond body")
+For      = namedtuple("For",      "init cond next body")
 Break    = namedtuple("Break",    "")
 Continue = namedtuple("Continue", "")
 If       = namedtuple("If",       "cond then els")
 Ret      = namedtuple("Ret",      "expr")
 Asm      = namedtuple("Asm",      "asm")
+NoOp     = namedtuple("NoOp",     "")
 
 KEYWORDS = {
     "include", "var", "const", "func", "struct",
-    "if", "then", "elif", "else", "while", "do", "end", "break", "continue",
+    "if", "then", "elif", "else", "while", "for", "do", "end", "break", "continue",
     "return", "asm", "or", "and",
 }
 
@@ -380,6 +382,22 @@ class Parser:
             self.loop -= 1
             self.eat("end")
             return While(cond, body)
+        if self.peek("for"):
+            self.eat()
+            init = self.stmt()
+            if not isinstance(init, Assign) or init.op != "=": self.error("invalid statement")
+            self.eat("sym", ",")
+            cond, t = self.expr()
+            if not is_cond(t): self.error("bad type")
+            self.eat("sym", ",")
+            next = self.stmt()
+            if not isinstance(next, Assign): self.error("invalid statement")
+            self.eat("do")
+            self.loop += 1
+            body = self.block()
+            self.loop -= 1
+            self.eat("end")
+            return For(init, cond, next, body)
         if self.peek("break"):
             self.eat()
             if self.loop == 0: self.error("break outside loop")
@@ -397,7 +415,8 @@ class Parser:
             if self.peek() and self.peek().k in KEYWORDS:
                 return Ret(None)
             expr, type = self.expr()
-            if type != self.return_type: self.error("return type mismatch")
+            if not (type == self.return_type or (is_ptr(self.return_type) and expr == Imm(0))):
+                self.error("return type mismatch")
             return Ret(expr)
         if self.peek("asm"):
             self.eat()
@@ -413,13 +432,14 @@ class Parser:
             if self.peek("sym", ":"):
                 ta = self.type()
                 if is_array(ta): self.error("no local arrays allowed")
+                self.decls[name] = Var(ta, None, None)
             if self.peek("sym", "=") or ta == None:
-                # assign
                 self.eat("sym", "=")
                 b, tb = self.expr()
                 if ta != None and ta != tb: self.error("type mismatch")
-            self.decls[name] = Var(tb, None, None)
-            return Assign(a, "=", b)
+                self.decls[name] = Var(tb, None, None)
+                return Assign(a, "=", b)
+            return NoOp()
 
         a, ta = self.primary()
         if isinstance(a, Call): return a
@@ -487,6 +507,13 @@ class Parser:
             return BinOp("*", a, Imm(-1)), INT
         return self.primary()
 
+    def resolve_var(self, name):
+        if self.var_prefix:
+            local_name = self.var_prefix + name
+            if local_name in self.decls: return VarRef(local_name)
+        if name not in self.decls: self.error(f"unknown variable '{name}'")
+        return VarRef(name)
+
     def primary(self):
         # number
         if self.peek("num"):
@@ -529,14 +556,10 @@ class Parser:
                 for t, n in zip(types, f.args):
                     if t != self.decls[n].type: self.error("type mismatch")
                 return Call(name, args), f.type
-
-            # resolve name
-            if self.var_prefix:
-                local_name = self.var_prefix + name
-                if local_name in self.decls: name = local_name
-            if name not in self.decls: self.error(f"unknown variable '{name}'")
-            node = VarRef(name)
-            type = self.decls[name].type
+            
+            # variable
+            node = self.resolve_var(name)
+            type = self.decls[node.name].type
 
         while True:
             if self.peek("sym", "["):
@@ -603,6 +626,8 @@ class Codegen:
         return f"_{base}_{self.label_i}"
 
     def emit(self, s):
+        if self.lines:
+            if s == "    ret" and self.lines[-1] == s: return
         self.lines.append(s)
 
     def emit_label(self, l):
@@ -750,7 +775,7 @@ class Codegen:
         elif isinstance(node, While):
             L = self.label("while")
             T = self.label("while_true")
-            E = self.label("end_while")
+            E = self.label("while_end")
             self.emit_label(L)
             self.branch(node.cond, T, E)
             self.emit_label(T)
@@ -759,6 +784,24 @@ class Codegen:
             self.loop_stack.pop()
             self.emit(f"    jmp {L}")
             self.emit_label(E)
+
+        elif isinstance(node, For):
+            L = self.label("for")
+            T = self.label("for_true")
+            N = self.label("for_next")
+            E = self.label("for_end")
+            self.stmt(node.init)
+            self.emit_label(L)
+            self.branch(node.cond, T, E)
+            self.emit_label(T)
+            self.loop_stack.append((N, E))
+            for st in node.body: self.stmt(st)
+            self.loop_stack.pop()
+            self.emit_label(N)
+            self.stmt(node.next)
+            self.emit(f"    jmp {L}")
+            self.emit_label(E)
+
 
         elif isinstance(node, Continue):
             l = self.loop_stack[-1][0]
@@ -771,7 +814,7 @@ class Codegen:
         elif isinstance(node, If):
             T = self.label("if_true")
             F = self.label("if_false")
-            E = self.label("end_if")
+            E = self.label("if_end")
             self.branch(node.cond, T, F)
             self.emit_label(T)
             for st in node.then: self.stmt(st)
@@ -794,6 +837,8 @@ class Codegen:
 
         elif isinstance(node, Asm):
             self.lines += node.asm.rstrip().split("\n")
+
+        elif isinstance(node, NoOp): pass
 
         else:
             assert False, f"unsupported statement {node}"

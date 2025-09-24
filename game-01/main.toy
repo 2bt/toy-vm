@@ -1,59 +1,177 @@
 include "prelude.toy"
 include "util.toy"
 
-
 const Q = 256
 
-var x = SCREEN_W/2 - 16
-var y = SCREEN_H/2 - 16
+const BORDER    = 18
+const BALL_W    = 4
+const BLOCK_W   = 16
+const PAD_W     = 10
+const PAD_RIGHT = 48
+const PAD_SPEED = 2 * Q
+
 
 struct Ball
-    x: int
-    y: int
-    vx: int
-    vy: int
+    x
+    y
+    vx
+    vy
+    alive
 end
 
-var balls: Ball[1000]
+struct Block
+    x
+    y
+    alive
+end
+
+struct Pad
+    y
+    h
+end
+
+var balls:  Ball[10]
+var blocks: Block[100]
+var pad:    Pad
+
+
+
+func Ball_add(x, y): Ball*
+    for var b = balls.ptr, b < balls.limit, b += 1 do
+        if b.alive == 0 then
+            b.alive = 1
+            b.x  = x
+            b.y  = y
+            b.vx = 600 + rand(-100, 100)
+            b.vy = rand(-400, 400)
+            return b
+        end
+    end
+    return 0
+end
+
+
+
+var blocks_alive
+var balls_alive
 
 
 
 
 func init()
-    var p = balls.ptr
-    while p < balls.limit do
-        p.x  = rand(0, SCREEN_W-1) * Q
-        p.y  = rand(0, SCREEN_H-1) * Q
-        p.vx = rand(-100, 100)
-        p.vy = rand(-100, 100)
-        p += 1
+
+    pad.h = 30
+    pad.y = SCREEN_H/2 - (pad.h / 2)
+    pad.y *= Q
+
+    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+
+
+    var k = blocks.ptr
+    for var i = 0, i < 6, i += 1 do
+        for var j = 0, j < 9, j += 1 do
+            k.alive = 1
+            k.x = 150 + i * BLOCK_W
+            k.y = BORDER + j * BLOCK_W
+            k += 1
+        end
     end
+
+    while k < blocks.limit do
+        k.alive = 0
+        k += 1
+    end
+
 end
 
 
 
 
-func update()
-    var p = balls.ptr
-    while p < balls.limit do
-        p.x += p.vx
-        p.y += p.vy
-        if p.x < 0 or p.x >= (SCREEN_W) * Q then p.vx *= -1 end
-        if p.y < 0 or p.y >= (SCREEN_H) * Q then p.vy *= -1 end
-        sprite(p.x / Q, p.y / Q, 1, 1, 0, 64, 0)
-        p += 1
+func Ball_update(b: Ball*)
+
+    if b.alive == 0 then return end
+    balls_alive += 1
+
+    b.x += b.vx
+    b.y += b.vy
+
+    if b.vx < 0 then
+
+        if b.x < -100 * Q then
+            b.alive = 0
+        end
+
+        # collision with pad
+        if b.x <= PAD_RIGHT * Q and b.x > (PAD_RIGHT - 4) * Q then
+            if b.y + BALL_W/2*Q >= pad.y and b.y <= pad.y + pad.h * Q then
+                b.x = PAD_RIGHT * Q
+                b.vx *= -1
+            end
+        end
+
+
+    elif b.vx > 0 then
+        if b.x > (SCREEN_W - BALL_W - BORDER) * Q then
+            b.x = (SCREEN_W - BALL_W - BORDER) * Q
+            b.vx *= -1
+        end
     end
 
-    if btn & BTN_LEFT  then x -= 2 end
-    if btn & BTN_RIGHT then x += 2 end
-    if btn & BTN_UP    then y -= 2 end
-    if btn & BTN_DOWN  then y += 2 end
+
+    if b.y < BORDER * Q then
+        b.y = BORDER * Q
+        b.vy *= -1
+    end
+    if b.y > (SCREEN_H - BALL_W - BORDER) * Q then
+        b.y = (SCREEN_H - BALL_W - BORDER) * Q
+        b.vy *= -1
+    end
+
+    sprite(b.x / Q, b.y / Q, BALL_W, BALL_W, 16, 224, 0)
+
+end
 
 
-    sprite(x, y, 32, 32, 0, 32, 0)
+
+func update()
+
+    # draw stage
+    sprite(0, 0, SCREEN_W, SCREEN_H, 0, 32, 0)
 
 
-    print(4, 4, "hello")
-    print(4 + 6 * 8, 4, int_to_str(x))
+    # draw blocks
+    blocks_alive = 0
+    for var k = blocks.ptr, k < blocks.limit, k += 1 do
+        if k.alive then
+            blocks_alive += 1
+            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 32, 224, 0)
+        end
+    end
 
+
+
+    # pad
+    if btn & BTN_UP   then pad.y -= PAD_SPEED end
+    if btn & BTN_DOWN then pad.y += PAD_SPEED end
+    pad.y = clamp(pad.y, BORDER * Q, (SCREEN_H - BORDER - pad.h) * Q)
+
+    sprite(PAD_RIGHT - PAD_W, pad.y / Q, PAD_W, pad.h - 8, 0, 224, 0)
+    sprite(PAD_RIGHT - PAD_W, pad.y / Q + pad.h - 8, PAD_W, 8, 0, 224, 2)
+
+
+    # update balls
+    balls_alive = 0
+    for var b = balls.ptr, b < balls.limit, b += 1 do
+        Ball_update(b)
+    end
+
+    # spawn new ball
+    if balls_alive == 0 then
+        Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    end
+
+
+    print(5, 5, "Balls: ")
+    print(5 + 8*6, 5, int_to_str(balls_alive))
 end

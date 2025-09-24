@@ -8,6 +8,11 @@ func max(a, b)
     if a > b then return a end
     return b
 end
+func clamp(x, a, b)
+    if x < a then return a end
+    if x > b then return b end
+    return x
+end
 
 
 var int_to_str_buf: int[10]

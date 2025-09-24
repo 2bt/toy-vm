@@ -66,13 +66,15 @@ func init()
 
     Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
     Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
 
 
     var k = blocks.ptr
-    for var i = 0, i < 6, i += 1 do
+    for var i = 0, i < 7, i += 1 do
         for var j = 0, j < 9, j += 1 do
             k.alive = 1
-            k.x = 150 + i * BLOCK_W
+            k.x = 158 + i * BLOCK_W
             k.y = BORDER + j * BLOCK_W
             k += 1
         end
@@ -172,6 +174,9 @@ func update()
     end
 
 
-    print(5, 5, "Balls: ")
+    print(5, 5, "Balls ")
     print(5 + 8*6, 5, int_to_str(balls_alive))
+
+    print(10*8 + 5, 5, "Blocks ")
+    print(10*8 + 5 + 8*7, 5, int_to_str(blocks_alive))
 end

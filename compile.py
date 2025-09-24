@@ -556,7 +556,7 @@ class Parser:
                 for t, n in zip(types, f.args):
                     if t != self.decls[n].type: self.error("type mismatch")
                 return Call(name, args), f.type
-            
+
             # variable
             node = self.resolve_var(name)
             type = self.decls[node.name].type
@@ -627,7 +627,8 @@ class Codegen:
 
     def emit(self, s):
         if self.lines:
-            if s == "    ret" and self.lines[-1] == s: return
+            p = self.lines[-1]
+            if s == "    ret" and p == s: return
         self.lines.append(s)
 
     def emit_label(self, l):
@@ -844,6 +845,26 @@ class Codegen:
             assert False, f"unsupported statement {node}"
 
 
+    def peephole(self):
+        # eliminate unnecessary mov's
+        new_lines = []
+        tmp = None
+        for l in self.lines:
+            new_lines.append(l)
+            m = re.match(r"    (mov|add|sub|mul|div|mod) ([^, ]+), ([^, ]+)", l)
+            if not m: continue
+            op, a, b = m.groups()
+            if op == "mov" and a in self.tmp_vars:
+                block = [(op, b)]
+                tmp = a
+            elif op != "mov" and a == tmp and a not in b:
+                block.append((op, b))
+            elif op == "mov" and b == tmp:
+                del new_lines[-len(block) - 1:]
+                for op, x in block: new_lines.append(f"    {op} {a}, {x}")
+            else: tmp = None
+        self.lines = new_lines
+
     def compile(self, ast):
         self.expr_types = {}
         self.lines      = []
@@ -867,6 +888,7 @@ class Codegen:
                 self.stmt(st)
             self.emit("    ret")
 
+        self.peephole()
 
         # variables and data
         lines, self.lines = self.lines, []

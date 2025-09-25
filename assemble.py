@@ -3,7 +3,6 @@ import argparse
 import pathlib
 import re
 import sys
-import struct
 
 
 OPCODE_TABLE = []
@@ -99,6 +98,17 @@ def eval_expression(ts, min_p=1):
                     case "%": a %= b
             case _: break
     return a, ts
+
+
+def encode(out: bytearray, v: int):
+    """Encode a signed int32 into ZigZag + varint"""
+    v &= 0Xffffffff
+    if v & 0x80000000: v -= 0x100000000
+    u = (v << 1) ^ (v >> 31)
+    while u >= 0x80:
+        out.append((u & 0x7f) | 0x80)
+        u >>= 7
+    out.append(u)
 
 
 def asm(args):
@@ -246,6 +256,19 @@ def asm(args):
         bin_cmd = bin_cmds[pos]
         bin_cmd[1] = get_label_addr(label)
 
+    # write binary
+    code = []
+    for cmd in bin_cmds: code += cmd
+
+    path = args.out or pathlib.Path(args.src).parent / "code"
+    out = bytearray()
+    encode(out, data_base or 0)
+    encode(out, len(data))
+    for x in data: encode(out, x)
+    encode(out, len(code))
+    for x in code: encode(out, x)
+    with open(path, "wb") as f: f.write(out)
+
 
     # print assembled code
     if args.print:
@@ -267,20 +290,9 @@ def asm(args):
                 if b == "imm": l += f" #{bin.pop(0)}"
             print(l)
             pos += len(bin_cmd)
+    print("codes:", len(code))
+    print("size:", len(out))
 
-    # write binary
-    out = args.out or pathlib.Path(args.src).parent / "code"
-    code = []
-    for cmd in bin_cmds: code += cmd
-    with open(out, "wb") as f:
-        f.write(struct.pack(f"i", data_base or 0))
-        f.write(struct.pack(f"i", len(data)))
-        f.write(struct.pack(f"{len(data)}i", *data))
-        f.write(struct.pack(f"i", len(code)))
-        f.write(struct.pack(f"{len(code)}i", *code))
-
-    print("size:", len(code))
-    # print(code)
 
 
 if __name__ == "__main__":

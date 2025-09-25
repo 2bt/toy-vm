@@ -847,6 +847,7 @@ class Codegen:
 
     def peephole(self):
         # eliminate unnecessary mov's
+        used_tmps = {}
         new_lines = []
         tmp = None
         for l in self.lines:
@@ -857,13 +858,18 @@ class Codegen:
             if op == "mov" and a in self.tmp_vars:
                 block = [(op, b)]
                 tmp = a
+                used_tmps[tmp] = used_tmps.get(tmp, 0) + 1
             elif op != "mov" and a == tmp and a not in b:
                 block.append((op, b))
             elif op == "mov" and b == tmp:
+                used_tmps[tmp] -= 1
                 del new_lines[-len(block) - 1:]
                 for op, x in block: new_lines.append(f"    {op} {a}, {x}")
             else: tmp = None
         self.lines = new_lines
+        # remove unused temporary variables
+        for t in list(self.tmp_vars.keys()):
+            if used_tmps.get(t, 0) == 0: del self.tmp_vars[t]
 
     def compile(self, ast):
         self.expr_types = {}

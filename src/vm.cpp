@@ -5,6 +5,7 @@
 #include <cassert>
 #include <fstream>
 
+namespace {
 
 enum Operation {
     MOV, ADD, SUB, MUL, DIV, MOD, AND, ORE, CMP, TST,
@@ -24,6 +25,32 @@ struct Opcode {
 };
 
 constexpr Opcode OPCODE_TABLE[] = {
+
+    { RET },
+
+    { INT, NIL, IMM },
+
+    { JLT, NIL, IMM },
+    { JLE, NIL, IMM },
+    { JGT, NIL, IMM },
+    { JGE, NIL, IMM },
+    { JEQ, NIL, IMM },
+    { JNE, NIL, IMM },
+    { JMP, NIL, IMM },
+    { JSR, NIL, IMM },
+
+    { CMP, ABS, ABS },
+    { CMP, ABS, IND },
+    { CMP, ABS, IDX },
+    { CMP, ABS, IMM },
+    { CMP, IND, ABS },
+    { CMP, IND, IND },
+    { CMP, IND, IDX },
+    { CMP, IND, IMM },
+    { CMP, IDX, ABS },
+    { CMP, IDX, IND },
+    { CMP, IDX, IDX },
+    { CMP, IDX, IMM },
 
     { MOV, ABS, ABS },
     { MOV, ABS, IND },
@@ -129,19 +156,6 @@ constexpr Opcode OPCODE_TABLE[] = {
     { ORE, IDX, IDX },
     { ORE, IDX, IMM },
 
-    { CMP, ABS, ABS },
-    { CMP, ABS, IND },
-    { CMP, ABS, IDX },
-    { CMP, ABS, IMM },
-    { CMP, IND, ABS },
-    { CMP, IND, IND },
-    { CMP, IND, IDX },
-    { CMP, IND, IMM },
-    { CMP, IDX, ABS },
-    { CMP, IDX, IND },
-    { CMP, IDX, IDX },
-    { CMP, IDX, IMM },
-
     { TST, ABS, ABS },
     { TST, ABS, IND },
     { TST, ABS, IDX },
@@ -154,44 +168,35 @@ constexpr Opcode OPCODE_TABLE[] = {
     { TST, IDX, IND },
     { TST, IDX, IDX },
     { TST, IDX, IMM },
-
-    { JLT, NIL, IMM },
-    { JLE, NIL, IMM },
-    { JGT, NIL, IMM },
-    { JGE, NIL, IMM },
-    { JEQ, NIL, IMM },
-    { JNE, NIL, IMM },
-    { JMP, NIL, IMM },
-    { JSR, NIL, IMM },
-    { RET },
-
-    { INT, NIL, IMM },
 };
 
-template <class T>
-bool read(std::istream& f, T& t) {
-    return !! f.read((char*) &t, sizeof(T));
+
+int32_t decode(std::istream& f) {
+    uint32_t u = 0;
+    for (int shift = 0;; shift += 7) {
+        uint8_t b = f.get();
+        u |= (b & 0x7f) << shift;
+        if (b < 0x80) break;
+    }
+    return int32_t((u >> 1) ^ -(u & 1));
 }
 
+} // namespace
+
+
 bool VM::load(std::string const& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) {
         printf("ERROR: cannot open file '%s'\n", path.c_str());
         return false;
     }
-
-    int32_t base;
-    int32_t size;
-
-    read(file, base);
-    read(file, size);
-    file.read((char*) &mem[base], size * sizeof(int32_t));
-
-    read(file, size);
-    code.resize(size);
-    file.read((char*) code.data(), size * sizeof(int32_t));
-
-    return true;
+    int32_t base = decode(f);
+    int32_t size = decode(f);
+    for (int32_t i = 0; i < size; ++i) mem_at(base + i) = decode(f);
+    size = decode(f);
+    code.reserve(size);
+    for (int32_t i = 0; i < size; ++i) code.push_back(decode(f));
+    return f.good();
 }
 
 

@@ -656,14 +656,6 @@ class Codegen:
             self.emit(f"    jeq {F}")
             self.emit(f"    jne {T}")
 
-        elif isinstance(node, BinOp) and node.op == "&":
-            a = self.value(node.a)
-            b = self.value(node.b)
-            if a.startswith("#"): a, b = b, a
-            self.emit(f"    tst {a}, {b}")
-            self.emit(f"    jeq {F}")
-            self.emit(f"    jne {T}")
-
         elif isinstance(node, BinOp) and node.op in CMP_TO_JMP:
             a = self.value(node.a)
             b = self.value(node.b)
@@ -864,12 +856,26 @@ class Codegen:
             elif op == "mov" and b == tmp:
                 used_tmps[tmp] -= 1
                 del new_lines[-len(block) - 1:]
+                if a == block[0][1]: block.pop(0) # remove "mov x, x"
                 for op, x in block: new_lines.append(f"    {op} {a}, {x}")
             else: tmp = None
         self.lines = new_lines
         # remove unused temporary variables
         for t in list(self.tmp_vars.keys()):
             if used_tmps.get(t, 0) == 0: del self.tmp_vars[t]
+
+        # previous destination address
+        new_lines = []
+        dst = None
+        for l in self.lines:
+            if m := re.match(r"    (mov|add|sub|mul|div|mod) ([^, ]+), ([^, ]+)", l):
+                op, a, b = m.groups()
+                if op != "mov" and dst == a: l = f"    {op} %, {b}"
+                dst = a
+            else: dst = None
+            new_lines.append(l)
+        self.lines = new_lines
+
 
     def compile(self, ast):
         self.expr_types = {}
@@ -890,10 +896,10 @@ class Codegen:
             self.emit("")
             self.emit(f"    ; function {name}")
             self.emit(f"{name}:")
-            for st in f.body:
-                self.stmt(st)
+            for st in f.body: self.stmt(st)
             self.emit("    ret")
 
+        # optimize asm
         self.peephole()
 
         # variables and data
@@ -945,9 +951,8 @@ def main(args):
     parser.program(Path(args.src))
 
     asm = Codegen().compile(parser)
-    out = args.out or Path(args.src).with_suffix(".asm")
-    with open(out, "w") as f:
-        f.write(asm)
+    path = args.out or Path(args.src).with_suffix(".asm")
+    path.write_text(asm)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

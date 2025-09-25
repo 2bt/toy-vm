@@ -94,6 +94,7 @@ void interrupt(int32_t n) {
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("usage: %s game-dir\n", argv[0]);
+        return 1;
     }
     std::string dir = argv[1];
     dir += "/";

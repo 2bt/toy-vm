@@ -16,7 +16,7 @@ target_compile_options(
     PRIVATE
     -std=c++20
     -Wall
-    -O2
+    -O3
 )
 
 target_link_libraries(

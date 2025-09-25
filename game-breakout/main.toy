@@ -30,11 +30,12 @@ struct Pad
     h
 end
 
-var balls:  Ball[10]
-var blocks: Block[100]
+var balls:  Ball[20]
+var blocks: Block[117]
 var pad:    Pad
 
-
+var blocks_alive
+var balls_alive
 
 func Ball_add(x, y): Ball*
     for var b = balls.ptr, b < balls.limit, b += 1 do
@@ -51,30 +52,21 @@ func Ball_add(x, y): Ball*
 end
 
 
-
-var blocks_alive
-var balls_alive
-
-
-
-
 func init()
 
     pad.h = 30
-    pad.y = SCREEN_H/2 - (pad.h / 2)
-    pad.y *= Q
+    pad.y = (SCREEN_H/2 - (pad.h / 2)) * Q
 
-    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
-    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
-    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
-    Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    for var i = 0, i < 3, i += 1 do
+        Ball_add(PAD_RIGHT * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
+    end
 
 
     var k = blocks.ptr
-    for var i = 0, i < 7, i += 1 do
+    for i = 3, i < 10, i += 1 do
         for var j = 0, j < 9, j += 1 do
             k.alive = 1
-            k.x = 158 + i * BLOCK_W
+            k.x = 94 + i * BLOCK_W
             k.y = BORDER + j * BLOCK_W
             k += 1
         end
@@ -174,9 +166,9 @@ func update()
     end
 
 
-    print(5, 5, "Balls ")
+    print(5, 5, "Balls")
     print(5 + 8*6, 5, int_to_str(balls_alive))
 
-    print(10*8 + 5, 5, "Blocks ")
+    print(10*8 + 5, 5, "Blocks")
     print(10*8 + 5 + 8*7, 5, int_to_str(blocks_alive))
 end

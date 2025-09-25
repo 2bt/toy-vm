@@ -8,14 +8,18 @@
 namespace {
 
 enum Operation {
-    MOV, ADD, SUB, MUL, DIV, MOD, AND, ORE, CMP, TST,
-    JLT, JLE, JGT, JGE, JEQ, JNE, JMP, JSR,
-    RET,
+    RET, JLT, JLE, JGT, JGE, JEQ, JNE, JMP, JSR,
+    MOV, ADD, SUB, MUL, DIV, MOD, AND, ORE, CMP,
     INT,
 };
 
 enum AddressMode {
-    NIL, ABS, IND, IMM, IDX,
+    NIL,
+    ABS,       // absolute address
+    IND,       // indirect address
+    IDX,       // indirect address + offset
+    IMM,       // immediate
+    PDA = NIL, // previous destination address
 };
 
 struct Opcode {
@@ -39,19 +43,6 @@ constexpr Opcode OPCODE_TABLE[] = {
     { JMP, NIL, IMM },
     { JSR, NIL, IMM },
 
-    { CMP, ABS, ABS },
-    { CMP, ABS, IND },
-    { CMP, ABS, IDX },
-    { CMP, ABS, IMM },
-    { CMP, IND, ABS },
-    { CMP, IND, IND },
-    { CMP, IND, IDX },
-    { CMP, IND, IMM },
-    { CMP, IDX, ABS },
-    { CMP, IDX, IND },
-    { CMP, IDX, IDX },
-    { CMP, IDX, IMM },
-
     { MOV, ABS, ABS },
     { MOV, ABS, IND },
     { MOV, ABS, IDX },
@@ -65,6 +56,23 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MOV, IDX, IDX },
     { MOV, IDX, IMM },
 
+    { CMP, ABS, ABS },
+    { CMP, ABS, IND },
+    { CMP, ABS, IDX },
+    { CMP, ABS, IMM },
+    { CMP, IND, ABS },
+    { CMP, IND, IND },
+    { CMP, IND, IDX },
+    { CMP, IND, IMM },
+    { CMP, IDX, ABS },
+    { CMP, IDX, IND },
+    { CMP, IDX, IDX },
+    { CMP, IDX, IMM },
+    { CMP, PDA, ABS },
+    { CMP, PDA, IND },
+    { CMP, PDA, IDX },
+    { CMP, PDA, IMM },
+
     { ADD, ABS, ABS },
     { ADD, ABS, IND },
     { ADD, ABS, IDX },
@@ -77,6 +85,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { ADD, IDX, IND },
     { ADD, IDX, IDX },
     { ADD, IDX, IMM },
+    { ADD, PDA, ABS },
+    { ADD, PDA, IND },
+    { ADD, PDA, IDX },
+    { ADD, PDA, IMM },
 
     { SUB, ABS, ABS },
     { SUB, ABS, IND },
@@ -90,6 +102,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { SUB, IDX, IND },
     { SUB, IDX, IDX },
     { SUB, IDX, IMM },
+    { SUB, PDA, ABS },
+    { SUB, PDA, IND },
+    { SUB, PDA, IDX },
+    { SUB, PDA, IMM },
 
     { MUL, ABS, ABS },
     { MUL, ABS, IND },
@@ -103,6 +119,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MUL, IDX, IND },
     { MUL, IDX, IDX },
     { MUL, IDX, IMM },
+    { MUL, PDA, ABS },
+    { MUL, PDA, IND },
+    { MUL, PDA, IDX },
+    { MUL, PDA, IMM },
 
     { DIV, ABS, ABS },
     { DIV, ABS, IND },
@@ -116,6 +136,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { DIV, IDX, IND },
     { DIV, IDX, IDX },
     { DIV, IDX, IMM },
+    { DIV, PDA, ABS },
+    { DIV, PDA, IND },
+    { DIV, PDA, IDX },
+    { DIV, PDA, IMM },
 
     { MOD, ABS, ABS },
     { MOD, ABS, IND },
@@ -129,6 +153,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MOD, IDX, IND },
     { MOD, IDX, IDX },
     { MOD, IDX, IMM },
+    { MOD, PDA, ABS },
+    { MOD, PDA, IND },
+    { MOD, PDA, IDX },
+    { MOD, PDA, IMM },
 
     { AND, ABS, ABS },
     { AND, ABS, IND },
@@ -142,6 +170,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { AND, IDX, IND },
     { AND, IDX, IDX },
     { AND, IDX, IMM },
+    { AND, PDA, ABS },
+    { AND, PDA, IND },
+    { AND, PDA, IDX },
+    { AND, PDA, IMM },
 
     { ORE, ABS, ABS },
     { ORE, ABS, IND },
@@ -155,19 +187,11 @@ constexpr Opcode OPCODE_TABLE[] = {
     { ORE, IDX, IND },
     { ORE, IDX, IDX },
     { ORE, IDX, IMM },
+    { ORE, PDA, ABS },
+    { ORE, PDA, IND },
+    { ORE, PDA, IDX },
+    { ORE, PDA, IMM },
 
-    { TST, ABS, ABS },
-    { TST, ABS, IND },
-    { TST, ABS, IDX },
-    { TST, ABS, IMM },
-    { TST, IND, ABS },
-    { TST, IND, IND },
-    { TST, IND, IDX },
-    { TST, IND, IMM },
-    { TST, IDX, ABS },
-    { TST, IDX, IND },
-    { TST, IDX, IDX },
-    { TST, IDX, IMM },
 };
 
 
@@ -241,7 +265,6 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
         case AND: res = *a &= b; break;
         case ORE: res = *a |= b; break;
         case CMP: res = *a - b; break;
-        case TST: res = *a & b; break;
         case JLT: if (res <  0) pc = b; break;
         case JLE: if (res <= 0) pc = b; break;
         case JGT: if (res >  0) pc = b; break;

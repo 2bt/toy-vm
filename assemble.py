@@ -8,20 +8,19 @@ import sys
 OPCODE_TABLE = []
 
 def load_opcode_table():
-    f = open("src/vm.cpp")
-    while l := f.readline():
-        if "OPCODE_TABLE" in l: break
-    while l := f.readline():
-        l = l.strip()
-        if not l or l.startswith("//"): continue
-        if not l.startswith("{"): break
-        m = list(map(str.lower, re.findall(r'[A-Z]+', l)))
-        m += ["nil"] * (3 - len(m))
-        OPCODE_TABLE.append(tuple(m))
-        o, a, b = m
-    if not OPCODE_TABLE:
-        sys.exit("no opcode table")
-
+    with open("src/vm.cpp") as f:
+        while l := f.readline():
+            if "OPCODE_TABLE" in l: break
+        while l := f.readline():
+            l = l.strip()
+            if not l or l.startswith("//"): continue
+            if not l.startswith("{"): break
+            m = list(map(str.lower, re.findall(r'[A-Z]+', l)))
+            m += ["nil"] * (3 - len(m))
+            OPCODE_TABLE.append(tuple(m))
+            o, a, b = m
+        if not OPCODE_TABLE:
+            sys.exit("no opcode table")
 
 load_opcode_table()
 
@@ -102,7 +101,7 @@ def eval_expression(ts, min_p=1):
 
 def encode(out: bytearray, v: int):
     """Encode a signed int32 into ZigZag + varint"""
-    v &= 0Xffffffff
+    v &= 0xffffffff
     if v & 0x80000000: v -= 0x100000000
     u = (v << 1) ^ (v >> 31)
     while u >= 0x80:
@@ -182,6 +181,8 @@ def asm(args):
 
         # operand a
         match ts:
+            case []: pass
+
             # label
             case [("name", label)] if is_jump:
                 ts = []
@@ -204,8 +205,12 @@ def asm(args):
                         mode_a = "idx"
                         offset_a, ts = eval_expression(rest)
 
+            # previous destination address
+            case [("sym", "%"), *rest]:
+                mode_a = "pda"
+                ts = rest
+
             # absolute
-            case []: pass
             case rest:
                 mode_a = "abs"
                 value_a, ts = eval_expression(rest)
@@ -240,7 +245,7 @@ def asm(args):
             print(op, mode_a, mode_b)
             bad_line()
         bin_cmd = [opc]
-        if mode_a != "nil": bin_cmd.append(value_a)
+        if mode_a not in ("nil", "pda"): bin_cmd.append(value_a)
         if mode_a == "idx": bin_cmd.append(offset_a)
         if mode_b != "nil": bin_cmd.append(value_b)
         if mode_b == "idx": bin_cmd.append(offset_b)
@@ -267,29 +272,33 @@ def asm(args):
     for x in data: encode(out, x)
     encode(out, len(code))
     for x in code: encode(out, x)
-    with open(path, "wb") as f: f.write(out)
-
+    path.write_bytes(out)
 
     # print assembled code
     if args.print:
         pos = 0
         for bin in bin_cmds:
             q = " ".join(map(str, bin))
+            bs = bytearray()
+            for x in bin: encode(bs, x)
+            bs = bs.hex(" ").upper()
+            l = f"{pos:6} : {q:<20} {bs:<24}"
+            pos += len(bin)
             o, a, b = OPCODE_TABLE[bin.pop(0)]
-            l = f"{pos:6} : {q:<24} {o}"
+            l += f" {o}"
             if o.startswith("j"):
                 l += f" {bin.pop(0)}"
             else:
                 if a == "abs": l += f" {bin.pop(0)}"
                 if a == "ind": l += f" [{bin.pop(0)}]"
                 if a == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
+                if a == "pda": l += " %"
                 if a != "nil" and b != "nil": l += ","
                 if b == "abs": l += f" {bin.pop(0)}"
                 if b == "ind": l += f" [{bin.pop(0)}]"
                 if b == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
                 if b == "imm": l += f" #{bin.pop(0)}"
             print(l)
-            pos += len(bin_cmd)
     print("codes:", len(code))
     print("size:", len(out))
 

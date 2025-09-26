@@ -18,6 +18,16 @@ func abs(x)
     return -x
 end
 
+func sqrt(n)
+    if n == 0 or n == 1 then return n end
+    var x = n
+    var y = (x + n / x) / 2
+    while y < x do
+        x = y
+        y = (x + n / x) / 2
+    end
+    return x
+end
 
 var int_to_str_buf: int[10]
 

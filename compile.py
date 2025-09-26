@@ -626,11 +626,7 @@ class Codegen:
         self.label_i += 1
         return f"_{base}_{self.label_i}"
 
-    def emit(self, s):
-        if self.lines:
-            p = self.lines[-1]
-            if p == "    ret" and s.startswith("    "): return
-        self.lines.append(s)
+    def emit(self, s): self.lines.append(s)
 
     def emit_label(self, l):
         # remove useless jump
@@ -898,6 +894,7 @@ class Codegen:
                     else: pa = a
                     new_lines.append(f"    {op} {a}, {b}")
                 block = []
+            if l == "    ret" and new_lines[-1] == l: continue
             new_lines.append(l)
         self.lines = new_lines
 

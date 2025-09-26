@@ -194,7 +194,6 @@ constexpr Opcode OPCODE_TABLE[] = {
 
 };
 
-
 int32_t decode(std::istream& f) {
     uint32_t u = 0;
     for (int shift = 0;; shift += 7) {
@@ -202,7 +201,7 @@ int32_t decode(std::istream& f) {
         u |= (b & 0x7f) << shift;
         if (b < 0x80) break;
     }
-    return int32_t((u >> 1) ^ -(u & 1));
+    return int32_t(u) << 4 >> 4;
 }
 
 } // namespace
@@ -247,7 +246,12 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
     int32_t  b   = 0;
     int32_t  res = 0;
     for (size_t steps = 0; steps < STEP_LIMIT; ++steps) {
-        auto oc = OPCODE_TABLE[next()];
+        int32_t o = next();
+        if (o < 0 || o >= int32_t(std::size(OPCODE_TABLE))) {
+            printf("ERROR: illegal opcode %d\n", o);
+            exit(1);
+        }
+        Opcode oc = OPCODE_TABLE[o];
         if (oc.a == ABS) a = &mem_at(next());
         if (oc.a == IND) a = &mem_at(mem_at(next()));
         if (oc.a == IDX) { b = mem_at(next()); a = &mem_at(b + next()); };

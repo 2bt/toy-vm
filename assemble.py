@@ -100,14 +100,14 @@ def eval_expression(ts, min_p=1):
 
 
 def encode(out: bytearray, v: int):
-    """Encode a signed int32 into ZigZag + varint"""
-    v &= 0xffffffff
-    if v & 0x80000000: v -= 0x100000000
-    u = (v << 1) ^ (v >> 31)
-    while u >= 0x80:
-        out.append((u & 0x7f) | 0x80)
-        u >>= 7
-    out.append(u)
+    # encode int28 into up to 4 bytes
+    # negative numbers take up 4 bytes
+    assert -2**27 <= v < 2**27
+    v &= 0xfffffff
+    while v >= 0x80:
+        out.append((v & 0x7f) | 0x80)
+        v >>= 7
+    out.append(v)
 
 
 def asm(args):
@@ -282,7 +282,7 @@ def asm(args):
             bs = bytearray()
             for x in bin: encode(bs, x)
             bs = bs.hex(" ").upper()
-            l = f"{pos:6} : {q:<20} {bs:<24}"
+            l = f"{pos:6} : {q:<20} {bs:<27}"
             pos += len(bin)
             o, a, b = OPCODE_TABLE[bin.pop(0)]
             l += f" {o}"

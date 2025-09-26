@@ -23,6 +23,7 @@ end
 
 struct Block
     alive
+    type
     x
     y
     anim
@@ -90,15 +91,17 @@ func init()
 
     add_ball((PAD_X + PAD_W) * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
 
-
     var k = blocks.ptr
+    var t = 0
     for var i = 4, i < 11, i += 1 do
         for var j = 0, j < 9, j += 1 do
             k.alive = 1
-            k.x = 94 + i * BLOCK_W
-            k.y = BORDER + j * BLOCK_W
+            k.anim  = 10
+            k.type  = t % 4
+            k.x     = 94 + i * BLOCK_W
+            k.y     = BORDER + j * BLOCK_W
             k += 1
-            k.anim = 10
+            t += 1
         end
     end
 
@@ -115,7 +118,7 @@ func update_ball(b: Ball*)
     balls_alive += 1
 
     # spin
-    b.spin = clamp(0, b.spin - 10, b.spin + 10)
+    b.spin = clamp(0, b.spin - 20, b.spin + 20)
     var s = clamp(b.spin, -50, 50)
     if s != 0 then
         var nx = b.vx
@@ -131,12 +134,12 @@ func update_ball(b: Ball*)
     var overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap then
         b.x = ((b.x / Q) + overlap) * Q
+
         b.spin = pad.vy
 
-        var speed = sqrt(b.vx * b.vx + b.vy * b.vy)
-        speed += 20 # inc speed
+        var speed = sqrt(b.vx * b.vx + b.vy * b.vy) + 20
         b.vx = abs(b.vx)
-        b.vy += pad.vy *2/3
+        b.vy += pad.vy / 3
         var speed2 = sqrt(b.vx * b.vx + b.vy * b.vy)
         b.vx = b.vx * speed / speed2
         b.vy = b.vy * speed / speed2
@@ -276,10 +279,10 @@ func update()
     for var k = blocks.ptr, k < blocks.limit, k += 1 do
         if k.alive then
             blocks_alive += 1
-            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 32, 224, 0)
+            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 32, 224 + k.type * 16, 0)
         elif k.anim > 0 then
             var frame = 10 - k.anim
-            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 48 + frame * 16, 224, 0)
+            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 48 + frame * 16, 224 + k.type * 16, 0)
             k.anim -= 1
         end
     end

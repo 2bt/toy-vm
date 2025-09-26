@@ -13,6 +13,10 @@ func clamp(x, a, b)
     if x > b then return b end
     return x
 end
+func abs(x)
+    if x >= 0 then return x end
+    return -x
+end
 
 
 var int_to_str_buf: int[10]

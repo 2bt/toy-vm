@@ -27,14 +27,14 @@ For      = namedtuple("For",      "init cond next body")
 Break    = namedtuple("Break",    "")
 Continue = namedtuple("Continue", "")
 If       = namedtuple("If",       "cond then els")
-Ret      = namedtuple("Ret",      "expr")
+Return   = namedtuple("Return",   "expr")
 Asm      = namedtuple("Asm",      "asm")
 NoOp     = namedtuple("NoOp",     "")
 
 KEYWORDS = {
-    "include", "var", "const", "func", "struct",
-    "if", "then", "elif", "else", "while", "for", "do", "end", "break", "continue",
-    "return", "asm", "or", "and",
+    "include", "var", "const", "func", "struct", "if", "then", "elif", "else",
+    "while", "for", "do", "end", "break", "continue", "return", "asm", "or",
+    "and",
 }
 
 token_regex = re.compile(r"""
@@ -146,7 +146,7 @@ class Parser:
         self.funcs      = {}
         self.structs    = {}
         self.loop       = 0
-        self.var_prefix = None
+        self.current_func = None
         # for includes
         self.included   = set()
         self.stack      = []
@@ -209,7 +209,7 @@ class Parser:
 
     def func_arg(self):
         short = self.eat("id").v
-        name = self.var_prefix + short
+        name = f"_{self.current_func}_{short}"
         if name in self.decls: self.error(f"variable '{short}' already exists")
         type = self.type()
         if is_array(type): self.error("no local arrays allowed")
@@ -304,7 +304,8 @@ class Parser:
                 incl = path.parent / self.eat("string").v
                 if incl in self.included: continue
                 self.stack.append(self.head)
-                self.program(incl)
+                try: self.program(incl)
+                except FileNotFoundError: self.error("file not found")
                 self.head = self.stack.pop()
 
             elif tok.k == "const":
@@ -331,7 +332,7 @@ class Parser:
             elif tok.k == "func":
                 name = self.eat("id").v
                 if name in self.funcs: self.error(f"function '{name}' already exists")
-                self.var_prefix = f"_{name}_"
+                self.current_func = name
                 self.eat("sym", "(")
                 args = []
                 if not self.peek("sym", ")"):
@@ -344,7 +345,7 @@ class Parser:
                 body = self.block()
                 self.eat("end")
                 self.funcs[name] = Func(args, self.return_type, body)
-                self.var_prefix = None
+                self.current_func = None
 
             else: assert False
         self.eat("eof")
@@ -413,11 +414,11 @@ class Parser:
             self.eat()
             # TODO: add void return type to functions
             if self.peek() and self.peek().k in KEYWORDS:
-                return Ret(None)
+                return Return(None)
             expr, type = self.expr()
             if not (type == self.return_type or (is_ptr(self.return_type) and expr == Imm(0))):
                 self.error("return type mismatch")
-            return Ret(expr)
+            return Return(expr)
         if self.peek("asm"):
             self.eat()
             return Asm(self.eat("string").v)
@@ -425,7 +426,7 @@ class Parser:
         if self.peek("var"):
             self.eat()
             short = self.eat("id").v
-            name = self.var_prefix + short
+            name = f"_{self.current_func}_{short}"
             if name in self.decls: self.error(f"variable '{short}' already exists")
             a = VarRef(name)
             ta = None
@@ -508,8 +509,8 @@ class Parser:
         return self.primary()
 
     def resolve_var(self, name):
-        if self.var_prefix:
-            local_name = self.var_prefix + name
+        if self.current_func:
+            local_name = f"_{self.current_func}_{name}"
             if local_name in self.decls: return VarRef(local_name)
         if name not in self.decls: self.error(f"unknown variable '{name}'")
         return VarRef(name)
@@ -628,7 +629,7 @@ class Codegen:
     def emit(self, s):
         if self.lines:
             p = self.lines[-1]
-            if s == "    ret" and p == s: return
+            if p == "    ret" and s.startswith("    "): return
         self.lines.append(s)
 
     def emit_label(self, l):
@@ -638,7 +639,6 @@ class Codegen:
             if m[1] == l: self.lines.pop(i)
             i -= 1
         self.emit(f"{l}:")
-
 
     def branch(self, node, T, F):
         if isinstance(node, Imm):
@@ -741,7 +741,11 @@ class Codegen:
                 return t
             assert False, f"unsupported binop {node.op}"
 
-        if isinstance(node, Call): return self.call(node)
+        if isinstance(node, Call):
+            self.call(node)
+            t = self.newtmp()
+            self.emit(f"    mov {t}, _R")
+            return t
 
         assert False, f"unsupported expression {node}"
 
@@ -752,8 +756,6 @@ class Codegen:
             t = self.value(a)
             self.emit(f"    mov {b}, {t}")
         self.emit(f"    jsr {node.name}")
-        return "_R"
-
 
     def stmt(self, node):
         self.tmp_i = 0 # reuse temporary variables
@@ -819,7 +821,7 @@ class Codegen:
             else:
                 self.emit_label(F)
 
-        elif isinstance(node, Ret):
+        elif isinstance(node, Return):
             if node.expr:
                 v = self.value(node.expr)
                 self.emit(f"    mov _R, {v}")
@@ -838,44 +840,70 @@ class Codegen:
 
 
     def peephole(self):
-        # eliminate unnecessary mov's
-        used_tmps = {}
-        new_lines = []
-        tmp = None
+
+        # remove unused labels
+        used_labels = set()
         for l in self.lines:
+            if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
+        new_lines = []
+        for l in self.lines:
+            if m := re.match(r"(_[^: ]+):", l):
+                if m[1] not in used_labels: continue
             new_lines.append(l)
-            m = re.match(r"    (mov|add|sub|mul|div|mod) ([^, ]+), ([^, ]+)", l)
-            if not m: continue
-            op, a, b = m.groups()
-            if op == "mov" and a in self.tmp_vars:
-                block = [(op, b)]
-                tmp = a
-                used_tmps[tmp] = used_tmps.get(tmp, 0) + 1
-            elif op != "mov" and a == tmp and a not in b:
-                block.append((op, b))
-            elif op == "mov" and b == tmp:
-                used_tmps[tmp] -= 1
-                del new_lines[-len(block) - 1:]
-                if a == block[0][1]: block.pop(0) # remove "mov x, x"
-                for op, x in block: new_lines.append(f"    {op} {a}, {x}")
-            else: tmp = None
         self.lines = new_lines
-        # remove unused temporary variables
+
+        def process(block):
+            # remove unnecessary mov's
+            i = 0
+            while i < len(block):
+                op, a, b = block[i]
+                if op == "mov" and a in self.tmp_vars:
+                    start = i
+                    i += 1
+                    while i < len(block) and block[i].a == a: i += 1
+                    if i >= len(block): break
+                    op2, a2, b2 = block[i]
+                    if op2 == "mov" and b2 == a and not any(a2 in block[j].b for j in range(start, i)):
+                        for j in range(start, i): block[j] = BinOp(block[j].op, a2, block[j].b)
+                        block.pop(i)
+                        continue
+                i += 1
+
+            new_block = []
+            while block:
+                match block:
+                    case [("mov", a, b), (op, c, d), *rest] if a in self.tmp_vars and a == d:
+                        new_block.append((op, c, b))
+                        block = rest
+                    case [("mov", a, b), ("cmp", c, d), *rest] if a in self.tmp_vars and a == c:
+                        new_block.append(("cmp", b, d))
+                        block = rest
+                    case [b, *rest]:
+                        new_block.append(b)
+                        block = rest
+            return new_block
+
+        new_lines = []
+        block     = []
+        operands  = set()
+        for l in self.lines:
+            if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", l):
+                block.append(BinOp(*m.groups()))
+                continue
+            if block:
+                pa = None
+                for op, a, b in process(block):
+                    operands |= {a, b}
+                    if a == pa and op != "mov": a = "%" # previous destination address
+                    else: pa = a
+                    new_lines.append(f"    {op} {a}, {b}")
+                block = []
+            new_lines.append(l)
+        self.lines = new_lines
+
+        # remove unused tmp vars
         for t in list(self.tmp_vars.keys()):
-            if used_tmps.get(t, 0) == 0: del self.tmp_vars[t]
-
-        # previous destination address
-        new_lines = []
-        dst = None
-        for l in self.lines:
-            if m := re.match(r"    (mov|add|sub|mul|div|mod) ([^, ]+), ([^, ]+)", l):
-                op, a, b = m.groups()
-                if op != "mov" and dst == a: l = f"    {op} %, {b}"
-                dst = a
-            else: dst = None
-            new_lines.append(l)
-        self.lines = new_lines
-
+            if t not in operands: del self.tmp_vars[t]
 
     def compile(self, ast):
         self.expr_types = {}
@@ -886,7 +914,7 @@ class Codegen:
         self.funcs      = ast.funcs
         self.structs    = ast.structs
 
-        self.tmp_vars   = {} # use dict to keep original order
+        self.tmp_vars   = { "_R": () } # use dict to keep original order
         self.loop_stack = []
         self.ast        = ast
 
@@ -914,7 +942,7 @@ class Codegen:
                 addr = max(addr, v.addr + 1)
 
         # temp variables
-        for name in ["_R"] + list(self.tmp_vars):
+        for name in self.tmp_vars:
             self.emit(f"{name} = {addr}")
             addr += 1
 

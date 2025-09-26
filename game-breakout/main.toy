@@ -52,24 +52,16 @@ func Ball_add(x, y): Ball*
 end
 
 
-struct Box x y w h end
-func Box_right(a: Box*)
-    return a.x + a.w
+func Box_overlaps(ax, ay, aw, ah, bx, by, bw, bh)
+    return ax < bx + bw and ax + aw > bx and
+           ay < by + bh and ay + ah > by
 end
-func Box_bottom(a: Box*)
-    return a.y + a.h
-end
-func Box_overlaps(a: Box*, b: Box*)
-    return a.x < Box_right(b) and Box_right(a) > b.x and
-           a.y < Box_bottom(b) and Box_bottom(a) > b.y
-end
-func Box_overlap_x(a: Box*, b: Box*)
-    if Box_overlaps(a, b) == 0 then return 0 end
-    var d1 = Box_right(b) - a.x
-    var d2 = b.x - Box_right(a)
+func Box_overlap_x(ax, ay, aw, ah, bx, by, bw, bh)
+    if not Box_overlaps(ax, ay, aw, ah, bx, by, bw, bh) then return 0 end
+    var d1 = bx + bw - ax
+    var d2 = bx - (ax + aw)
     if abs(d1) < abs(d2) then return d1 else return d2 end
 end
-
 
 
 func init()
@@ -83,8 +75,8 @@ func init()
 
 
     var k = blocks.ptr
-    for i = 3, i < 10, i += 1 do
-        for var j = 0, j < 9, j += 1 do
+    for i = 4, i < 11, i += 1 do
+        for var j = 2, j < 7, j += 1 do
             k.alive = 1
             k.x = 94 + i * BLOCK_W
             k.y = BORDER + j * BLOCK_W
@@ -130,6 +122,18 @@ func Ball_update(b: Ball*)
         end
     end
 
+
+    var hit = 0
+    for var k = blocks.ptr, k < blocks.limit, k += 1 do
+        if k.alive == 0 then continue end
+        if Box_overlaps(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W) then
+            k.alive = 0
+            hit = 1
+        end
+    end
+    if hit then b.vx *= -1 end
+
+
     b.y += b.vy
     if b.y < BORDER * Q then
         b.y = BORDER * Q
@@ -139,6 +143,8 @@ func Ball_update(b: Ball*)
         b.y = (SCREEN_H - BALL_W - BORDER) * Q
         b.vy *= -1
     end
+
+
 
     sprite(b.x / Q, b.y / Q, BALL_W, BALL_W, 16, 224, 0)
 
@@ -155,7 +161,10 @@ func update()
     # draw blocks
     blocks_alive = 0
     for var k = blocks.ptr, k < blocks.limit, k += 1 do
-        if k.alive then
+        if k.alive != 0 then end
+        if k.alive then end
+
+        if k.alive != 0 then
             blocks_alive += 1
             sprite(k.x, k.y, BLOCK_W, BLOCK_W, 32, 224, 0)
         end

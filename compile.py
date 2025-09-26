@@ -18,6 +18,7 @@ VarRef   = namedtuple("VarRef",   "name")
 AddrOf   = namedtuple("AddrOf",   "lv")
 Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
+Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
 Var      = namedtuple("Var",      "type addr data")
 Func     = namedtuple("Func",     "args type body")
@@ -34,7 +35,7 @@ NoOp     = namedtuple("NoOp",     "")
 KEYWORDS = {
     "include", "var", "const", "func", "struct", "if", "then", "elif", "else",
     "while", "for", "do", "end", "break", "continue", "return", "asm", "or",
-    "and",
+    "and", "not",
 }
 
 token_regex = re.compile(r"""
@@ -506,6 +507,12 @@ class Parser:
             if not is_int(t): self.error("bad type")
             if isinstance(a, Imm): return Imm(-a.value), INT
             return BinOp("*", a, Imm(-1)), INT
+        if self.peek("not"):
+            self.eat()
+            a, t = self.unary()
+            if not is_cond(t): self.error("bad type")
+            if isinstance(a, Imm): return Imm(int(not a.value)), INT
+            return Not(a), INT
         return self.primary()
 
     def resolve_var(self, name):
@@ -646,11 +653,8 @@ class Codegen:
             self.emit(f"    jeq {F}")
             self.emit(f"    jne {T}")
 
-        elif isinstance(node, Deref):
-            a = self.value(node.expr)
-            self.emit(f"    cmp [{a}], #0")
-            self.emit(f"    jeq {F}")
-            self.emit(f"    jne {T}")
+        elif isinstance(node, Not):
+            self.branch(node.expr, F, T)
 
         elif isinstance(node, BinOp) and node.op in CMP_TO_JMP:
             a = self.value(node.a)
@@ -677,7 +681,8 @@ class Codegen:
             self.branch(node.b, T, F)
 
         else:
-            _ = self.value(node)
+            a = self.value(node)
+            self.emit(f"    cmp {a}, #0")
             self.emit(f"    jne {T}")
             self.emit(f"    jeq {F}")
 
@@ -699,25 +704,32 @@ class Codegen:
             if off: a += f"+{off}"
             return a
 
+        if isinstance(node, Not):
+            t = self.newtmp()
+            T = self.label("true")
+            E = self.label("done")
+            self.emit(f"    mov {t}, #0")
+            self.branch(node.expr, E, T)
+            self.emit_label(T)
+            self.emit(f"    mov {t}, #1")
+            self.emit_label(E)
+            return t
+
         if isinstance(node, BinOp):
             if node.op == "+":
                 dyn, sym, off = split_add(node)
                 if not dyn: return f"#{sym}+{off}"
-
             if op := ARITH_OPS.get(node.op):
                 a = self.value(node.a)
                 b = self.value(node.b)
                 if node.op in {"-", "/", "%"}:
                     t = self.newtmp(a)
-                    if t != a:
-                        self.emit(f"    mov {t}, {a}")
+                    if t != a: self.emit(f"    mov {t}, {a}")
                     self.emit(f"    {op} {t}, {b}")
                 else:
                     t = self.newtmp(a, b)
-                    if t == a:
-                        self.emit(f"    {op} {t}, {b}")
-                    elif t == b:
-                        self.emit(f"    {op} {t}, {a}")
+                    if t == a: self.emit(f"    {op} {t}, {b}")
+                    elif t == b: self.emit(f"    {op} {t}, {a}")
                     else:
                         self.emit(f"    mov {t}, {a}")
                         self.emit(f"    {op} {t}, {b}")
@@ -725,16 +737,14 @@ class Codegen:
             if node.op in CMP_TO_JMP or node.op in {"and", "or"}:
                 t = self.newtmp()
                 T = self.label("true")
-                F = self.label("false")
-                D = self.label("done")
-                self.branch(node, T, F)
-                self.emit_label(F)
-                self.emit(f"    mov {t}, #0")
-                self.emit(f"    jmp {D}")
-                self.emit_label(T)
+                E = self.label("done")
                 self.emit(f"    mov {t}, #1")
-                self.emit_label(D)
+                self.branch(node, E, T)
+                self.emit_label(T)
+                self.emit(f"    mov {t}, #0")
+                self.emit_label(E)
                 return t
+
             assert False, f"unsupported binop {node.op}"
 
         if isinstance(node, Call):
@@ -836,7 +846,6 @@ class Codegen:
 
 
     def peephole(self):
-
         # remove unused labels
         used_labels = set()
         for l in self.lines:
@@ -849,31 +858,33 @@ class Codegen:
         self.lines = new_lines
 
         def process(block):
-            # remove unnecessary mov's
-            i = 0
-            while i < len(block):
-                op, a, b = block[i]
-                if op == "mov" and a in self.tmp_vars:
-                    start = i
-                    i += 1
-                    while i < len(block) and block[i].a == a: i += 1
-                    if i >= len(block): break
-                    op2, a2, b2 = block[i]
-                    if op2 == "mov" and b2 == a and not any(a2 in block[j].b for j in range(start, i)):
-                        for j in range(start, i): block[j] = BinOp(block[j].op, a2, block[j].b)
-                        block.pop(i)
-                        continue
-                i += 1
-
             new_block = []
             while block:
                 match block:
-                    case [("mov", a, b), (op, c, d), *rest] if a in self.tmp_vars and a == d:
-                        new_block.append((op, c, b))
-                        block = rest
                     case [("mov", a, b), ("cmp", c, d), *rest] if a in self.tmp_vars and a == c:
                         new_block.append(("cmp", b, d))
                         block = rest
+                    case [(op, a, b), ("cmp", c, "#0"), *rest] if a == c:
+                        new_block.append((op, a, b))
+                        block = rest
+                    case [("mov", a, b), (op, c, d), *rest] if a in self.tmp_vars and a == d:
+                        new_block.append((op, c, b))
+                        block = rest
+                    case [("mov", a, b), *foo] if a in self.tmp_vars:
+                        q = []
+                        while True:
+                            match block:
+                                case [(op, c, d), *rest] if c == a:
+                                    block = rest
+                                    q.append((op, d))
+                                    continue
+                                case [("mov", c, d), *rest] if d == a and not any(c == x for _, x in q):
+                                    block = rest
+                                    for op, x in q: new_block.append((op, c, x))
+                                    break
+                            new_block.append(("mov", a, b))
+                            block = foo
+                            break
                     case [b, *rest]:
                         new_block.append(b)
                         block = rest
@@ -882,20 +893,27 @@ class Codegen:
         new_lines = []
         block     = []
         operands  = set()
-        for l in self.lines:
-            if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", l):
-                block.append(BinOp(*m.groups()))
+        for line in self.lines:
+            if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", line):
+                block.append(m.groups())
+                continue
+            if m := re.match(r"    (j..) ([^ ]+)", line):
+                block.append(m.groups())
                 continue
             if block:
                 pa = None
-                for op, a, b in process(block):
-                    operands |= {a, b}
-                    if a == pa and op != "mov": a = "%" # previous destination address
-                    else: pa = a
-                    new_lines.append(f"    {op} {a}, {b}")
+                for o in process(block):
+                    match o:
+                        case op, a, b:
+                            operands |= {a, b}
+                            if a == pa and op != "mov": a = "%" # previous destination address
+                            else: pa = a
+                            new_lines.append(f"    {op} {a}, {b}")
+                        case j, l:
+                            new_lines.append(f"    {j} {l}")
                 block = []
-            if l == "    ret" and new_lines[-1] == l: continue
-            new_lines.append(l)
+            if line == "    ret" and new_lines[-1] == line: continue
+            new_lines.append(line)
         self.lines = new_lines
 
         # remove unused tmp vars

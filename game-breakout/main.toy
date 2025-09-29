@@ -3,17 +3,32 @@ include "util.toy"
 
 const Q = 256
 
+const BALL_STATE_DEAD     = 0
+const BALL_STATE_FLYING   = 1
+const BALL_STATE_STICKING = 2
+
+const BLOCK_STATE_DEAD   = 0
+const BLOCK_STATE_NORMAL = 1
+const BLOCK_STATE_DYING  = 2
+
+const GAME_STATE_PLAYING = 0
+const GAME_STATE_CLEAR   = 1
+const GAME_STATE_DEAD    = 2
+
 const BORDER      = 18
-const BALL_W      = 4
+const BALL_W      = 8
 const BLOCK_W     = 16
 const PAD_W       = 8
 const PAD_X       = 38
 const PAD_START_H = 40
 const ACC         = 100
+const BLOCK_TYPES = 4
 
 
 struct Ball
-    alive
+    state
+    tick
+    frame
     x
     y
     vx
@@ -21,105 +36,127 @@ struct Ball
     spin
 end
 
+
 struct Block
-    alive
+    state
+    tick
+    frame
     type
     x
     y
-    anim
 end
 
 struct Pad
+    is_sticky
     y
     h
     vy
 end
 
+var game_state
+var blocks_alive
+var balls_alive
+var lives
+
 var balls:  Ball[20]
 var blocks: Block[117]
 var pad:    Pad
 
-var blocks_alive
-var balls_alive
+var prev_input
 
-func add_ball(x, y): Ball*
+func is_just_pressed(button)
+    return input & button & (-1-prev_input)
+end
+
+
+func new_ball(): Ball*
     for var b = balls.ptr, b < balls.limit, b += 1 do
-        if not b.alive then
-            b.alive = 1
-            b.x     = x
-            b.y     = y
-            b.vx    = 400 + rand(-100, 100)
-            b.vy    = 300 + rand(-100, 100)
-            if rand(0, 1) then
-                b.vy *= -1
-            end
-            b.spin  = 0
-
-            # # XXX
-            # b.vy = 0
-            # b.vx *= -1
-            # b.x += 100 * Q
-
-            return b
-        end
+        if b.state != BALL_STATE_DEAD then continue end
+        balls_alive += 1
+        b.state = BALL_STATE_STICKING
+        b.tick  = 0
+        b.spin  = 0
+        b.x     = (PAD_X + PAD_W) * Q
+        b.y     = pad.y + pad.h * (Q / 2) - BALL_W * Q / 2
+        b.vx    = 500
+        b.vy    = 400
+        if rand(0, 1) then b.vy *= -1 end
+        return
     end
-    return 0
+end
+
+func unstick_balls()
+    for var b = balls.ptr, b < balls.limit, b += 1 do
+        if b.state != BALL_STATE_STICKING then continue end
+        b.state = BALL_STATE_FLYING
+    end
 end
 
 
-func box_intersect(ax, ay, aw, ah, bx, by, bw, bh)
-    return ax < bx + bw and ax + aw > bx and
-           ay < by + bh and ay + ah > by
-end
-func box_overlap_x(ax, ay, aw, ah, bx, by, bw, bh)
-    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh) then return 0 end
-    var d1 = bx + bw - ax
-    var d2 = bx - (ax + aw)
-    if abs(d1) < abs(d2) then return d1 else return d2 end
-end
-func box_overlap_y(ax, ay, aw, ah, bx, by, bw, bh)
-    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh) then return 0 end
-    var d1 = by + bh - ay
-    var d2 = by - (ay + ah)
-    if abs(d1) < abs(d2) then return d1 else return d2 end
-end
+func init_stage()
+    game_state   = GAME_STATE_PLAYING
+    blocks_alive = 0
+    balls_alive  = 0
 
+    # pad
+    pad.is_sticky = 0
+    pad.vy        = 0
+    pad.h         = PAD_START_H
+    pad.y         = (SCREEN_H/2 - (pad.h / 2)) * Q
 
-func init()
-    pad.h = PAD_START_H
-    pad.y = (SCREEN_H/2 - (pad.h / 2)) * Q
+    # balls
+    for var b = balls.ptr, b < balls.limit, b += 1 do
+        b.state = BALL_STATE_DEAD
+    end
+    new_ball()
 
-    add_ball((PAD_X + PAD_W) * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
-
+    # blocks
     var k = blocks.ptr
     var t = 0
     for var i = 4, i < 11, i += 1 do
         for var j = 0, j < 9, j += 1 do
-            k.alive = 1
-            k.anim  = 10
-            k.type  = t % 4
+            blocks_alive += 1
+            k.state = BLOCK_STATE_NORMAL
+            k.type  = t % BLOCK_TYPES
             k.x     = 94 + i * BLOCK_W
             k.y     = BORDER + j * BLOCK_W
             k += 1
             t += 1
         end
     end
-
     while k < blocks.limit do
-        k.alive = 0
+        k.state = BLOCK_STATE_DEAD
         k += 1
     end
+end
 
+func init()
+    lives = 3
+    init_stage()
 end
 
 
 func update_ball(b: Ball*)
-    if not b.alive then return end
-    balls_alive += 1
+    if b.state == BALL_STATE_DEAD then return end
+
+
+    # pad y collision
+    var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
+    if overlap then
+        b.y = ((b.y / Q) + overlap) * Q
+        if pad.vy > 0 then
+            b.vy = abs(pad.vy)
+        elif pad.vy < 0 then
+            b.vy = -abs(pad.vy)
+        else
+            b.vy *= -1
+        end
+    end
+
 
     # spin
     b.spin = clamp(0, b.spin - 20, b.spin + 20)
-    var s = clamp(b.spin, -50, 50)
+    var s = clamp(b.spin, -100, 100)
     if s != 0 then
         var nx = b.vx
         var ny = b.vy
@@ -128,39 +165,45 @@ func update_ball(b: Ball*)
     end
 
     # move x
-    b.x += b.vx
+    if b.state != BALL_STATE_STICKING then
+        b.x += b.vx
+    end
 
     # pad collision
-    var overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
+    overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap then
-        b.x = ((b.x / Q) + overlap) * Q
-
+        b.x    = ((b.x / Q) + overlap) * Q
         b.spin = pad.vy
-
-        var speed = sqrt(b.vx * b.vx + b.vy * b.vy) + 20
+        var speed = sqrt(b.vx * b.vx + b.vy * b.vy)
+        speed += 5 # increase speed
         b.vx = abs(b.vx)
-        b.vy += pad.vy / 3
+        b.vy += pad.vy / 4
         var speed2 = sqrt(b.vx * b.vx + b.vy * b.vy)
-        b.vx = b.vx * speed / speed2
-        b.vy = b.vy * speed / speed2
+        b.vx   = b.vx * speed / speed2
+        b.vy   = b.vy * speed / speed2
+        b.tick = 0
+        if pad.is_sticky then
+            b.state = BALL_STATE_STICKING
+        end
     end
 
 
     # block collision
     overlap = 0
     for var k = blocks.ptr, k < blocks.limit, k += 1 do
-        if not k.alive then continue end
+        if k.state != BLOCK_STATE_NORMAL then continue end
         var o = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
         if o then
-            k.alive = 0
+            k.state = BLOCK_STATE_DYING
             overlap = o
+            blocks_alive -= 1
         end
     end
     if overlap then
         b.vx *= -1
         b.x = ((b.x / Q) + overlap) * Q
-        b.vx += rand(-50, 50)
-        b.vy += rand(-50, 50)
+        b.vx += rand(-20, 20)
+        b.vy += rand(-20, 20)
     end
 
     # wall collision
@@ -171,31 +214,28 @@ func update_ball(b: Ball*)
 
 
     # move y
-    b.y += b.vy
-
-    # pad collision
-    overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
-    if overlap then
-        b.vy *= -1
-        b.y = ((b.y / Q) + overlap) * Q
+    if b.state != BALL_STATE_STICKING then
+        b.y += b.vy
+    else
+        b.y += pad.vy
     end
-
 
     # block collision
     overlap = 0
     for k = blocks.ptr, k < blocks.limit, k += 1 do
-        if not k.alive then continue end
+        if k.state != BLOCK_STATE_NORMAL then continue end
         o = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
         if o then
-            k.alive = 0
+            k.state = BLOCK_STATE_DYING
             overlap = o
+            blocks_alive -= 1
         end
     end
     if overlap then
         b.vy *= -1
         b.y = ((b.y / Q) + overlap) * Q
-        b.vx += rand(-50, 50)
-        b.vy += rand(-50, 50)
+        b.vx += rand(-20, 20)
+        b.vy += rand(-20, 20)
     end
 
 
@@ -209,85 +249,135 @@ func update_ball(b: Ball*)
         b.vy = -abs(b.vy)
     end
 
-
     # die
-    if b.x < -100 * Q then
-        b.alive = 0
+    if b.x < -20 * Q then
+        balls_alive -= 1
+        b.state = BALL_STATE_DEAD
     end
 
-    # draw
-    sprite(b.x / Q, b.y / Q, BALL_W, BALL_W, 16, 224, 0)
+    # set frame
+    b.frame = 0
+    if b.spin != 0 then
+        b.frame = 1 + b.tick % 8
+        if b.spin > 0 then b.frame = 9 - b.frame end
+    end
+
+    b.tick += 1
 end
 
 
+func update_stage()
+    if game_state == GAME_STATE_PLAYING then
 
-func update()
+        # pad
+        var dy = 0
+        if input & INPUT_UP   then dy -= 1 end
+        if input & INPUT_DOWN then dy += 1 end
+        pad.vy = clamp(dy * (4 * Q), pad.vy - ACC, pad.vy + ACC)
 
-    # draw stage
+        pad.y += pad.vy
+        if pad.y < BORDER * Q then
+            pad.y = BORDER * Q
+            pad.vy = 0
+        end
+        if pad.y > (SCREEN_H - BORDER - pad.h) * Q then
+            pad.y = (SCREEN_H - BORDER - pad.h) * Q
+            pad.vy = 0
+        end
+
+        if is_just_pressed(INPUT_A) then
+            unstick_balls()
+        end
+
+        # balls
+        for var b = balls.ptr, b < balls.limit, b += 1 do
+            update_ball(b)
+        end
+        if balls_alive == 0 then
+            if lives > 0 then
+                lives -= 1
+                new_ball()
+            else
+                game_state = GAME_STATE_DEAD
+            end
+        end
+
+        # stage clear
+        if blocks_alive <= 0 then
+            for b = balls.ptr, b < balls.limit, b += 1 do
+                b.vx = 0
+                b.vy = 0
+            end
+            game_state = GAME_STATE_CLEAR
+        end
+
+    elif game_state == GAME_STATE_CLEAR then
+        if is_just_pressed(INPUT_A) then
+            init_stage()
+        end
+    elif game_state == GAME_STATE_DEAD then
+        if is_just_pressed(INPUT_A) then
+            init()
+        end
+    end
+
+    # blocks
+    for var k = blocks.ptr, k < blocks.limit, k += 1 do
+        k.frame = 0
+        if k.state == BLOCK_STATE_DYING then
+            k.frame = 1 + k.tick / 2
+            k.tick += 1
+            if k.tick > 20 then
+                k.state = BLOCK_STATE_DEAD
+            end
+        end
+    end
+end
+
+
+func draw_stage()
+
+    # border
     sprite(0, 0, SCREEN_W, SCREEN_H, 0, 32, 0)
+    for var i = 0, i < 19, i += 1 do
+        for var j = 0, j < 9, j += 1 do
+            sprite(i * 16, BORDER + j * 16, 16, 16, 336, 32, 0)
+        end
+    end
 
 
     # pad
-    var dy = 0
-    if btn & BTN_UP   then dy -= 1 end
-    if btn & BTN_DOWN then dy += 1 end
-    pad.vy = clamp(dy * (3 * Q), pad.vy - ACC, pad.vy + ACC)
-
-    pad.y += pad.vy
-    if pad.y < BORDER * Q then
-        pad.y = BORDER * Q
-        pad.vy = 0
-    end
-    if pad.y > (SCREEN_H - BORDER - pad.h) * Q then
-        pad.y = (SCREEN_H - BORDER - pad.h) * Q
-        pad.vy = 0
-    end
-
     sprite(PAD_X, pad.y / Q, PAD_W, pad.h - 8, 0, 224, 0)
     sprite(PAD_X, pad.y / Q + pad.h - 8, PAD_W, 8, 0, 224, 2)
 
-
-    # update balls
-    balls_alive = 0
-    for var b = balls.ptr, b < balls.limit, b += 1 do
-        if not b.alive then continue end
-
-        # pad collision
-        var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
-        if overlap then
-            if pad.vy > 0 then
-                b.vy = abs(pad.vy)
-            elif pad.vy < 0 then
-                b.vy = -abs(pad.vy)
-            else
-                b.vy *= -1
-            end
-            b.y = ((b.y / Q) + overlap) * Q
-        end
-
-        update_ball(b)
-    end
-
-    # spawn new ball
-    if balls_alive == 0 then
-        add_ball((PAD_X + PAD_W) * Q, pad.y + (pad.h / 2 - BALL_W / 2) * Q)
-    end
-
-
-    # draw blocks
-    blocks_alive = 0
+    # blocks
     for var k = blocks.ptr, k < blocks.limit, k += 1 do
-        if k.alive then
-            blocks_alive += 1
-            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 32, 224 + k.type * 16, 0)
-        elif k.anim > 0 then
-            var frame = 10 - k.anim
-            sprite(k.x, k.y, BLOCK_W, BLOCK_W, 48 + frame * 16, 224 + k.type * 16, 0)
-            k.anim -= 1
-        end
+        if k.state == BLOCK_STATE_DEAD then continue end
+        sprite(k.x, k.y, BLOCK_W, BLOCK_W, k.frame * 16, 336 + k.type * 16, 0)
+    end
+
+    # balls
+    for var b = balls.ptr, b < balls.limit, b += 1 do
+        if b.state == BALL_STATE_DEAD then continue end
+        sprite(b.x / Q - 4, b.y / Q - 4, 16, 16, b.frame * 16, 320, 0)
     end
 
 
-    print(5, 5, "BLOCKS LEFT:")
-    print(5 + 8*13, 5, int_to_str(blocks_alive))
+    print(5, 5, "LIVES")
+    print(5 + 8*6, 5, int_to_str(lives))
+
+    if game_state == GAME_STATE_CLEAR then
+        print(116, 86, "STAGE CLEAR")
+    elif game_state == GAME_STATE_DEAD then
+        print(124, 86, "GAME OVER")
+    end
 end
+
+
+func update()
+    update_stage()
+    draw_stage()
+    prev_input = input
+end
+
+

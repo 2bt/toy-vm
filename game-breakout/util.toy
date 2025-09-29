@@ -1,5 +1,3 @@
-
-
 func min(a, b)
     if a < b then return a end
     return b
@@ -69,3 +67,22 @@ func print(x, y, msg: int*)
         msg += 1
     end
 end
+
+
+func box_intersect(ax, ay, aw, ah, bx, by, bw, bh)
+    return ax < bx + bw and ax + aw > bx and
+           ay < by + bh and ay + ah > by
+end
+func box_overlap_x(ax, ay, aw, ah, bx, by, bw, bh)
+    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh) then return 0 end
+    var d1 = bx + bw - ax
+    var d2 = bx - (ax + aw)
+    if abs(d1) < abs(d2) then return d1 else return d2 end
+end
+func box_overlap_y(ax, ay, aw, ah, bx, by, bw, bh)
+    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh) then return 0 end
+    var d1 = by + bh - ay
+    var d2 = by - (ay + ah)
+    if abs(d1) < abs(d2) then return d1 else return d2 end
+end
+

@@ -9,7 +9,7 @@
 
 enum {
     // io memory locations
-    IO_BTN,
+    IO_INPUT,
 
     IO_SPRITE_X,
     IO_SPRITE_Y,
@@ -28,12 +28,12 @@ enum {
     INT_RAND,
 
     // button bits
-    BTN_UP = 0,
-    BTN_DOWN,
-    BTN_LEFT,
-    BTN_RIGHT,
-    BTN_A,
-    BTN_B,
+    INPUT_UP = 0,
+    INPUT_DOWN,
+    INPUT_LEFT,
+    INPUT_RIGHT,
+    INPUT_A,
+    INPUT_B,
 
     // screen
     SCREEN_W = 320,
@@ -132,14 +132,14 @@ int main(int argc, char** argv) {
         // input
         const Uint8* ks = SDL_GetKeyboardState(nullptr);
         uint8_t button_bits = 0;
-        button_bits |= !!ks[SDL_SCANCODE_LEFT ] << BTN_LEFT;
-        button_bits |= !!ks[SDL_SCANCODE_RIGHT] << BTN_RIGHT;
-        button_bits |= !!ks[SDL_SCANCODE_UP   ] << BTN_UP;
-        button_bits |= !!ks[SDL_SCANCODE_DOWN ] << BTN_DOWN;
-        button_bits |= !!ks[SDL_SCANCODE_X    ] << BTN_A;
-        button_bits |= !!ks[SDL_SCANCODE_Z    ] << BTN_B;
-        button_bits |= !!ks[SDL_SCANCODE_C    ] << BTN_B;
-        vm.mem_at(IO_BTN) = button_bits;
+        button_bits |= !!ks[SDL_SCANCODE_LEFT ] << INPUT_LEFT;
+        button_bits |= !!ks[SDL_SCANCODE_RIGHT] << INPUT_RIGHT;
+        button_bits |= !!ks[SDL_SCANCODE_UP   ] << INPUT_UP;
+        button_bits |= !!ks[SDL_SCANCODE_DOWN ] << INPUT_DOWN;
+        button_bits |= !!ks[SDL_SCANCODE_X    ] << INPUT_A;
+        button_bits |= !!ks[SDL_SCANCODE_Z    ] << INPUT_B;
+        button_bits |= !!ks[SDL_SCANCODE_C    ] << INPUT_B;
+        vm.mem_at(IO_INPUT) = button_bits;
 
         SDL_RenderClear(renderer);
         vm.run(2, interrupt); // update

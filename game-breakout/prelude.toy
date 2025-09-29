@@ -3,14 +3,14 @@ func preamble()
     asm "    jmp update"
 end
 
-const BTN_UP    = 1
-const BTN_DOWN  = 2
-const BTN_LEFT  = 4
-const BTN_RIGHT = 8
-const BTN_A     = 16
-const BTN_B     = 32
+const INPUT_UP    = 1
+const INPUT_DOWN  = 2
+const INPUT_LEFT  = 4
+const INPUT_RIGHT = 8
+const INPUT_A     = 16
+const INPUT_B     = 32
 
-var btn @ 0
+var input @ 0
 
 func sprite(x @ 1, y @ 2, w @ 3, h @ 4, s @ 5, t @ 6, f @ 7)
     asm "    int #0"

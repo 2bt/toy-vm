@@ -1,5 +1,6 @@
 include "prelude.toy"
 include "util.toy"
+include "sound.toy"
 
 const Q = 256
 
@@ -89,6 +90,7 @@ func unstick_balls()
     for var b = balls.ptr, b < balls.limit, b += 1 do
         if b.state != BALL_STATE_STICKING then continue end
         b.state = BALL_STATE_FLYING
+        sound(SOUND_UNSTICK)
     end
 end
 
@@ -118,6 +120,7 @@ func init_stage()
             blocks_alive += 1
             k.state = BLOCK_STATE_NORMAL
             k.type  = t % BLOCK_TYPES
+            k.tick  = 0
             k.x     = 94 + i * BLOCK_W
             k.y     = BORDER + j * BLOCK_W
             k += 1
@@ -131,6 +134,7 @@ func init_stage()
 end
 
 func init()
+
     lives = 3
     init_stage()
 end
@@ -143,6 +147,8 @@ func update_ball(b: Ball*)
     # pad y collision
     var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap then
+        sound(SOUND_BING)
+
         b.y = ((b.y / Q) + overlap) * Q
         if pad.vy > 0 then
             b.vy = abs(pad.vy)
@@ -162,6 +168,8 @@ func update_ball(b: Ball*)
         var ny = b.vy
         b.vx += ny * s / 6000
         b.vy -= nx * s / 6000
+    else
+        sound(SOUND_NOSPIN)
     end
 
     # move x
@@ -172,6 +180,8 @@ func update_ball(b: Ball*)
     # pad collision
     overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap then
+        sound(SOUND_BING)
+
         b.x    = ((b.x / Q) + overlap) * Q
         b.spin = pad.vy
         var speed = sqrt(b.vx * b.vx + b.vy * b.vy)
@@ -184,6 +194,9 @@ func update_ball(b: Ball*)
         b.tick = 0
         if pad.is_sticky then
             b.state = BALL_STATE_STICKING
+        end
+        if b.spin != 0 then
+            sound(SOUND_SPIN)
         end
     end
 
@@ -200,6 +213,7 @@ func update_ball(b: Ball*)
         end
     end
     if overlap then
+        sound(SOUND_BLOCK)
         b.vx *= -1
         b.x = ((b.x / Q) + overlap) * Q
         b.vx += rand(-20, 20)
@@ -210,6 +224,7 @@ func update_ball(b: Ball*)
     if b.x > (SCREEN_W - BALL_W - BORDER) * Q then
         b.x = (SCREEN_W - BALL_W - BORDER) * Q
         b.vx = -abs(b.vx)
+        sound(SOUND_BING)
     end
 
 
@@ -232,6 +247,7 @@ func update_ball(b: Ball*)
         end
     end
     if overlap then
+        sound(SOUND_BLOCK)
         b.vy *= -1
         b.y = ((b.y / Q) + overlap) * Q
         b.vx += rand(-20, 20)
@@ -241,16 +257,19 @@ func update_ball(b: Ball*)
 
     # wall collision
     if b.y < BORDER * Q then
+        sound(SOUND_BING)
         b.y = BORDER * Q
         b.vy = abs(b.vy)
     end
     if b.y > (SCREEN_H - BALL_W - BORDER) * Q then
+        sound(SOUND_BING)
         b.y = (SCREEN_H - BALL_W - BORDER) * Q
         b.vy = -abs(b.vy)
     end
 
     # die
-    if b.x < -20 * Q then
+    if b.x < -BALL_W * Q then
+        sound(SOUND_DIE)
         balls_alive -= 1
         b.state = BALL_STATE_DEAD
     end
@@ -378,6 +397,6 @@ func update()
     update_stage()
     draw_stage()
     prev_input = input
+
+    update_sound()
 end
-
-

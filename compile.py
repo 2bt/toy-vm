@@ -213,7 +213,8 @@ class Parser:
         name = f"_{self.current_func}_{short}"
         if name in self.decls: self.error(f"variable '{short}' already exists")
         type = self.type()
-        if is_array(type): self.error("no local arrays allowed")
+        if is_array(type): self.error("local arrays not allowed")
+        if is_struct(type): self.error("local structs not allowed")
         addr = None
         if self.peek("sym", "@"):
             self.eat()
@@ -433,12 +434,15 @@ class Parser:
             ta = None
             if self.peek("sym", ":"):
                 ta = self.type()
-                if is_array(ta): self.error("no local arrays allowed")
+                if is_array(ta): self.error("local arrays not allowed")
+                if is_struct(ta): self.error("local structs not allowed")
                 self.decls[name] = Var(ta, None, None)
             if self.peek("sym", "=") or ta == None:
                 self.eat("sym", "=")
                 b, tb = self.expr()
                 if ta != None and ta != tb: self.error("type mismatch")
+                if is_array(tb): self.error("local arrays not allowed")
+                if is_struct(tb): self.error("local structs not allowed")
                 self.decls[name] = Var(tb, None, None)
                 return Assign(a, "=", b)
             return NoOp()
@@ -449,7 +453,9 @@ class Parser:
         if isinstance(a, (VarRef, Deref)) and self.peek("sym") and self.peek().v in ASSIGN_OPS:
             op = self.eat().v
             b, tb = self.expr()
-            if op == "=" and (ta == tb or is_ptr(ta) and is_int(tb) and b == Imm(0)): pass
+            if op == "=" and (ta == tb or is_ptr(ta) and is_int(tb) and b == Imm(0)):
+                if is_array(ta): self.error("array assign not allowed")
+                if is_struct(ta): self.error("struct assign not allowed")
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -545,8 +551,8 @@ class Parser:
 
             # function call
             if self.peek("sym", "("):
-                f = self.funcs.get(name)
-                if not f: self.error(f"unknown function '{name}'")
+                func = self.funcs.get(name)
+                if not func: self.error(f"unknown function '{name}'")
                 self.eat()
                 args = []
                 types = []
@@ -560,10 +566,10 @@ class Parser:
                         args.append(e)
                         types.append(t)
                 self.eat("sym", ")")
-                if len(args) != len(f.args): self.error("wrong number of function arguments")
-                for t, n in zip(types, f.args):
+                if len(args) != len(func.args): self.error("wrong number of function arguments")
+                for t, n in zip(types, func.args):
                     if t != self.decls[n].type: self.error("type mismatch")
-                return Call(name, args), f.type
+                return Call(name, args), func.type
 
             # variable
             node = self.resolve_var(name)
@@ -638,7 +644,10 @@ class Codegen:
     def emit_label(self, l):
         # remove useless jump
         i = len(self.lines) - 1
-        while i > 0 and (m := re.match(f"    j[^m]. ([^ ]+)", self.lines[i])):
+        while i > 0 and (m := re.match(f"    jmp {l}", self.lines[i])):
+            self.lines.pop(i)
+            i -= 1
+        while i > 0 and (m := re.match(r"    j[^m]. ([^ ]+)", self.lines[i])):
             if m[1] == l: self.lines.pop(i)
             i -= 1
         self.emit(f"{l}:")
@@ -699,6 +708,9 @@ class Codegen:
             dyn, sym, off = split_add(node.expr)
             if not dyn: return f"{sym}+{off}"
             a = self.value(dyn)
+            if a.startswith("["):
+                t, a = a, self.newtmp()
+                self.emit(f"    mov {a}, {t}")
             a = f"[{a}]"
             if sym: a += f"+{sym}"
             if off: a += f"+{off}"
@@ -954,7 +966,7 @@ class Codegen:
             if v.addr != None:
                 assert v.data == None
                 self.emit(f"{name} = {v.addr}")
-                addr = max(addr, v.addr + 1)
+                addr = max(addr, v.addr + ast.type_size(v.type))
 
         # temp variables
         for name in self.tmp_vars:

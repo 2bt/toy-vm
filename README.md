@@ -35,6 +35,6 @@ This will:
 ## Roadmap
 
 * [x] Breakout example
-* [ ] Audio support
+* [x] Audio support
 * [ ] More demos
 

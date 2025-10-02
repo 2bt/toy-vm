@@ -5,6 +5,7 @@
 #include <cassert>
 #include <fstream>
 
+
 namespace {
 
 enum Operation {

@@ -15,12 +15,13 @@ public:
 
     bool load(std::string const& path);
     void run(int32_t start, std::function<void(int32_t)> interrupt = [](int32_t){});
-    int32_t& mem_at(int32_t addr);
+
+    std::array<int32_t, MEM_SIZE> mem = {};
 
 private:
     int32_t next();
+    int32_t& mem_at(int32_t addr);
 
-    std::vector<int32_t>          code;
-    int32_t                       pc  = 0;
-    std::array<int32_t, MEM_SIZE> mem = {};
+    std::vector<int32_t> code;
+    int32_t              pc;
 };

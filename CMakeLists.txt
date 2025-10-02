@@ -17,6 +17,7 @@ target_compile_options(
     -std=c++20
     -Wall
     -O3
+    -mbmi2 # for _pext_u32
 )
 
 target_link_libraries(

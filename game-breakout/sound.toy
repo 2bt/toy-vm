@@ -6,42 +6,41 @@ const SOUND_DIE     = 3
 const SOUND_SPIN    = 4
 const SOUND_NOSPIN  = 5
 
-const SNDCMD_SET_PITCH = 0
-const SNDCMD_INC_PITCH = 1
-const SNDCMD_SET_VOL   = 2
-const SNDCMD_INC_VOL   = 3
-const SNDCMD_SET_PW    = 4
-const SNDCMD_INC_PW    = 5
-const SNDCMD_SET_WAVE  = 6
-const SNDCMD_WAIT      = 7
-const SNDCMD_LOOP      = 8
-const SNDCMD_DONE      = 9
+const SNDCMD_DONE       = 0
+const SNDCMD_SET_PITCH  = 1
+const SNDCMD_INC_PITCH  = 2
+const SNDCMD_SET_VOL    = 3
+const SNDCMD_INC_VOL    = 4
+const SNDCMD_SET_PW     = 5
+const SNDCMD_INC_PW     = 6
+const SNDCMD_SET_WAVE   = 7
+const SNDCMD_WAIT       = 8
+const SNDCMD_LOOP_START = 9
+const SNDCMD_LOOP_END   = 10
 
 
 struct SoundCommandStream
     voice: Voice*
-    pos: int*
-    wait
+    pos:   int*
+    loop:  int*
+    wait:  int
 end
 
 struct SoundEffect
     stream: SoundCommandStream*
-    start: int*
+    start:  int*
 end
 
 var SOUND_COMMANDS_BING: int[] = {
     SNDCMD_SET_WAVE,    WAVE_NOISE,
     SNDCMD_SET_VOL,     60,
     SNDCMD_SET_PITCH,   100 * 8,
-
     SNDCMD_WAIT,        1,
     SNDCMD_SET_PITCH,   32 * 8,
     SNDCMD_INC_VOL,     -20,
-
     SNDCMD_WAIT,        1,
     SNDCMD_SET_PITCH,   10 * 8,
     SNDCMD_INC_VOL,     -20,
-
     SNDCMD_WAIT,        1,
     SNDCMD_SET_VOL,     0,
     SNDCMD_DONE,
@@ -51,10 +50,10 @@ var SOUND_COMMANDS_BLOCK: int[] = {
     SNDCMD_SET_WAVE,    WAVE_NOISE,
     SNDCMD_SET_PITCH,   40 * 8,
     SNDCMD_SET_VOL,     100,
-
+    SNDCMD_LOOP_START,
     SNDCMD_WAIT,        1,
     SNDCMD_INC_VOL,     -10,
-    SNDCMD_LOOP,        2,
+    SNDCMD_LOOP_END,
 }
 
 var SOUND_COMMANDS_UNSTICK: int[] = {
@@ -62,7 +61,7 @@ var SOUND_COMMANDS_UNSTICK: int[] = {
     SNDCMD_SET_WAVE,    WAVE_PULSE,
     SNDCMD_SET_PW,      128,
     SNDCMD_SET_PITCH,   44 * 8,
-
+    SNDCMD_LOOP_START,
     SNDCMD_WAIT,        2,
     SNDCMD_INC_PITCH,   7 * 8,
     SNDCMD_WAIT,        2,
@@ -71,7 +70,7 @@ var SOUND_COMMANDS_UNSTICK: int[] = {
     SNDCMD_INC_PITCH,   -14 * 8,
     SNDCMD_INC_PW,      10,
     SNDCMD_INC_VOL,     -20,
-    SNDCMD_LOOP,        8,
+    SNDCMD_LOOP_END,
 }
 
 var SOUND_COMMANDS_DIE: int[] = {
@@ -79,7 +78,7 @@ var SOUND_COMMANDS_DIE: int[] = {
     SNDCMD_SET_WAVE,    WAVE_PULSE,
     SNDCMD_SET_PW,      0,
     SNDCMD_SET_PITCH,   44 * 8,
-
+    SNDCMD_LOOP_START,
     SNDCMD_WAIT,        1,
     SNDCMD_INC_PITCH,   20,
     SNDCMD_INC_PW,      1,
@@ -107,7 +106,7 @@ var SOUND_COMMANDS_DIE: int[] = {
     SNDCMD_WAIT,        1,
     SNDCMD_INC_PITCH,   -25,
     SNDCMD_INC_VOL,     -20,
-    SNDCMD_LOOP,        27,
+    SNDCMD_LOOP_END,
 }
 
 var SOUND_COMMANDS_SPIN: int[] = {
@@ -115,7 +114,7 @@ var SOUND_COMMANDS_SPIN: int[] = {
     SNDCMD_SET_VOL,     40,
     SNDCMD_SET_PW,      0,
     SNDCMD_SET_PITCH,   38 * 8,
-
+    SNDCMD_LOOP_START,
     SNDCMD_WAIT,        2,
     SNDCMD_INC_PITCH,   12 * 8,
     SNDCMD_INC_PW,      2,
@@ -126,7 +125,7 @@ var SOUND_COMMANDS_SPIN: int[] = {
     SNDCMD_WAIT,        2,
     SNDCMD_INC_PITCH,   -12 * 3 * 8,
     SNDCMD_INC_VOL,     -1,
-    SNDCMD_LOOP,        10,
+    SNDCMD_LOOP_END,
 }
 var SOUND_COMMANDS_NOSPIN: int[] = {
     SNDCMD_SET_VOL,     0,
@@ -140,7 +139,7 @@ var sound_command_streams: SoundCommandStream[] = {
     { &voices[2] },
 }
 
-var SOUND_EFFECTS: SoundEffect[] = {
+var sound_effects: SoundEffect[] = {
     { &sound_command_streams[0], SOUND_COMMANDS_BING.ptr    },
     { &sound_command_streams[1], SOUND_COMMANDS_BLOCK.ptr   },
     { &sound_command_streams[1], SOUND_COMMANDS_UNSTICK.ptr },
@@ -151,14 +150,13 @@ var SOUND_EFFECTS: SoundEffect[] = {
 
 
 func sound(s)
-    var effect = &SOUND_EFFECTS[s]
+    var effect = &sound_effects[s]
     effect.stream.pos  = effect.start
     effect.stream.wait = 0
 end
 
 
 func update_sound()
-
     for var s = sound_command_streams.ptr, s < sound_command_streams.limit, s += 1 do
         while s.pos do
             if s.wait > 0 then
@@ -169,27 +167,36 @@ func update_sound()
             s.pos += 1
             if cmd == SNDCMD_SET_PITCH then
                 s.voice.pitch = s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_INC_PITCH then
                 s.voice.pitch += s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_SET_VOL then
                 s.voice.vol = s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_INC_VOL then
                 s.voice.vol += s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_SET_PW then
                 s.voice.pw = s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_INC_PW then
                 s.voice.pw += s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_SET_WAVE then
                 s.voice.wave = s.pos@
+                s.pos += 1
             elif cmd == SNDCMD_WAIT then
                 s.wait = s.pos@
-            elif cmd == SNDCMD_LOOP then
-                s.pos -= s.pos@ * 2 + 2
+                s.pos += 1
+            elif cmd == SNDCMD_LOOP_START then
+                s.loop = s.pos
+            elif cmd == SNDCMD_LOOP_END then
+                s.pos = s.loop
             elif cmd == SNDCMD_DONE then
                 s.pos = 0
                 break
             end
-            s.pos += 1
         end
     end
 end

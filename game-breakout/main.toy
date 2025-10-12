@@ -383,7 +383,8 @@ func draw_stage()
 
 
     print(5, 5, "LIVES")
-    print(5 + 8*6, 5, int_to_str(lives))
+    int_to_str(lives)
+    print(5 + 8*6, 5, format_str.ptr)
 
     if game_state == GAME_STATE_CLEAR then
         print(116, 86, "STAGE CLEAR")

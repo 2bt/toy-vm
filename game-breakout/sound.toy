@@ -1,4 +1,3 @@
-
 const SOUND_BING    = 0
 const SOUND_BLOCK   = 1
 const SOUND_UNSTICK = 2
@@ -158,6 +157,7 @@ end
 
 func update_sound()
     for var s = sound_command_streams.ptr, s < sound_command_streams.limit, s += 1 do
+        var voice = s.voice
         while s.pos do
             if s.wait > 0 then
                 s.wait -= 1
@@ -165,29 +165,30 @@ func update_sound()
             end
             var cmd = s.pos@
             s.pos += 1
+            var val = s.pos@
             if cmd == SNDCMD_SET_PITCH then
-                s.voice.pitch = s.pos@
+                voice.pitch = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_PITCH then
-                s.voice.pitch += s.pos@
+                voice.pitch += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_VOL then
-                s.voice.vol = s.pos@
+                voice.vol = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_VOL then
-                s.voice.vol += s.pos@
+                voice.vol += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_PW then
-                s.voice.pw = s.pos@
+                voice.pw = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_PW then
-                s.voice.pw += s.pos@
+                voice.pw += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_WAVE then
-                s.voice.wave = s.pos@
+                voice.wave = val
                 s.pos += 1
             elif cmd == SNDCMD_WAIT then
-                s.wait = s.pos@
+                s.wait = val
                 s.pos += 1
             elif cmd == SNDCMD_LOOP_START then
                 s.loop = s.pos

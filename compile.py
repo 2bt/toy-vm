@@ -4,11 +4,14 @@ import ast
 from pathlib import Path
 import argparse
 from collections import namedtuple
-from types import SimpleNamespace
+from dataclasses import dataclass, field
 
+@dataclass
+class Head:
+    toks: list
+    i = 0
 
 Token    = namedtuple("Token",    "k v loc")
-
 Type     = namedtuple("Type",     "base ptr array")
 TyStruct = namedtuple("TyStruct", "fields size")
 TyField  = namedtuple("TyField",  "type offset")
@@ -21,7 +24,6 @@ BinOp    = namedtuple("BinOp",    "op a b")
 Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
 Var      = namedtuple("Var",      "type addr data")
-Func     = namedtuple("Func",     "args type body")
 Assign   = namedtuple("Assign",   "lhs op rhs")
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
@@ -31,6 +33,16 @@ If       = namedtuple("If",       "cond then els")
 Return   = namedtuple("Return",   "expr")
 Asm      = namedtuple("Asm",      "asm")
 NoOp     = namedtuple("NoOp",     "")
+
+@dataclass
+class Func:
+    name: str
+    type: Type   = None
+    locals: dict = field(default_factory=dict)
+    args: list   = field(default_factory=list)
+    body: list   = None
+    calls: set   = field(default_factory=set)
+
 
 KEYWORDS = {
     "include", "var", "const", "func", "struct", "if", "then", "elif", "else",
@@ -143,7 +155,7 @@ JMP_SWAP = {
 class Parser:
     def __init__(self):
         self.consts     = {}
-        self.decls      = {}
+        self.globals    = {}
         self.funcs      = {}
         self.structs    = {}
         self.loop       = 0
@@ -208,23 +220,9 @@ class Parser:
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
 
-    def func_arg(self):
-        short = self.eat("id").v
-        name = f"_{self.current_func}_{short}"
-        if name in self.decls: self.error(f"variable '{short}' already exists")
-        type = self.type()
-        if is_array(type): self.error("local arrays not allowed")
-        if is_struct(type): self.error("local structs not allowed")
-        addr = None
-        if self.peek("sym", "@"):
-            self.eat()
-            addr = self.const_expr()
-        self.decls[name] = Var(type, addr, None)
-        return name
-
     def global_var(self):
         name = self.eat("id").v
-        if name in self.decls: self.error(f"variable '{name}' already exists")
+        if name in self.globals: self.error(f"variable '{name}' already exists")
         type = self.type(True)
         addr = None
         data = None
@@ -290,7 +288,7 @@ class Parser:
 
             data = unroll(type, data)
 
-        self.decls[name] = Var(type, addr, data)
+        self.globals[name] = Var(type, addr, data)
 
     def get_struct(self, name):
         if name not in self.structs: self.error(f"unknown struct '{name}'")
@@ -298,7 +296,8 @@ class Parser:
 
     def program(self, path):
         self.included.add(path)
-        self.head = SimpleNamespace(toks = tokenize(path), i = 0)
+        # self.head = SimpleNamespace(toks = tokenize(path), i = 0)
+        self.head = Head(tokenize(path))
 
         while any(self.peek(k) for k in ["include", "const", "var", "func", "struct"]):
             tok = self.eat()
@@ -332,22 +331,36 @@ class Parser:
                 self.structs[name] = TyStruct(fields, offset)
 
             elif tok.k == "func":
-                name = self.eat("id").v
-                if name in self.funcs: self.error(f"function '{name}' already exists")
-                self.current_func = name
+                func = Func(self.eat("id").v)
+                if func.name in self.funcs: self.error(f"function '{func.name}' already exists")
+                self.funcs[func.name] = func
+
+                def func_arg():
+                    name = self.eat("id").v
+                    if name in func.locals: self.error(f"variable '{name}' already exists")
+                    type = self.type()
+                    if is_array(type): self.error("local arrays not allowed")
+                    if is_struct(type): self.error("local structs not allowed")
+                    addr = None
+                    if self.peek("sym", "@"):
+                        self.eat()
+                        addr = self.const_expr()
+                    func.locals[name] = Var(type, addr, None)
+                    func.args.append(name)
+
                 self.eat("sym", "(")
-                args = []
                 if not self.peek("sym", ")"):
-                    args.append(self.func_arg())
+                    func_arg()
                     while self.peek("sym", ","):
                         self.eat()
-                        args.append(self.func_arg())
+                        func_arg()
+
                 self.eat("sym", ")")
-                self.return_type = self.type()
-                body = self.block()
-                self.eat("end")
-                self.funcs[name] = Func(args, self.return_type, body)
+                func.type = self.type()
+                self.current_func = func
+                func.body = self.block()
                 self.current_func = None
+                self.eat("end")
 
             else: assert False
         self.eat("eof")
@@ -418,7 +431,7 @@ class Parser:
             if self.peek() and self.peek().k in KEYWORDS:
                 return Return(None)
             expr, type = self.expr()
-            if not (type == self.return_type or (is_ptr(self.return_type) and expr == Imm(0))):
+            if not (type == self.current_func.type or (is_ptr(self.current_func.type) and expr == Imm(0))):
                 self.error("return type mismatch")
             return Return(expr)
         if self.peek("asm"):
@@ -427,23 +440,22 @@ class Parser:
 
         if self.peek("var"):
             self.eat()
-            short = self.eat("id").v
-            name = f"_{self.current_func}_{short}"
-            if name in self.decls: self.error(f"variable '{short}' already exists")
-            a = VarRef(name)
+            name = self.eat("id").v
+            if name in self.current_func.locals: self.error(f"variable '{name}' already exists")
+            a = VarRef(f"{self.current_func.name}.{name}")
             ta = None
             if self.peek("sym", ":"):
                 ta = self.type()
                 if is_array(ta): self.error("local arrays not allowed")
                 if is_struct(ta): self.error("local structs not allowed")
-                self.decls[name] = Var(ta, None, None)
+                self.current_func.locals[name] = Var(ta, None, None)
             if self.peek("sym", "=") or ta == None:
                 self.eat("sym", "=")
                 b, tb = self.expr()
-                if ta != None and ta != tb: self.error("type mismatch")
+                if ta != None and ta != tb: self.error("type mismatch") # XXX check for x: Foo* = 0
                 if is_array(tb): self.error("local arrays not allowed")
                 if is_struct(tb): self.error("local structs not allowed")
-                self.decls[name] = Var(tb, None, None)
+                self.current_func.locals[name] = Var(tb, None, None)
                 return Assign(a, "=", b)
             return NoOp()
 
@@ -521,13 +533,6 @@ class Parser:
             return Not(a), INT
         return self.primary()
 
-    def resolve_var(self, name):
-        if self.current_func:
-            local_name = f"_{self.current_func}_{name}"
-            if local_name in self.decls: return VarRef(local_name)
-        if name not in self.decls: self.error(f"unknown variable '{name}'")
-        return VarRef(name)
-
     def primary(self):
         # number
         if self.peek("num"):
@@ -539,8 +544,8 @@ class Parser:
         # string literal -> int*
         if self.peek("string"):
             data = list(map(ord, self.eat().v)) + [0]
-            name = f"_str_{len(self.decls)}"
-            self.decls[name] = Var(Type("int", 0, len(data)), None, data)
+            name = f"_str_{len(self.globals)}"
+            self.globals[name] = Var(Type("int", 0, len(data)), None, data)
             node = AddrOf(VarRef(name))
             type = Type("int", 1, None)
 
@@ -568,12 +573,16 @@ class Parser:
                 self.eat("sym", ")")
                 if len(args) != len(func.args): self.error("wrong number of function arguments")
                 for t, n in zip(types, func.args):
-                    if t != self.decls[n].type: self.error("type mismatch")
+                    if t != func.locals[n].type: self.error("type mismatch")
+                self.current_func.calls.add(func.name)
                 return Call(name, args), func.type
 
             # variable
-            node = self.resolve_var(name)
-            type = self.decls[node.name].type
+            if self.current_func and name in self.current_func.locals:
+                node, type = VarRef(f"{self.current_func.name}.{name}"), self.current_func.locals[name].type
+            else:
+                if name not in self.globals: self.error(f"unknown variable '{name}'")
+                node, type = VarRef(name), self.globals[name].type
 
         while True:
             if self.peek("sym", "["):
@@ -624,13 +633,92 @@ class Parser:
 
 
 
+def peephole(lines, tmp_vars):
+    # remove unused labels
+    used_labels = set()
+    for l in lines:
+        if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
+    new_lines = []
+    for l in lines:
+        if m := re.match(r"(_[^: ]+):", l):
+            if m[1] not in used_labels: continue
+        new_lines.append(l)
+    lines = new_lines
+
+    def process(block):
+        new_block = []
+        while block:
+            match block:
+                case [("mov", a, b), ("cmp", c, d), *rest] if a in tmp_vars and a == c:
+                    new_block.append(("cmp", b, d))
+                    block = rest
+                case [(op, a, b), ("cmp", c, "#0"), *rest] if a == c:
+                    new_block.append((op, a, b))
+                    block = rest
+                case [("mov", a, b), (op, c, d), *rest] if a in tmp_vars and a == d:
+                    new_block.append((op, c, b))
+                    block = rest
+                case [("mov", a, b), *foo] if a in tmp_vars:
+                    q = []
+                    while True:
+                        match block:
+                            case [(op, c, d), *rest] if c == a:
+                                block = rest
+                                q.append((op, d))
+                                continue
+                            case [("mov", c, d), *rest] if d == a and not any(c == x for _, x in q):
+                                block = rest
+                                for op, x in q: new_block.append((op, c, x))
+                                break
+                        new_block.append(("mov", a, b))
+                        block = foo
+                        break
+                case [b, *rest]:
+                    new_block.append(b)
+                    block = rest
+        return new_block
+
+    new_lines = []
+    block     = []
+    operands  = set()
+    for line in lines:
+        if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", line):
+            block.append(m.groups())
+            continue
+        if m := re.match(r"    (j..) ([^ ]+)", line):
+            block.append(m.groups())
+            continue
+        if block:
+            pa = None
+            for o in process(block):
+                match o:
+                    case op, a, b:
+                        operands |= {a, b}
+                        if a == pa and op != "mov": a = "%" # previous destination address
+                        else: pa = a
+                        new_lines.append(f"    {op} {a}, {b}")
+                    case j, l:
+                        new_lines.append(f"    {j} {l}")
+            block = []
+        if line == "    ret" and new_lines[-1] == line: continue
+        new_lines.append(line)
+    lines = new_lines
+
+    # remove unused tmp vars
+    for t in list(tmp_vars.keys()):
+        if t not in operands: del tmp_vars[t]
+
+    return lines
+
+
+
 class Codegen:
 
     def newtmp(self, *ts):
         for t in ts:
             if t in self.tmp_vars: return t
             if t.startswith("[") and t[1:-1] in self.tmp_vars: return t[1:-1]
-        t = f"_{self.current_func}_T{self.tmp_i}"
+        t = f"{self.current_func.name}._T{self.tmp_i}"
         self.tmp_i += 1
         self.tmp_vars[t] = ()
         return t
@@ -772,7 +860,7 @@ class Codegen:
         f = self.funcs[node.name]
         for a, b in zip(node.args, f.args):
             t = self.value(a)
-            self.emit(f"    mov {b}, {t}")
+            self.emit(f"    mov {f.name}.{b}, {t}")
         self.emit(f"    jsr {node.name}")
 
     def stmt(self, node):
@@ -857,124 +945,67 @@ class Codegen:
             assert False, f"unsupported statement {node}"
 
 
-    def peephole(self):
-        # remove unused labels
-        used_labels = set()
-        for l in self.lines:
-            if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
-        new_lines = []
-        for l in self.lines:
-            if m := re.match(r"(_[^: ]+):", l):
-                if m[1] not in used_labels: continue
-            new_lines.append(l)
-        self.lines = new_lines
-
-        def process(block):
-            new_block = []
-            while block:
-                match block:
-                    case [("mov", a, b), ("cmp", c, d), *rest] if a in self.tmp_vars and a == c:
-                        new_block.append(("cmp", b, d))
-                        block = rest
-                    case [(op, a, b), ("cmp", c, "#0"), *rest] if a == c:
-                        new_block.append((op, a, b))
-                        block = rest
-                    case [("mov", a, b), (op, c, d), *rest] if a in self.tmp_vars and a == d:
-                        new_block.append((op, c, b))
-                        block = rest
-                    case [("mov", a, b), *foo] if a in self.tmp_vars:
-                        q = []
-                        while True:
-                            match block:
-                                case [(op, c, d), *rest] if c == a:
-                                    block = rest
-                                    q.append((op, d))
-                                    continue
-                                case [("mov", c, d), *rest] if d == a and not any(c == x for _, x in q):
-                                    block = rest
-                                    for op, x in q: new_block.append((op, c, x))
-                                    break
-                            new_block.append(("mov", a, b))
-                            block = foo
-                            break
-                    case [b, *rest]:
-                        new_block.append(b)
-                        block = rest
-            return new_block
-
-        new_lines = []
-        block     = []
-        operands  = set()
-        for line in self.lines:
-            if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", line):
-                block.append(m.groups())
-                continue
-            if m := re.match(r"    (j..) ([^ ]+)", line):
-                block.append(m.groups())
-                continue
-            if block:
-                pa = None
-                for o in process(block):
-                    match o:
-                        case op, a, b:
-                            operands |= {a, b}
-                            if a == pa and op != "mov": a = "%" # previous destination address
-                            else: pa = a
-                            new_lines.append(f"    {op} {a}, {b}")
-                        case j, l:
-                            new_lines.append(f"    {j} {l}")
-                block = []
-            if line == "    ret" and new_lines[-1] == line: continue
-            new_lines.append(line)
-        self.lines = new_lines
-
-        # remove unused tmp vars
-        for t in list(self.tmp_vars.keys()):
-            if t not in operands: del self.tmp_vars[t]
-
     def compile(self, ast):
-        self.expr_types = {}
         self.lines      = []
-        self.tmp_i      = 0
         self.label_i    = 0
-        self.decls      = ast.decls
+        self.globals    = ast.globals
         self.funcs      = ast.funcs
         self.structs    = ast.structs
-
-        self.tmp_vars   = { "_R": () } # use dict to keep original order
         self.loop_stack = []
         self.ast        = ast
 
         # functions
+        lines = []
         for name, f in self.funcs.items():
-            self.current_func = name
+            self.current_func = f
+            self.tmp_vars     = {} # use dict to keep original order
+            self.lines        = []
             self.emit("")
             self.emit(f"    ; function {name}")
             self.emit(f"{name}:")
             for st in f.body: self.stmt(st)
             self.emit("    ret")
+            # optimize asm
+            lines += peephole(self.lines, self.tmp_vars)
+            # add temporary variables to locals
+            f.locals.update({t.split(".", 1)[1]: Var(INT, None, None) for t in self.tmp_vars})
 
-        # optimize asm
-        self.peephole()
-
-        # variables and data
-        lines, self.lines = self.lines, []
-
-        # API variables
+        # variables with fixed addresses
         addr = 0
-        for name, v in self.decls.items():
+        self.lines = []
+        for name, v in self.globals.items():
             if v.addr != None:
                 assert v.data == None
                 self.emit(f"{name} = {v.addr}")
                 addr = max(addr, v.addr + ast.type_size(v.type))
+        for name, f in self.funcs.items():
+            for k, v in f.locals.items():
+                if v.addr != None:
+                    assert v.data == None
+                    self.emit(f"{name}.{k} = {v.addr}")
+                    addr = max(addr, v.addr + ast.type_size(v.type))
 
-        # temp variables
-        for name in self.tmp_vars:
-            self.emit(f"{name} = {addr}")
-            addr += 1
+        # special register for return value
+        self.emit(f"_R = {addr}")
+        addr += 1
 
-        # BSS
-        for name, v in self.decls.items():
+        cache = {}
+        def alloc_vars(name):
+            if name in cache: return cache[name]
+            func = self.funcs[name]
+            a = addr
+            for f in func.calls: a = max(a, alloc_vars(f))
+            for k, v in func.locals.items():
+                assert not v.data
+                if v.addr == None:
+                    self.emit(f"{name}.{k} = {a}")
+                    a += ast.type_size(v.type)
+            cache[name] = a
+            return a
+        addr = max(alloc_vars(name) for name in self.funcs)
+
+        # global variables
+        for name, v in self.globals.items():
             if v.addr == None and not v.data:
                 self.emit(f"{name} = {addr}")
                 addr += ast.type_size(v.type)
@@ -982,7 +1013,7 @@ class Codegen:
         # data
         self.emit(f"")
         self.emit(f"    .data {addr}")
-        for name, v in self.decls.items():
+        for name, v in self.globals.items():
             if v.data:
                 assert v.addr == None
                 self.emit(f"{name}:")

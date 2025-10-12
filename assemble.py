@@ -27,7 +27,7 @@ load_opcode_table()
 
 token_regex = re.compile(r"""
     \s*(?P<comment> ;.*                    )|
-    \s*(?P<name>    [A-Za-z_][A-Za-z0-9_@]*)|
+    \s*(?P<name>    [A-Za-z_][A-Za-z0-9_.]*)|
     \s*(?P<number>  [0-9]+|\$[A-Fa-f0-9]*  )|
     \s*(?P<sym>     [\[\]():,\.#=+\-*/%]   )|
     \s*(?P<other>   [^\s]+                 )

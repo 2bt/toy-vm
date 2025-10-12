@@ -7,6 +7,9 @@
 
 
 enum {
+    SCREEN_W = 320,
+    SCREEN_H = 180,
+
     INPUT_UP = 0,
     INPUT_DOWN,
     INPUT_LEFT,
@@ -16,9 +19,6 @@ enum {
 
     INT_SPRITE = 0,
     INT_RAND,
-
-    SCREEN_W = 320,
-    SCREEN_H = 180,
 };
 
 
@@ -89,7 +89,7 @@ private:
             MemMap::Voice const& m = m_mem_voices[i];
             v.pitch = std::exp2f((m.pitch * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
             v.pw    = (m.pw % 256) * (1.0f / 256.0f);
-            v.vol   = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f);
+            v.vol   = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f) * 0.5f;
             v.wave  = m.wave;
             if (v.wave == NOISE) v.pitch *= 8.0f;
         }

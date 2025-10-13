@@ -21,10 +21,10 @@ VarRef   = namedtuple("VarRef",   "name")
 AddrOf   = namedtuple("AddrOf",   "lv")
 Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
+Assign   = namedtuple("Assign",   "op a b")
 Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
 Var      = namedtuple("Var",      "type addr data")
-Assign   = namedtuple("Assign",   "lhs op rhs")
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
 Break    = namedtuple("Break",    "")
@@ -92,11 +92,21 @@ def addr_of(e):
     if isinstance(e, Deref): return e.expr
     return AddrOf(e)
 
+def has_call(e):
+    match e:
+        case Imm(_): return False
+        case VarRef(_): return False
+        case AddrOf(_): return False
+        case Call(_, _): return True
+        case Not(e): return has_call(e)
+        case Deref(e): return has_call(e)
+        case BinOp(_, a, b): return has_call(a) or has_call(b)
+    assert False, e
+
 def split_add(e):
     match e:
         case Imm(v): return (None, None, v)
         case AddrOf(VarRef(n)): return (None, n, 0)
-        case AddrOf(Deref(e)): assert False, "WOOT"
         case BinOp("+", a, b):
             d1, s1, k1 = split_add(a)
             d2, s2, k2 = split_add(b)
@@ -456,7 +466,7 @@ class Parser:
                 if is_array(tb): self.error("local arrays not allowed")
                 if is_struct(tb): self.error("local structs not allowed")
                 self.current_func.locals[name] = Var(tb, None, None)
-                return Assign(a, "=", b)
+                return Assign("=", a, b)
             return NoOp()
 
         a, ta = self.primary()
@@ -476,7 +486,7 @@ class Parser:
                     else: b = BinOp("*", b, Imm(elem_size))
             else:
                 if not (is_int(ta) and is_int(tb)): self.error("type mismatch")
-            return Assign(a, op, b)
+            return Assign(op, a, b)
 
         self.error("invalid statement")
 
@@ -632,18 +642,24 @@ class Parser:
             else: return node, type
 
 
-
 def peephole(lines, tmp_vars):
-    # remove unused labels
-    used_labels = set()
-    for l in lines:
-        if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
-    new_lines = []
-    for l in lines:
-        if m := re.match(r"(_[^: ]+):", l):
-            if m[1] not in used_labels: continue
-        new_lines.append(l)
-    lines = new_lines
+    for _ in range(2):
+        # remove unused labels
+        used_labels = set()
+        for l in lines:
+            if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
+        new_lines = []
+        for l in lines:
+            if m := re.match(r"(_[^: ]+):$", l):
+                if m[1] not in used_labels: continue
+            new_lines.append(l)
+        lines = []
+        # remove dead code
+        dead = False
+        for l in new_lines:
+            if dead and re.match(r"(_[^: ]+):$", l): dead = False
+            if not dead: lines.append(l)
+            if l == "    ret": dead = True
 
     def process(block):
         new_block = []
@@ -690,23 +706,23 @@ def peephole(lines, tmp_vars):
             continue
         if block:
             pa = None
-            for o in process(block):
+            for o in process(process(block)):
                 match o:
                     case op, a, b:
                         operands |= {a, b}
-                        if a == pa and op != "mov": a = "%" # previous destination address
+                        if op != "mov" and a == pa: a = "%" # previous destination address
                         else: pa = a
                         new_lines.append(f"    {op} {a}, {b}")
                     case j, l:
                         new_lines.append(f"    {j} {l}")
             block = []
-        if line == "    ret" and new_lines[-1] == line: continue
         new_lines.append(line)
     lines = new_lines
 
     # remove unused tmp vars
     for t in list(tmp_vars.keys()):
         if t not in operands: del tmp_vars[t]
+
 
     return lines
 
@@ -727,7 +743,8 @@ class Codegen:
         self.label_i += 1
         return f"_{base}_{self.label_i}"
 
-    def emit(self, s): self.lines.append(s)
+    def emit(self, s):
+        self.lines.append(s)
 
     def emit_label(self, l):
         # remove useless jump
@@ -738,7 +755,7 @@ class Codegen:
         while i > 0 and (m := re.match(r"    j[^m]. ([^ ]+)", self.lines[i])):
             if m[1] == l: self.lines.pop(i)
             i -= 1
-        self.emit(f"{l}:")
+        self.lines.append(f"{l}:")
 
     def branch(self, node, T, F):
         if isinstance(node, Imm):
@@ -857,21 +874,31 @@ class Codegen:
 
 
     def call(self, node):
-        f = self.funcs[node.name]
-        for a, b in zip(node.args, f.args):
-            t = self.value(a)
-            self.emit(f"    mov {f.name}.{b}, {t}")
+        func = self.funcs[node.name]
+        staged = []
+        for e in node.args:
+            t = None
+            if has_call(e):
+                v = self.value(e)
+                t = self.newtmp(v)
+                if t != v: self.emit(f"    mov {t}, {v}")
+            staged.append(t)
+        for a, e, v in zip(func.args, node.args, staged):
+            if not v: v = self.value(e)
+            self.emit(f"    mov {func.name}.{a}, {v}")
         self.emit(f"    jsr {node.name}")
+
+
 
     def stmt(self, node):
         self.tmp_i = 0 # reuse temporary variables
 
         if isinstance(node, Assign):
-            assert isinstance(node.lhs, (VarRef, Deref))
-            dst = self.value(node.lhs)
-            v = self.value(node.rhs)
+            assert isinstance(node.a, (VarRef, Deref))
+            a = self.value(node.a)
+            b = self.value(node.b)
             op = ASSIGN_OPS[node.op]
-            if dst != v or node.op != "=": self.emit(f"    {op} {dst}, {v}")
+            if a != b or node.op != "=": self.emit(f"    {op} {a}, {b}")
 
         elif isinstance(node, While):
             L = self.label("while")
@@ -966,7 +993,9 @@ class Codegen:
             for st in f.body: self.stmt(st)
             self.emit("    ret")
             # optimize asm
+
             lines += peephole(self.lines, self.tmp_vars)
+
             # add temporary variables to locals
             f.locals.update({t.split(".", 1)[1]: Var(INT, None, None) for t in self.tmp_vars})
 

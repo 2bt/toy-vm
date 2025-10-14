@@ -19,6 +19,8 @@ enum AddressMode {
     ABS,        // absolute address
     IND,        // indirect address
     IDX,        // indirect address + offset
+    ZRO,        // immediate 0
+    ONE,        // immediate 1
     IMM,        // immediate
     NXT,        // next address
     PDA = NIL,  // previous address
@@ -49,52 +51,64 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MOV, ABS, IND },
     { MOV, ABS, IDX },
     { MOV, ABS, IMM },
+    { MOV, ABS, ZRO },
     { MOV, IND, ABS },
     { MOV, IND, IND },
     { MOV, IND, IDX },
     { MOV, IND, IMM },
+    { MOV, IND, ZRO },
     { MOV, IDX, ABS },
     { MOV, IDX, IND },
     { MOV, IDX, IDX },
     { MOV, IDX, IMM },
+    { MOV, IDX, ZRO },
     { MOV, NXT, ABS },
     { MOV, NXT, IND },
     { MOV, NXT, IDX },
     { MOV, NXT, IMM },
+    { MOV, NXT, ZRO },
 
     { CMP, ABS, ABS },
     { CMP, ABS, IND },
     { CMP, ABS, IDX },
     { CMP, ABS, IMM },
+    { CMP, ABS, ZRO },
     { CMP, IND, ABS },
     { CMP, IND, IND },
     { CMP, IND, IDX },
     { CMP, IND, IMM },
+    { CMP, IND, ZRO },
     { CMP, IDX, ABS },
     { CMP, IDX, IND },
     { CMP, IDX, IDX },
     { CMP, IDX, IMM },
+    { CMP, IDX, ZRO },
     { CMP, PDA, ABS },
     { CMP, PDA, IND },
     { CMP, PDA, IDX },
     { CMP, PDA, IMM },
+    { CMP, PDA, ZRO },
 
     { ADD, ABS, ABS },
     { ADD, ABS, IND },
     { ADD, ABS, IDX },
     { ADD, ABS, IMM },
+    { ADD, ABS, ONE },
     { ADD, IND, ABS },
     { ADD, IND, IND },
     { ADD, IND, IDX },
     { ADD, IND, IMM },
+    { ADD, IND, ONE },
     { ADD, IDX, ABS },
     { ADD, IDX, IND },
     { ADD, IDX, IDX },
     { ADD, IDX, IMM },
+    { ADD, IDX, ONE },
     { ADD, PDA, ABS },
     { ADD, PDA, IND },
     { ADD, PDA, IDX },
     { ADD, PDA, IMM },
+    { ADD, PDA, ONE },
 
     { SUB, ABS, ABS },
     { SUB, ABS, IND },
@@ -262,6 +276,8 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
         if (oc.a == ABS) a = &mem_at(next());
         if (oc.a == IND) a = &mem_at(mem_at(next()));
         if (oc.a == IDX) { b = mem_at(next()); a = &mem_at(b + next()); };
+        if (oc.b == ZRO) b = 0;
+        if (oc.b == ONE) b = 1;
         if (oc.b == IMM) b = next();
         if (oc.b == ABS) b = mem_at(next());
         if (oc.b == IND) b = mem_at(mem_at(next()));

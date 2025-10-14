@@ -265,17 +265,21 @@ def asm(args):
                     if a == prev_a: a_mode_opt = "pda"
                 prev_a = a
 
-        try: opc = OPCODE_TABLE.index((op, a_mode_opt, b_mode))
+            if b_mode == "imm":
+                if b_value == 0 and (op, a_mode_opt, "zro") in OPCODE_TABLE: b_mode = "zro"
+                if b_value == 1 and (op, a_mode_opt, "one") in OPCODE_TABLE: b_mode = "one"
+
+        try:
+            opc = OPCODE_TABLE.index((op, a_mode_opt, b_mode))
         except ValueError:
             print(op, a_mode_opt, b_mode)
             bad_line()
         bin_cmd = [opc]
-        if a_mode_opt not in ("nil", "pda", "nxt"): bin_cmd.append(a_value)
+        if a_mode_opt in ("abs", "ind", "idx"): bin_cmd.append(a_value)
         if a_mode_opt == "idx": bin_cmd.append(a_offset)
-        if b_mode != "nil": bin_cmd.append(b_value)
+        if b_mode in ("abs", "ind", "idx", "imm"): bin_cmd.append(b_value)
         if b_mode == "idx": bin_cmd.append(b_offset)
         bin_cmds.append(bin_cmd)
-
 
     # fix labels
     def get_label_addr(label):
@@ -324,6 +328,8 @@ def asm(args):
                 if b == "ind": l += f" [{bin.pop(0)}]"
                 if b == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
                 if b == "imm": l += f" #{bin.pop(0)}"
+                if b == "zro": l += f" #0"
+                if b == "one": l += f" #1"
             print(l)
     print("codes:", len(code))
     print("size:", len(out))

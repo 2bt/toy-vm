@@ -660,10 +660,23 @@ def peephole(lines, tmp_vars):
             if not dead: lines.append(l)
             if l == "    ret": dead = True
 
-    def process(block):
+    block = []
+    for line in lines:
+        if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)$", line):
+            block.append(m.groups())
+        elif m := re.match(r"    (j..) ([^ ]+)$", line):
+            block.append(m.groups())
+        elif m := re.match(r"    (...)$", line):
+            block.append(m.groups())
+        else: block.append(line)
+
+    for _ in range(2):
         new_block = []
         while block:
             match block:
+                case [("jsr", l), ("ret",), *rest]:
+                    new_block.append(("jmp", l))
+                    block = rest
                 case [("mov", a, b), ("cmp", c, d), *rest] if a in tmp_vars and a == c:
                     new_block.append(("cmp", b, d))
                     block = rest
@@ -691,31 +704,21 @@ def peephole(lines, tmp_vars):
                 case [b, *rest]:
                     new_block.append(b)
                     block = rest
-        return new_block
+        block = new_block
 
-    new_lines = []
-    block     = []
     operands  = set()
-    for line in lines:
-        if m := re.match(r"    ([^ ]{3}) ([^, ]+), ([^ ]+)", line):
-            block.append(m.groups())
-            continue
-        if m := re.match(r"    (j..) ([^ ]+)", line):
-            block.append(m.groups())
-            continue
-        if block:
-            pa = None
-            for o in process(process(block)):
-                match o:
-                    case op, a, b:
-                        operands |= {a, b}
-                        if op != "mov" and a == pa: a = "%" # previous destination address
-                        else: pa = a
-                        new_lines.append(f"    {op} {a}, {b}")
-                    case j, l:
-                        new_lines.append(f"    {j} {l}")
-            block = []
-        new_lines.append(line)
+    new_lines = []
+    for o in block:
+        match o:
+            case op, a, b:
+                operands |= {a, b}
+                new_lines.append(f"    {op} {a}, {b}")
+            case j, l:
+                new_lines.append(f"    {j} {l}")
+            case op,:
+                new_lines.append(f"    {op}")
+            case line:
+                new_lines.append(line)
 
     # remove unused tmp vars
     for t in list(tmp_vars.keys()):

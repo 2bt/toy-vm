@@ -16,11 +16,12 @@ enum Operation {
 
 enum AddressMode {
     NIL,
-    ABS,       // absolute address
-    IND,       // indirect address
-    IDX,       // indirect address + offset
-    IMM,       // immediate
-    PDA = NIL, // previous destination address
+    ABS,        // absolute address
+    IND,        // indirect address
+    IDX,        // indirect address + offset
+    IMM,        // immediate
+    NXT,        // next address
+    PDA = NIL,  // previous address
 };
 
 struct Opcode {
@@ -56,6 +57,10 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MOV, IDX, IND },
     { MOV, IDX, IDX },
     { MOV, IDX, IMM },
+    { MOV, NXT, ABS },
+    { MOV, NXT, IND },
+    { MOV, NXT, IDX },
+    { MOV, NXT, IMM },
 
     { CMP, ABS, ABS },
     { CMP, ABS, IND },
@@ -243,7 +248,7 @@ int32_t& VM::mem_at(int32_t addr) {
 void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
     pc = start;
     std::vector<int32_t> stack;
-    int32_t* a   = nullptr;
+    int32_t* a   = &mem_at(0);
     int32_t  b   = 0;
     int32_t  res = 0;
     for (size_t steps = 0; steps < STEP_LIMIT; ++steps) {
@@ -253,6 +258,7 @@ void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
             exit(1);
         }
         Opcode oc = OPCODE_TABLE[o];
+        if (oc.a == NXT) ++a;
         if (oc.a == ABS) a = &mem_at(next());
         if (oc.a == IND) a = &mem_at(mem_at(next()));
         if (oc.a == IDX) { b = mem_at(next()); a = &mem_at(b + next()); };

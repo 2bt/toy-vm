@@ -6,7 +6,6 @@ import sys
 
 
 OPCODE_TABLE = []
-
 def load_opcode_table():
     with open("src/vm.cpp") as f:
         while l := f.readline():
@@ -23,6 +22,8 @@ def load_opcode_table():
             sys.exit("no opcode table")
 
 load_opcode_table()
+
+OPTIMIZE = True
 
 
 token_regex = re.compile(r"""
@@ -118,6 +119,8 @@ def asm(args):
     data_base = None
     data      = []
 
+    prev_a = None, None, None
+
     for l in open(args.src):
         global line
         global nr
@@ -172,12 +175,12 @@ def asm(args):
             case _: bad_line()
 
         is_jump  = op.startswith("j")
-        mode_a   = "nil"
-        value_a  = 0
-        offset_a = 0
-        mode_b   = "nil"
-        value_b  = 0
-        offset_b = 0
+        a_mode   = "nil"
+        a_value  = 0
+        a_offset = 0
+        b_mode   = "nil"
+        b_value  = 0
+        b_offset = 0
 
         # operand a
         match ts:
@@ -186,69 +189,91 @@ def asm(args):
             # label
             case [("name", label)] if is_jump:
                 ts = []
-                mode_b = "imm" # label is actually operand b
+                b_mode = "imm" # label is actually operand b
                 jumps.append((len(bin_cmds), label))
 
             # immediate
             case [("sym", "#"), *rest]:
-                mode_b = "imm" # XXX: only INT uses immediate
-                value_b, ts = eval_expression(rest)
+                b_mode = "imm" # XXX: only INT uses immediate
+                b_value, ts = eval_expression(rest)
 
             # indirect
             case [("sym", "["), *rest]:
-                mode_a = "ind"
-                value_a, ts = eval_expression(rest)
+                a_mode = "ind"
+                a_value, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
                 # offset
                 match ts:
                     case [("sym", "+"), *rest]:
-                        mode_a = "idx"
-                        offset_a, ts = eval_expression(rest)
+                        a_mode = "idx"
+                        a_offset, ts = eval_expression(rest)
 
-            # previous destination address
+            # previous address
             case [("sym", "%"), *rest]:
-                mode_a = "pda"
+                a_mode = "pda"
+                ts = rest
+
+            # next address
+            case [("sym", "+"), ("sym", "+"), ("sym", "%"), *rest]:
+                a_mode = "nxt"
                 ts = rest
 
             # absolute
             case rest:
-                mode_a = "abs"
-                value_a, ts = eval_expression(rest)
+                a_mode = "abs"
+                a_value, ts = eval_expression(rest)
 
         # operand b
         match ts:
             # immediate
             case [("sym", ","), ("sym", "#"), *rest]:
-                mode_b = "imm"
-                value_b, ts = eval_expression(rest)
+                b_mode = "imm"
+                b_value, ts = eval_expression(rest)
 
             # indirect
             case [("sym", ","), ("sym", "["), *rest]:
-                mode_b = "ind"
-                value_b, ts = eval_expression(rest)
+                b_mode = "ind"
+                b_value, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
                 # offset
                 match ts:
                     case [("sym", "+"), *rest]:
-                        mode_b = "idx"
-                        offset_b, ts = eval_expression(rest)
+                        b_mode = "idx"
+                        b_offset, ts = eval_expression(rest)
 
             # absolute
             case [("sym", ","), *rest]:
-                mode_b = "abs"
-                value_b, ts = eval_expression(rest)
+                b_mode = "abs"
+                b_value, ts = eval_expression(rest)
 
         if ts: bad_line()
 
-        try: opc = OPCODE_TABLE.index((op, mode_a, mode_b))
+        a_mode_opt = a_mode
+        if OPTIMIZE:
+            a = a_mode, a_value, a_offset
+            if is_jump or op == "ret":
+                prev_a = None, None, None
+            elif op != "int":
+                if op == "mov":
+                    prev_a_mode, prev_a_value, prev_a_offset = prev_a
+                    if prev_a_mode == a_mode:
+                        if a_mode == "abs" and prev_a_value == a_value - 1:
+                            a_mode_opt = "nxt"
+                        elif a_mode == "idx" and prev_a_value == a_value and prev_a_offset == a_offset - 1:
+                            a_mode_opt = "nxt"
+                else:
+                    if a == prev_a: a_mode_opt = "pda"
+                prev_a = a
+
+        try: opc = OPCODE_TABLE.index((op, a_mode_opt, b_mode))
         except ValueError:
-            print(op, mode_a, mode_b)
+            print(op, a_mode_opt, b_mode)
             bad_line()
         bin_cmd = [opc]
-        if mode_a not in ("nil", "pda"): bin_cmd.append(value_a)
-        if mode_a == "idx": bin_cmd.append(offset_a)
-        if mode_b != "nil": bin_cmd.append(value_b)
-        if mode_b == "idx": bin_cmd.append(offset_b)
+        if a_mode_opt not in ("nil", "pda", "nxt"): bin_cmd.append(a_value)
+        if a_mode_opt == "idx": bin_cmd.append(a_offset)
+        if b_mode != "nil": bin_cmd.append(b_value)
+        if b_mode == "idx": bin_cmd.append(b_offset)
         bin_cmds.append(bin_cmd)
 
 
@@ -293,6 +318,7 @@ def asm(args):
                 if a == "ind": l += f" [{bin.pop(0)}]"
                 if a == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
                 if a == "pda": l += " %"
+                if a == "nxt": l += " ++%"
                 if a != "nil" and b != "nil": l += ","
                 if b == "abs": l += f" {bin.pop(0)}"
                 if b == "ind": l += f" [{bin.pop(0)}]"

@@ -62,6 +62,7 @@ var blocks_alive
 var balls_alive
 var balls_spinning
 var lives
+var score
 
 var balls:  Ball[20]
 var blocks: Block[117]
@@ -99,7 +100,8 @@ end
 
 
 func init_stage()
-    game_state   = GAME_STATE_PLAYING
+    game_state = GAME_STATE_PLAYING
+    score      = 0
 
     # pad
     pad.is_sticky = 0
@@ -166,9 +168,9 @@ func block_collision(b: Ball*, axis)
         end
         if o then
             overlap = o
+            score        += 1
             blocks_alive -= 1
             k.state = BLOCK_STATE_DYING
-
             # extra ball!
             if k.type == BLOCK_TYPE_EXTRABALL then
                 var n = new_ball()
@@ -419,6 +421,8 @@ func draw_stage()
     print(5, 5, "LIVES")
     int_to_str(lives)
     print(5 + 8*6, 5, format_str.ptr)
+
+    int_to_str(score)
 
     if game_state == GAME_STATE_CLEAR then
         print(116, 86, "STAGE CLEAR")

@@ -16,17 +16,6 @@ func abs(x)
     return -x
 end
 
-func sqrt(n)
-    if n == 0 or n == 1 then return n end
-    var x = n
-    var y = (x + n / x) / 2
-    while y < x do
-        x = y
-        y = (x + n / x) / 2
-    end
-    return x
-end
-
 var format_str: int[10]
 
 func int_to_str(n): int*
@@ -34,7 +23,7 @@ func int_to_str(n): int*
         format_str[0] = 48
         format_str[1] = 0
     else
-        var p: int* = format_str.ptr
+        var p = format_str.ptr
         if n < 0 then
             p@ = 45     # sign
             p += 1

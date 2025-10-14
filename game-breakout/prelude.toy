@@ -20,20 +20,22 @@ struct Voice
     wave
 end
 
-var input @ 0
+var input @ 1
 
-var voices: Voice[4] @ 1
+var voices: Voice[4] @ 2
 
 func preamble()
     asm "    jmp init"
     asm "    jmp update"
 end
 
-func sprite(x @ 17, y @ 18, w @ 19, h @ 20, s @ 21, t @ 22, f @ 23)
+func sprite(x @ 18, y @ 19, w @ 20, h @ 21, s @ 22, t @ 23, f @ 24)
     asm "    int #0"
 end
-func rand(lo @ 17, hi @ 18)
+func rand(lo @ 18, hi @ 19)
     asm "    int #1"
-    asm "    mov _R, 19"
+end
+func sqrt(a @ 18)
+    asm "    int #2"
 end
 

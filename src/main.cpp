@@ -19,6 +19,7 @@ enum {
 
     INT_SPRITE = 0,
     INT_RAND,
+    INT_SQRT,
 };
 
 
@@ -29,6 +30,7 @@ struct MemMap {
         int32_t vol;
         int32_t wave;
     };
+    int32_t              ret;
     int32_t              input;
     std::array<Voice, 4> voices;
 
@@ -46,8 +48,12 @@ struct MemMap {
         struct {
             int32_t lo;
             int32_t hi;
-            int32_t res;
         } rand;
+        struct {
+            int32_t a;
+            int32_t b;
+            int32_t c;
+        } math;
     };
 };
 
@@ -177,7 +183,10 @@ void interrupt(int32_t n) {
     else if (n == INT_RAND) {
         static std::random_device rd;
         static std::mt19937 gen(rd());
-        mem.rand.res = std::uniform_int_distribution<>(mem.rand.lo, mem.rand.hi)(gen);
+        mem.ret = std::uniform_int_distribution<>(mem.rand.lo, mem.rand.hi)(gen);
+    }
+    else if (n == INT_SQRT) {
+        mem.ret = std::sqrt(mem.math.a);
     }
     else {
         printf("ERROR: unknown interrupt %d\n", n);

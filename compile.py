@@ -998,7 +998,7 @@ class Codegen:
 
         # variables with fixed addresses
         addr = 0
-        self.lines = []
+        self.lines = ["_R = 0"]
         for name, v in self.globals.items():
             if v.addr != None:
                 assert v.data == None
@@ -1011,9 +1011,6 @@ class Codegen:
                     self.emit(f"{name}.{k} = {v.addr}")
                     addr = max(addr, v.addr + ast.type_size(v.type))
 
-        # special register for return value
-        self.emit(f"_R = {addr}")
-        addr += 1
 
         cache = {}
         def alloc_vars(name):

@@ -101,7 +101,6 @@ end
 
 func init_stage()
     game_state = GAME_STATE_PLAYING
-    score      = 0
 
     # pad
     pad.is_sticky = 0
@@ -146,8 +145,8 @@ func init_stage()
 end
 
 func init()
-
     lives = 3
+    score = 0
     init_stage()
 end
 
@@ -390,12 +389,12 @@ end
 func draw_stage()
 
     # border
-    sprite(0, 0, SCREEN_W, SCREEN_H, 0, 32, 0)
     for var i = 0, i < 19, i += 1 do
         for var j = 0, j < 9, j += 1 do
             sprite(i * 16, BORDER + j * 16, 16, 16, 336, 32, 0)
         end
     end
+    sprite(0, 0, SCREEN_W, SCREEN_H, 0, 32, 0)
 
 
     # pad
@@ -422,7 +421,13 @@ func draw_stage()
     int_to_str(lives)
     print(5 + 8*6, 5, format_str.ptr)
 
-    int_to_str(score)
+    print(5, 180 - 18 + 5, "SCORE")
+    var len = int_to_str(score)
+    for i = 0, i < 4-len, i += 1 do
+        putchar(5 + 8*6 + i * 8, 180 - 18 + 5, 48)
+    end
+
+    print(5 + 8*10 - len*8, 180 - 18 + 5, format_str.ptr)
 
     if game_state == GAME_STATE_CLEAR then
         print(116, 86, "STAGE CLEAR")

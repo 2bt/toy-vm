@@ -18,39 +18,47 @@ end
 
 var format_str: int[10]
 
-func int_to_str(n): int*
+func int_to_str(n)
     if n == 0 then
         format_str[0] = 48
         format_str[1] = 0
-    else
-        var p = format_str.ptr
-        if n < 0 then
-            p@ = 45     # sign
-            p += 1
-            n *= -1
-        end
-        var q = p
-        while n do
-            p@ = n % 10 + 48
-            n /= 10
-            p += 1
-        end
-        p@ = 0
-        p -= 1
-        while q < p do
-            n = p@
-            p@ = q@
-            q@ = n
-            p -= 1
-            q += 1
-        end
+        return 1
     end
+    var len = 0
+    var p = format_str.ptr
+    if n < 0 then
+        n *= -1
+        p@ = 45     # sign
+        p += 1
+        len += 1
+    end
+    var q = p
+    while n do
+        p@ = n % 10 + 48
+        n /= 10
+        p += 1
+        len += 1
+    end
+    p@ = 0
+    p -= 1
+    while q < p do
+        n = p@
+        p@ = q@
+        q@ = n
+        p -= 1
+        q += 1
+    end
+    return len
 end
 
 
+func putchar(x, y, c)
+    sprite(x, y, 8, 8, c % 32 * 8, (c / 32 - 1) * 8, 0)
+end
+
 func print(x, y, msg: int*)
     while msg@ do
-        sprite(x, y, 8, 8, msg@ % 32 * 8, (msg@ / 32 - 1) * 8, 0)
+        putchar(x, y, msg@)
         x += 8
         msg += 1
     end

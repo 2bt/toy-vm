@@ -277,14 +277,18 @@ func update_ball(b: Ball*)
 
     # wall collision
     if b.y < BORDER * Q then
-        sound(SOUND_BING)
         b.y = BORDER * Q
         b.vy = abs(b.vy)
+        if abs(b.vx) < 100 then
+            if b.vx > 0 then b.vx += 10 end
+            if b.vx < 0 then b.vx -= 10 end
+        end
+        sound(SOUND_BING)
     end
     if b.y > (SCREEN_H - BALL_W - BORDER) * Q then
-        sound(SOUND_BING)
         b.y = (SCREEN_H - BALL_W - BORDER) * Q
         b.vy = -abs(b.vy)
+        sound(SOUND_BING)
     end
 
     # die

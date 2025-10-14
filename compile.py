@@ -185,7 +185,6 @@ class Parser:
         if v and tok.v != v: return None
         return tok
 
-
     def eat(self, k=None, v=None):
         self.last_tok = self.head.toks[self.head.i]
         tok = self.peek(k, v)
@@ -447,7 +446,6 @@ class Parser:
         if self.peek("asm"):
             self.eat()
             return Asm(self.eat("string").v)
-
         if self.peek("var"):
             self.eat()
             name = self.eat("id").v
@@ -459,15 +457,17 @@ class Parser:
                 if is_array(ta): self.error("local arrays not allowed")
                 if is_struct(ta): self.error("local structs not allowed")
                 self.current_func.locals[name] = Var(ta, None, None)
-            if self.peek("sym", "=") or ta == None:
-                self.eat("sym", "=")
-                b, tb = self.expr()
-                if ta != None and ta != tb: self.error("type mismatch") # XXX check for x: Foo* = 0
-                if is_array(tb): self.error("local arrays not allowed")
-                if is_struct(tb): self.error("local structs not allowed")
-                self.current_func.locals[name] = Var(tb, None, None)
-                return Assign("=", a, b)
-            return NoOp()
+            if not self.peek("sym", "="):
+                self.current_func.locals[name] = Var(ta or INT, None, None)
+                return NoOp()
+            self.eat("sym", "=")
+            b, tb = self.expr()
+            if ta != None and ta != tb: self.error("type mismatch") # XXX check for x: Foo* = 0
+            if is_array(tb): self.error("local arrays not allowed")
+            if is_struct(tb): self.error("local structs not allowed")
+            self.current_func.locals[name] = Var(tb, None, None)
+            return Assign("=", a, b)
+
 
         a, ta = self.primary()
         if isinstance(a, Call): return a
@@ -489,7 +489,6 @@ class Parser:
             return Assign(op, a, b)
 
         self.error("invalid statement")
-
 
     def expr(self, minp=1):
         a, ta = self.unary()
@@ -717,14 +716,12 @@ def peephole(lines, tmp_vars):
                         new_lines.append(f"    {j} {l}")
             block = []
         new_lines.append(line)
-    lines = new_lines
 
     # remove unused tmp vars
     for t in list(tmp_vars.keys()):
         if t not in operands: del tmp_vars[t]
 
-
-    return lines
+    return new_lines
 
 
 

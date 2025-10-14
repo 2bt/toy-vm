@@ -11,19 +11,21 @@ const BALL_STATE_STICKING = 2
 const BLOCK_STATE_DEAD   = 0
 const BLOCK_STATE_NORMAL = 1
 const BLOCK_STATE_DYING  = 2
+const BLOCK_THEMES = 4
+const BLOCK_TYPE_NORMAL    = 0
+const BLOCK_TYPE_EXTRABALL = 1
 
 const GAME_STATE_PLAYING = 0
 const GAME_STATE_CLEAR   = 1
 const GAME_STATE_DEAD    = 2
 
-const BORDER      = 18
-const BALL_W      = 8
-const BLOCK_W     = 16
-const PAD_W       = 8
-const PAD_X       = 38
-const PAD_START_H = 40
-const ACC         = 100
-const BLOCK_TYPES = 4
+const BORDER       = 18
+const BALL_W       = 8
+const BLOCK_W      = 16
+const PAD_W        = 8
+const PAD_X        = 38
+const PAD_START_H  = 40
+const ACC          = 100
 
 
 struct Ball
@@ -42,6 +44,7 @@ struct Block
     state
     tick
     frame
+    theme
     type
     x
     y
@@ -57,6 +60,7 @@ end
 var game_state
 var blocks_alive
 var balls_alive
+var balls_spinning
 var lives
 
 var balls:  Ball[20]
@@ -73,7 +77,6 @@ end
 func new_ball(): Ball*
     for var b = balls.ptr, b < balls.limit, b += 1 do
         if b.state != BALL_STATE_DEAD then continue end
-        balls_alive += 1
         b.state = BALL_STATE_STICKING
         b.tick  = 0
         b.spin  = 0
@@ -82,7 +85,7 @@ func new_ball(): Ball*
         b.vx    = 500
         b.vy    = 400
         if rand(0, 1) then b.vy *= -1 end
-        return
+        return b
     end
 end
 
@@ -97,8 +100,6 @@ end
 
 func init_stage()
     game_state   = GAME_STATE_PLAYING
-    blocks_alive = 0
-    balls_alive  = 0
 
     # pad
     pad.is_sticky = 0
@@ -113,23 +114,32 @@ func init_stage()
     new_ball()
 
     # blocks
+    blocks_alive = 0
     var k = blocks.ptr
-    var t = 0
     for var i = 4, i < 11, i += 1 do
         for var j = 0, j < 9, j += 1 do
             blocks_alive += 1
             k.state = BLOCK_STATE_NORMAL
-            k.type  = t % BLOCK_TYPES
+            k.theme = rand(0, BLOCK_THEMES - 1)
             k.tick  = 0
             k.x     = 94 + i * BLOCK_W
             k.y     = BORDER + j * BLOCK_W
+            k.type  = BLOCK_TYPE_NORMAL
             k += 1
-            t += 1
         end
     end
     while k < blocks.limit do
         k.state = BLOCK_STATE_DEAD
         k += 1
+    end
+
+    i = 5
+    while i do
+        k = &blocks[rand(0, blocks_alive - 1)]
+        if k.type == BLOCK_TYPE_NORMAL then
+            k.type = BLOCK_TYPE_EXTRABALL
+            i -= 1
+        end
     end
 end
 
@@ -140,9 +150,56 @@ func init()
 end
 
 
+const AXIS_X = 0
+const AXIS_Y = 1
+
+func block_collision(b: Ball*, axis)
+
+    var overlap = 0
+    for var k = blocks.ptr, k < blocks.limit, k += 1 do
+        if k.state != BLOCK_STATE_NORMAL then continue end
+        var o
+        if axis == AXIS_X then
+            o = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
+        else
+            o = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
+        end
+        if o then
+            overlap = o
+            blocks_alive -= 1
+            k.state = BLOCK_STATE_DYING
+
+            # extra ball!
+            if k.type == BLOCK_TYPE_EXTRABALL then
+                var n = new_ball()
+                if n then
+                    n.state = BALL_STATE_FLYING
+                    n.x = b.x
+                    n.y = b.y
+                    if rand(0, 1) == 0 then
+                        b.vx *= -1
+                    end
+                end
+            end
+        end
+    end
+    if overlap then
+        sound(SOUND_BLOCK)
+        if axis == AXIS_X then
+            b.vx *= -1
+            b.x = ((b.x / Q) + overlap) * Q
+        else
+            b.vy *= -1
+            b.y = ((b.y / Q) + overlap) * Q
+        end
+        b.vx += rand(-20, 20)
+        b.vy += rand(-20, 20)
+    end
+end
+
+
 func update_ball(b: Ball*)
     if b.state == BALL_STATE_DEAD then return end
-
 
     # pad y collision
     var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
@@ -168,8 +225,6 @@ func update_ball(b: Ball*)
         var ny = b.vy
         b.vx += ny * s / 6000
         b.vy -= nx * s / 6000
-    else
-        sound(SOUND_NOSPIN)
     end
 
     # move x
@@ -195,30 +250,11 @@ func update_ball(b: Ball*)
         if pad.is_sticky then
             b.state = BALL_STATE_STICKING
         end
-        if b.spin != 0 then
-            sound(SOUND_SPIN)
-        end
     end
 
 
     # block collision
-    overlap = 0
-    for var k = blocks.ptr, k < blocks.limit, k += 1 do
-        if k.state != BLOCK_STATE_NORMAL then continue end
-        var o = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
-        if o then
-            k.state = BLOCK_STATE_DYING
-            overlap = o
-            blocks_alive -= 1
-        end
-    end
-    if overlap then
-        sound(SOUND_BLOCK)
-        b.vx *= -1
-        b.x = ((b.x / Q) + overlap) * Q
-        b.vx += rand(-20, 20)
-        b.vy += rand(-20, 20)
-    end
+    block_collision(b, AXIS_X)
 
     # wall collision
     if b.x > (SCREEN_W - BALL_W - BORDER) * Q then
@@ -236,24 +272,7 @@ func update_ball(b: Ball*)
     end
 
     # block collision
-    overlap = 0
-    for k = blocks.ptr, k < blocks.limit, k += 1 do
-        if k.state != BLOCK_STATE_NORMAL then continue end
-        o = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, k.x, k.y, BLOCK_W, BLOCK_W)
-        if o then
-            k.state = BLOCK_STATE_DYING
-            overlap = o
-            blocks_alive -= 1
-        end
-    end
-    if overlap then
-        sound(SOUND_BLOCK)
-        b.vy *= -1
-        b.y = ((b.y / Q) + overlap) * Q
-        b.vx += rand(-20, 20)
-        b.vy += rand(-20, 20)
-    end
-
+    block_collision(b, AXIS_Y)
 
     # wall collision
     if b.y < BORDER * Q then
@@ -269,8 +288,6 @@ func update_ball(b: Ball*)
 
     # die
     if b.x < -BALL_W * Q then
-        sound(SOUND_DIE)
-        balls_alive -= 1
         b.state = BALL_STATE_DEAD
     end
 
@@ -281,8 +298,14 @@ func update_ball(b: Ball*)
         if b.spin > 0 then b.frame = 9 - b.frame end
     end
 
+    balls_alive += 1
+    if b.spin != 0 then
+        balls_spinning += 1
+    end
+
     b.tick += 1
 end
+
 
 
 func update_stage()
@@ -309,16 +332,24 @@ func update_stage()
         end
 
         # balls
+        balls_alive = 0
+        var prev_spinning = balls_spinning
+        balls_spinning = 0
         for var b = balls.ptr, b < balls.limit, b += 1 do
             update_ball(b)
         end
         if balls_alive == 0 then
+            sound(SOUND_DIE)
             if lives > 0 then
                 lives -= 1
                 new_ball()
             else
                 game_state = GAME_STATE_DEAD
             end
+        end
+        if prev_spinning != balls_spinning then
+            if prev_spinning == 0 then sound(SOUND_SPIN) end
+            if balls_spinning == 0 then sound(SOUND_NOSPIN) end
         end
 
         # stage clear
@@ -372,7 +403,10 @@ func draw_stage()
     # blocks
     for var k = blocks.ptr, k < blocks.limit, k += 1 do
         if k.state == BLOCK_STATE_DEAD then continue end
-        sprite(k.x, k.y, BLOCK_W, BLOCK_W, k.frame * 16, 336 + k.type * 16, 0)
+        sprite(k.x, k.y, BLOCK_W, BLOCK_W, k.frame * 16, 336 + k.theme * 16, 0)
+        if k.state == BLOCK_STATE_NORMAL then
+            sprite(k.x, k.y, BLOCK_W, BLOCK_W, k.type * 16, 304, 0)
+        end
     end
 
     # balls

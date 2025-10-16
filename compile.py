@@ -194,19 +194,17 @@ JMP_SWAP = {
 
 class Parser:
     def __init__(self):
-        self.consts     = {}
-        self.funcs      = {}
-        self.structs    = {}
-        self.loop       = 0
+        self.consts       = {}
+        self.funcs        = {}
+        self.structs      = {}
+        self.loop         = 0
+        self.var_addr     = {}
+        self.var_data     = {}
+        self.var_type     = {}
         self.current_func = None
         # for includes
         self.included   = set()
         self.stack      = []
-
-        self.var_addr = {}
-        self.var_data = {}
-        self.var_type = {}
-
 
     def error(self, msg, tok=None):
         tok = tok or self.last_tok
@@ -226,9 +224,6 @@ class Parser:
             return tok
         need = f"{k or ''}".strip()
         self.error(f"expected {need}")
-
-    # def sep(self):
-        
 
     def const_expr(self):
         n, _ = self.expr()
@@ -668,7 +663,6 @@ class Parser:
                 long = f"{self.current_func.name}.{name}"
                 if long in self.var_type:
                     node, type = VarRef(long), self.var_type[long]
-
             if not node:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
                 node, type = VarRef(name), self.var_type[name]

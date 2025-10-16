@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 @dataclass
 class Head:
     toks: list
-    i = 0
+    i: int = 0
 
 Token    = namedtuple("Token",    "k v loc")
 Type     = namedtuple("Type",     "base ptr array")
@@ -24,7 +24,6 @@ BinOp    = namedtuple("BinOp",    "op a b")
 Assign   = namedtuple("Assign",   "op a b")
 Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
-Var      = namedtuple("Var",      "type addr data")
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
 Break    = namedtuple("Break",    "")
@@ -37,16 +36,15 @@ NoOp     = namedtuple("NoOp",     "")
 @dataclass
 class Func:
     name: str
-    type: Type   = None
-    locals: dict = field(default_factory=dict)
-    args: list   = field(default_factory=list)
-    body: list   = None
-    calls: set   = field(default_factory=set)
+    type: Type = None
+    body: list = None
+    args: list = field(default_factory=list)
+    calls: set = field(default_factory=set)
 
 
 KEYWORDS = {
-    "include", "var", "const", "func", "struct", "if", "then", "elif", "else",
-    "while", "for", "do", "end", "break", "continue", "return", "asm", "or",
+    "include", "var", "const", "func", "struct", "if", "elif", "else",
+    "while", "for", "in", "break", "continue", "return", "asm", "or",
     "and", "not",
 }
 
@@ -55,27 +53,59 @@ token_regex = re.compile(r"""
     [ \t]*(?P<comment> \#.*                        )|
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
-    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|
+    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
                        [+\-*/%{}()<>\[\]=,.:&|@]   )|
     [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
 
+
+
+
 def tokenize(path):
-    src = path.read_text(encoding="utf-8")
-    out = []
-    i, line, = 0, 1
+    src     = path.read_text(encoding="utf-8")
+    out     = []
+    indent  = 0
+    line    = 1
+    i       = 0
+    line_i  = 0
+    newline = True
+    paren_depth = 0
     while m := token_regex.match(src, i):
         i = m.end()
         k = m.lastgroup
         v = m.group(k)
         if k == "comment": continue
-        if k == "nl": line += 1; continue
+        if k == "nl":
+            if paren_depth == 0 and not newline:
+                newline = True
+                out.append(Token("eol", "", (path, line)))
+            line_i = i
+            line += 1
+            continue
+        if newline and paren_depth == 0:
+            newline = False
+            new_indent = m.start(k) - line_i
+            # XXX: make this more flexible
+            while indent < new_indent:
+                indent += 4
+                out.append(Token("indent", "", (path, line)))
+            while indent > new_indent:
+                indent -= 4
+                out.append(Token("dedent", "", (path, line)))
         if k == "string":
             line += v.count("\n")
             v = ast.literal_eval(v)
         if k == "id" and v in KEYWORDS: k = v
+        if k == "sym":
+            k = v
+            if k in "([{": paren_depth += 1
+            if k in ")]}": paren_depth -= 1
         out.append(Token(k, v, (path, line)))
+
+    while indent > 0:
+        indent -= 4
+        out.append(Token("dedent", "", (path, line)))
     out.append(Token("eof", "", (path, line)))
     return out
 
@@ -165,7 +195,6 @@ JMP_SWAP = {
 class Parser:
     def __init__(self):
         self.consts     = {}
-        self.globals    = {}
         self.funcs      = {}
         self.structs    = {}
         self.loop       = 0
@@ -174,25 +203,32 @@ class Parser:
         self.included   = set()
         self.stack      = []
 
-    def error(self, msg, tok=None):
-        file, nr = (tok or self.last_tok).loc
-        line = file.read_text().split("\n")[nr - 1]
-        sys.exit(f"{file.name}:{nr}: {msg}\n{line}")
+        self.var_addr = {}
+        self.var_data = {}
+        self.var_type = {}
 
-    def peek(self, k=None, v=None):
+
+    def error(self, msg, tok=None):
+        tok = tok or self.last_tok
+        file, nr = tok.loc
+        line = file.read_text().split("\n")[nr - 1]
+        sys.exit(f"{file.name}:{nr}: {msg} (token: {tok.k})\n{line}")
+
+    def peek(self, k=None):
         tok = self.head.toks[self.head.i]
         if k and tok.k != k: return None
-        if v and tok.v != v: return None
         return tok
 
-    def eat(self, k=None, v=None):
+    def eat(self, k=None):
         self.last_tok = self.head.toks[self.head.i]
-        tok = self.peek(k, v)
-        if not tok:
-            need = f"{k or ''} {v or ''}".strip()
-            self.error(f"expected {need}")
-        self.head.i += 1
-        return tok
+        if tok := self.peek(k):
+            self.head.i += 1
+            return tok
+        need = f"{k or ''}".strip()
+        self.error(f"expected {need}")
+
+    # def sep(self):
+        
 
     def const_expr(self):
         n, _ = self.expr()
@@ -206,21 +242,21 @@ class Parser:
         if sym: return f"{sym}+{off}" if off else sym
         return off
 
-    def type(self, auto_array_size=False):
-        if not self.peek("sym", ":"): return INT
+    def type(self, intro_tok=":", auto_array_size=False):
+        if not self.peek(intro_tok): return INT
         self.eat()
         base = self.eat("id").v
         ptr = 0
-        while self.peek("sym", "*"): self.eat(); ptr += 1
+        while self.peek("*"): self.eat(); ptr += 1
         array = None
-        if self.peek("sym", "["):
+        if self.peek("["):
             self.eat()
-            if auto_array_size and self.peek("sym", "]"):
+            if auto_array_size and self.peek("]"):
                 array = -1
             else:
                 array = self.const_expr()
                 if array <= 0: self.error("invalid array size")
-            self.eat("sym", "]")
+            self.eat("]")
         return Type(base, ptr, array)
 
     def type_size(self, t):
@@ -231,32 +267,31 @@ class Parser:
 
     def global_var(self):
         name = self.eat("id").v
-        if name in self.globals: self.error(f"variable '{name}' already exists")
-        type = self.type(True)
-        addr = None
-        data = None
-        if self.peek("sym", "@"):
-            self.eat()
-            addr = self.const_expr()
+        if name in self.var_type: self.error(f"variable '{name}' already exists")
+        type = self.type(auto_array_size=True)
 
-        elif self.peek("sym", "="):
+        if self.peek("@"): # has address
             self.eat()
+            self.var_addr[name] = self.const_expr()
 
-            def parse():
-                if self.peek("sym", "{"):
+        elif self.peek("="): # has data
+            self.eat()
+            def parse_data():
+                if self.peek("{"):
                     self.eat()
                     data = []
-                    while not self.peek("sym", "}"):
-                        data.append(parse())
-                        if not self.peek("sym", ","): break
+                    while not self.peek("}"):
+                        data.append(parse_data())
+                        if not self.peek(","): break
                         self.eat()
-                    self.eat("sym", "}")
+                    self.eat("}")
                     return data
                 if self.peek("string"):
                     return list(map(ord, self.eat("string").v)) + [0]
                 return self.const_int_or_addr()
+            data = parse_data()
 
-            data = parse()
+            # patch type array length
             if type.array == -1:
                 if not isinstance(data, list):
                     self.error("data doesn't match type")
@@ -277,7 +312,7 @@ class Parser:
                 if is_array(t) and isinstance(d, list):
                     l = type.array
                     t = Type(t.base, t.ptr, None)
-                    if len(d) > l: self.error("too too many initializers")
+                    if len(d) > l: self.error("too many initializers")
                     for x in d: res += unroll(t, x)
                     res += null_obj(t) * (l - len(d))
                     return res
@@ -289,19 +324,22 @@ class Parser:
                         if i < len(d): res += unroll(f.type, d[i])
                         else: res += null_obj(f.type)
                     return res
-                if is_ptr(t) and isinstance(d, str) or d == 0:
+                if is_ptr(t) and (isinstance(d, str) or d == 0):
                     return [d]
                 if is_int(t) and isinstance(d, int):
                     return [d]
                 self.error("data doesn't match type")
 
             data = unroll(type, data)
+            if any(x != 0 for x in data): self.var_data[name] = data
 
-        self.globals[name] = Var(type, addr, data)
+        if type.array == -1: self.error("invalid array size")
+        self.var_type[name] = type
 
     def get_struct(self, name):
         if name not in self.structs: self.error(f"unknown struct '{name}'")
         return self.structs[name]
+
 
     def program(self, path):
         self.included.add(path)
@@ -312,6 +350,7 @@ class Parser:
             tok = self.eat()
             if tok.k == "include":
                 incl = path.parent / self.eat("string").v
+                self.eat("eol")
                 if incl in self.included: continue
                 self.stack.append(self.head)
                 try: self.program(incl)
@@ -320,23 +359,29 @@ class Parser:
 
             elif tok.k == "const":
                 name = self.eat("id").v
-                self.eat("sym", "=")
+                self.eat("=")
                 self.consts[name] = self.const_expr()
+                self.eat("eol")
 
             elif tok.k == "var":
                 self.global_var()
+                self.eat("eol")
 
             elif tok.k == "struct":
                 name = self.eat("id").v
                 if name in self.structs: self.error(f"struct '{name}' already exists")
                 fields = {}
                 offset = 0
-                while not self.peek("end"):
+                self.eat(":")
+                self.eat("eol")
+                self.eat("indent")
+                while not self.peek("dedent"):
                     n = self.eat("id").v
                     t = self.type()
+                    self.eat("eol")
                     fields[n] = TyField(t, offset)
                     offset += self.type_size(t)
-                self.eat("end")
+                self.eat("dedent")
                 self.structs[name] = TyStruct(fields, offset)
 
             elif tok.k == "func":
@@ -346,44 +391,49 @@ class Parser:
 
                 def func_arg():
                     name = self.eat("id").v
-                    if name in func.locals: self.error(f"variable '{name}' already exists")
-                    type = self.type()
+                    long = f"{func.name}.{name}"
+                    if long in self.var_type:
+                        self.error(f"variable '{name}' already exists")
+                    self.var_type[long] = type = self.type()
                     if is_array(type): self.error("local arrays not allowed")
                     if is_struct(type): self.error("local structs not allowed")
-                    addr = None
-                    if self.peek("sym", "@"):
+                    if self.peek("@"):
                         self.eat()
-                        addr = self.const_expr()
-                    func.locals[name] = Var(type, addr, None)
-                    func.args.append(name)
+                        self.var_addr[long] = self.const_expr()
+                    func.args.append(long)
 
-                self.eat("sym", "(")
-                if not self.peek("sym", ")"):
+                self.eat("(")
+                if not self.peek(")"):
                     func_arg()
-                    while self.peek("sym", ","):
+                    while self.peek(","):
                         self.eat()
                         func_arg()
-
-                self.eat("sym", ")")
-                func.type = self.type()
+                self.eat(")")
+                func.type = self.type("->")
                 self.current_func = func
                 func.body = self.block()
                 self.current_func = None
-                self.eat("end")
 
             else: assert False
         self.eat("eof")
 
     def block(self):
         stmts = []
-        while not any(self.peek(k) for k in ("end", "elif", "else", "eof")):
+        self.eat(":")
+        if self.peek("eol"):
+            self.eat()
+            if self.peek("indent"):
+                self.eat()
+                while not self.peek("dedent"): stmts.append(self.stmt())
+                self.eat("dedent")
+        else:
+            # TODO
             stmts.append(self.stmt())
         return stmts
 
     def after_if(self):
         cond, t = self.expr()
         if not is_cond(t): self.error("bad type")
-        self.eat("then")
         then = self.block()
         if self.peek("elif"):
             self.eat()
@@ -391,44 +441,59 @@ class Parser:
         if self.peek("else"):
             self.eat()
             els = self.block()
-            self.eat("end")
             return If(cond, then, els)
-        self.eat("end")
         return If(cond, then, [])
 
     def stmt(self):
+
         if self.peek("while"):
             self.eat()
             cond, t = self.expr()
             if not is_cond(t): self.error("bad type")
-            self.eat("do")
             self.loop += 1
             body = self.block()
             self.loop -= 1
-            self.eat("end")
             return While(cond, body)
+
         if self.peek("for"):
             self.eat()
-            init = self.stmt()
-            if not isinstance(init, Assign) or init.op != "=": self.error("invalid statement")
-            self.eat("sym", ",")
-            cond, t = self.expr()
-            if not is_cond(t): self.error("bad type")
-            self.eat("sym", ",")
-            next = self.stmt()
-            if not isinstance(next, Assign): self.error("invalid statement")
-            self.eat("do")
+            name = self.eat("id").v
+            long = f"{self.current_func.name}.{name}"
+            if self.peek("="):
+                self.eat()
+                start, t = self.expr()
+                self.eat(",")
+                limit, t2 = self.expr()
+                if t != t2: self.error("bad type")
+            else:
+                self.eat("in")
+                a, t = self.expr()
+                if not is_array(t): self.error("invalid statement")
+                start = AddrOf(a)
+                offset = self.type_size(Type(t.base, t.ptr, None)) * t.array
+                limit = BinOp("+", start, Imm(offset))
+                t = Type(t.base, t.ptr + 1, None)
+            if not is_int(t) and not is_ptr(t): self.error("bad type")
+            if long in self.var_type:
+                if t != self.var_type[long]: self.error("bad type")
+            else:
+                self.var_type[long] = t
+            init = Assign("=", VarRef(long), start)
+            cond = BinOp("<", VarRef(long), limit)
+            inc = Imm(self.type_size(Type(t.base, t.ptr - 1, None)))
+            next = Assign("+=", VarRef(long), inc)
             self.loop += 1
             body = self.block()
             self.loop -= 1
-            self.eat("end")
             return For(init, cond, next, body)
         if self.peek("break"):
             self.eat()
+            self.eat("eol")
             if self.loop == 0: self.error("break outside loop")
             return Break()
         if self.peek("continue"):
             self.eat()
+            self.eat("eol")
             if self.loop == 0: self.error("continue outside loop")
             return Continue()
         if self.peek("if"):
@@ -437,44 +502,54 @@ class Parser:
         if self.peek("return"):
             self.eat()
             # TODO: add void return type to functions
-            if self.peek() and self.peek().k in KEYWORDS:
+            if self.peek("eol"):
+                self.eat()
                 return Return(None)
             expr, type = self.expr()
+            self.eat("eol")
             if not (type == self.current_func.type or (is_ptr(self.current_func.type) and expr == Imm(0))):
                 self.error("return type mismatch")
             return Return(expr)
         if self.peek("asm"):
             self.eat()
-            return Asm(self.eat("string").v)
+            asm = self.eat("string").v
+            self.eat("eol")
+            return Asm(asm)
+
         if self.peek("var"):
             self.eat()
             name = self.eat("id").v
-            if name in self.current_func.locals: self.error(f"variable '{name}' already exists")
-            a = VarRef(f"{self.current_func.name}.{name}")
+            long = f"{self.current_func.name}.{name}"
+            if long in self.var_type: self.error(f"variable '{name}' already exists")
+            a = VarRef(long)
             ta = None
-            if self.peek("sym", ":"):
+            if self.peek(":"):
                 ta = self.type()
                 if is_array(ta): self.error("local arrays not allowed")
                 if is_struct(ta): self.error("local structs not allowed")
-                self.current_func.locals[name] = Var(ta, None, None)
-            if not self.peek("sym", "="):
-                self.current_func.locals[name] = Var(ta or INT, None, None)
+                self.var_type[long] = ta
+            if not self.peek("="):
+                self.eat("eol")
+                self.var_type[long] = ta or INT
                 return NoOp()
-            self.eat("sym", "=")
+            self.eat("=")
             b, tb = self.expr()
-            if ta != None and ta != tb: self.error("type mismatch") # XXX check for x: Foo* = 0
             if is_array(tb): self.error("local arrays not allowed")
             if is_struct(tb): self.error("local structs not allowed")
-            self.current_func.locals[name] = Var(tb, None, None)
+            if ta != None and not (is_ptr(ta) and is_int(tb) and b == Imm(0)) and ta != tb: self.error("type mismatch")
+            self.var_type[long] = tb
+            self.eat("eol")
             return Assign("=", a, b)
 
-
         a, ta = self.primary()
-        if isinstance(a, Call): return a
+        if isinstance(a, Call):
+            self.eat("eol")
+            return a
 
-        if isinstance(a, (VarRef, Deref)) and self.peek("sym") and self.peek().v in ASSIGN_OPS:
+        if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().v in ASSIGN_OPS:
             op = self.eat().v
             b, tb = self.expr()
+            self.eat("eol")
             if op == "=" and (ta == tb or is_ptr(ta) and is_int(tb) and b == Imm(0)):
                 if is_array(ta): self.error("array assign not allowed")
                 if is_struct(ta): self.error("struct assign not allowed")
@@ -517,18 +592,18 @@ class Parser:
         return a, ta
 
     def unary(self):
-        if self.peek("sym", "&"):
+        if self.peek("&"):
             self.eat()
             a, ta = self.primary()
             if not isinstance(a, (VarRef, Deref)): self.error("& operand must be lvalue")
             if is_array(ta): self.error("address of array not allowed")
             return addr_of(a), Type(ta.base, ta.ptr + 1, None)
-        if self.peek("sym", "("):
+        if self.peek("("):
             self.eat()
             e, t = self.expr()
-            self.eat("sym", ")")
+            self.eat(")")
             return e, t
-        if self.peek("sym", "-"):
+        if self.peek("-"):
             self.eat()
             a, t = self.unary()
             if not is_int(t): self.error("bad type")
@@ -553,8 +628,9 @@ class Parser:
         # string literal -> int*
         if self.peek("string"):
             data = list(map(ord, self.eat().v)) + [0]
-            name = f"_str_{len(self.globals)}"
-            self.globals[name] = Var(Type("int", 0, len(data)), None, data)
+            name = f"_str_{len(self.var_data)}"
+            self.var_type[name] = Type("int", 0, len(data))
+            self.var_data[name]  = data
             node = AddrOf(VarRef(name))
             type = Type("int", 1, None)
 
@@ -564,42 +640,46 @@ class Parser:
             if name in self.consts: return Imm(self.consts[name]), INT
 
             # function call
-            if self.peek("sym", "("):
+            if self.peek("("):
                 func = self.funcs.get(name)
                 if not func: self.error(f"unknown function '{name}'")
                 self.eat()
                 args = []
                 types = []
-                if not self.peek("sym", ")"):
+                if not self.peek(")"):
                     e, t = self.expr()
                     args.append(e)
                     types.append(t)
-                    while self.peek("sym", ","):
+                    while self.peek(","):
                         self.eat()
                         e, t = self.expr()
                         args.append(e)
                         types.append(t)
-                self.eat("sym", ")")
+                self.eat(")")
                 if len(args) != len(func.args): self.error("wrong number of function arguments")
                 for t, n in zip(types, func.args):
-                    if t != func.locals[n].type: self.error("type mismatch")
+                    if t != self.var_type[n]: self.error("type mismatch")
                 self.current_func.calls.add(func.name)
                 return Call(name, args), func.type
 
             # variable
-            if self.current_func and name in self.current_func.locals:
-                node, type = VarRef(f"{self.current_func.name}.{name}"), self.current_func.locals[name].type
-            else:
-                if name not in self.globals: self.error(f"unknown variable '{name}'")
-                node, type = VarRef(name), self.globals[name].type
+            node = None
+            if self.current_func:
+                long = f"{self.current_func.name}.{name}"
+                if long in self.var_type:
+                    node, type = VarRef(long), self.var_type[long]
+
+            if not node:
+                if name not in self.var_type: self.error(f"unknown variable '{name}'")
+                node, type = VarRef(name), self.var_type[name]
 
         while True:
-            if self.peek("sym", "["):
+            if self.peek("["):
                 self.eat()
                 if not is_array(type): self.error("cannot index non-array")
                 idx, tidx = self.expr()
                 if not is_int(tidx): self.error("index must be int")
-                self.eat("sym", "]")
+                self.eat("]")
                 type = Type(type.base, type.ptr, None)
                 elem_size = self.type_size(type)
                 if idx != Imm(0):
@@ -608,13 +688,13 @@ class Parser:
                         else: idx = BinOp("*", idx, Imm(elem_size))
                     node = Deref(BinOp("+", addr_of(node), idx))
 
-            elif self.peek("sym", "@"):
+            elif self.peek("@"):
                 self.eat()
                 if not is_ptr(type): self.error("non-pointer deref")
                 node = Deref(node)
                 type = Type(type.base, type.ptr - 1, None)
 
-            elif self.peek("sym", "."):
+            elif self.peek("."):
                 self.eat()
                 field = self.eat("id").v
                 if is_array(type):
@@ -686,7 +766,7 @@ def peephole(lines, tmp_vars):
                 case [("mov", a, b), (op, c, d), *rest] if a in tmp_vars and a == d:
                     new_block.append((op, c, b))
                     block = rest
-                case [("mov", a, b), *foo] if a in tmp_vars:
+                case [("mov", a, b), *rest2] if a in tmp_vars:
                     q = []
                     while True:
                         match block:
@@ -699,7 +779,7 @@ def peephole(lines, tmp_vars):
                                 for op, x in q: new_block.append((op, c, x))
                                 break
                         new_block.append(("mov", a, b))
-                        block = foo
+                        block = rest2
                         break
                 case [b, *rest]:
                     new_block.append(b)
@@ -729,7 +809,6 @@ def peephole(lines, tmp_vars):
 
 
 class Codegen:
-
     def newtmp(self, *ts):
         for t in ts:
             if t in self.tmp_vars: return t
@@ -885,7 +964,7 @@ class Codegen:
             staged.append(t)
         for a, e, v in zip(func.args, node.args, staged):
             if not v: v = self.value(e)
-            self.emit(f"    mov {func.name}.{a}, {v}")
+            self.emit(f"    mov {a}, {v}")
         self.emit(f"    jsr {node.name}")
 
 
@@ -975,7 +1054,6 @@ class Codegen:
     def compile(self, ast):
         self.lines      = []
         self.label_i    = 0
-        self.globals    = ast.globals
         self.funcs      = ast.funcs
         self.structs    = ast.structs
         self.loop_stack = []
@@ -993,27 +1071,17 @@ class Codegen:
             for st in f.body: self.stmt(st)
             self.emit("    ret")
             # optimize asm
-
             lines += peephole(self.lines, self.tmp_vars)
-
             # add temporary variables to locals
-            f.locals.update({t.split(".", 1)[1]: Var(INT, None, None) for t in self.tmp_vars})
+            for t in self.tmp_vars: ast.var_type[t] = INT
 
         # variables with fixed addresses
         addr = 0
         self.lines = ["_R = 0"]
-        for name, v in self.globals.items():
-            if v.addr != None:
-                assert v.data == None
-                self.emit(f"{name} = {v.addr}")
-                addr = max(addr, v.addr + ast.type_size(v.type))
-        for name, f in self.funcs.items():
-            for k, v in f.locals.items():
-                if v.addr != None:
-                    assert v.data == None
-                    self.emit(f"{name}.{k} = {v.addr}")
-                    addr = max(addr, v.addr + ast.type_size(v.type))
-
+        for name, a in ast.var_addr.items():
+            assert name not in ast.var_data
+            self.emit(f"{name} = {a}")
+            addr = max(addr, a + ast.type_size(ast.var_type[name]))
 
         cache = {}
         def alloc_vars(name):
@@ -1021,36 +1089,34 @@ class Codegen:
             func = self.funcs[name]
             a = addr
             for f in func.calls: a = max(a, alloc_vars(f))
-            for k, v in func.locals.items():
-                assert not v.data
-                if v.addr == None:
-                    self.emit(f"{name}.{k} = {a}")
-                    a += ast.type_size(v.type)
+            for n, t in ast.var_type.items():
+                if n not in ast.var_addr and n.startswith(f"{name}."):
+                    assert n not in ast.var_data
+                    self.emit(f"{n} = {a}")
+                    a += ast.type_size(t)
             cache[name] = a
             return a
         addr = max(alloc_vars(name) for name in self.funcs)
 
         # global variables
-        for name, v in self.globals.items():
-            if v.addr == None and not v.data:
+        for name, type in ast.var_type.items():
+            if name not in ast.var_addr and name not in ast.var_data and "." not in name:
                 self.emit(f"{name} = {addr}")
-                addr += ast.type_size(v.type)
+                addr += ast.type_size(type)
 
         # data
         self.emit(f"")
         self.emit(f"    .data {addr}")
-        for name, v in self.globals.items():
-            if v.data:
-                assert v.addr == None
-                self.emit(f"{name}:")
-                ln = "   "
-                for d in v.data:
-                    lo = ln
-                    ln += f" {d},"
-                    if len(ln) > 80:
-                        self.emit(lo[:-1])
-                        ln = f"    {d},"
-                self.emit(ln[:-1])
+        for name, data in ast.var_data.items():
+            self.emit(f"{name}:")
+            ln = "   "
+            for d in data:
+                lo = ln
+                ln += f" {d},"
+                if len(ln) > 80:
+                    self.emit(lo[:-1])
+                    ln = f"    {d},"
+            self.emit(ln[:-1])
 
         # code
         self.emit(f"")

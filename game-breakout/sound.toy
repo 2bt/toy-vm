@@ -18,17 +18,15 @@ const SNDCMD_LOOP_START = 9
 const SNDCMD_LOOP_END   = 10
 
 
-struct SoundCommandStream
+struct SoundCommandStream:
     voice: Voice*
     pos:   int*
     loop:  int*
     wait:  int
-end
 
-struct SoundEffect
+struct SoundEffect:
     stream: SoundCommandStream*
     start:  int*
-end
 
 var SOUND_COMMANDS_BING: int[] = {
     SNDCMD_SET_WAVE,    WAVE_NOISE,
@@ -148,57 +146,52 @@ var sound_effects: SoundEffect[] = {
 }
 
 
-func sound(s)
+func sound(s):
     var effect = &sound_effects[s]
     effect.stream.pos  = effect.start
     effect.stream.wait = 0
-end
 
 
-func update_sound()
-    for var s = sound_command_streams.ptr, s < sound_command_streams.limit, s += 1 do
+
+func update_sound():
+    for s in sound_command_streams:
         var voice = s.voice
-        while s.pos do
-            if s.wait > 0 then
+        while s.pos:
+            if s.wait > 0:
                 s.wait -= 1
                 break
-            end
             var cmd = s.pos@
             s.pos += 1
             var val = s.pos@
-            if cmd == SNDCMD_SET_PITCH then
+            if cmd == SNDCMD_SET_PITCH:
                 voice.pitch = val
                 s.pos += 1
-            elif cmd == SNDCMD_INC_PITCH then
+            elif cmd == SNDCMD_INC_PITCH:
                 voice.pitch += val
                 s.pos += 1
-            elif cmd == SNDCMD_SET_VOL then
+            elif cmd == SNDCMD_SET_VOL:
                 voice.vol = val
                 s.pos += 1
-            elif cmd == SNDCMD_INC_VOL then
+            elif cmd == SNDCMD_INC_VOL:
                 voice.vol += val
                 s.pos += 1
-            elif cmd == SNDCMD_SET_PW then
+            elif cmd == SNDCMD_SET_PW:
                 voice.pw = val
                 s.pos += 1
-            elif cmd == SNDCMD_INC_PW then
+            elif cmd == SNDCMD_INC_PW:
                 voice.pw += val
                 s.pos += 1
-            elif cmd == SNDCMD_SET_WAVE then
+            elif cmd == SNDCMD_SET_WAVE:
                 voice.wave = val
                 s.pos += 1
-            elif cmd == SNDCMD_WAIT then
+            elif cmd == SNDCMD_WAIT:
                 s.wait = val
                 s.pos += 1
-            elif cmd == SNDCMD_LOOP_START then
+            elif cmd == SNDCMD_LOOP_START:
                 s.loop = s.pos
-            elif cmd == SNDCMD_LOOP_END then
+            elif cmd == SNDCMD_LOOP_END:
                 s.pos = s.loop
-            elif cmd == SNDCMD_DONE then
+            elif cmd == SNDCMD_DONE:
                 s.pos = 0
                 break
-            end
-        end
-    end
-end
 

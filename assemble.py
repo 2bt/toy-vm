@@ -4,7 +4,6 @@ import pathlib
 import re
 import sys
 
-
 OPCODE_TABLE = []
 def load_opcode_table():
     with open("src/vm.cpp") as f:
@@ -137,7 +136,7 @@ def asm(args):
             # data section
             case [("sym", "."), ("name", "data"), ("number", base)]:
                 section = "data"
-                if data_base != None: bad_line()
+                if data_base is not None: bad_line()
                 data_base = int(base)
                 continue
 
@@ -328,8 +327,8 @@ def asm(args):
                 if b == "ind": l += f" [{bin.pop(0)}]"
                 if b == "idx": l += f" [{bin.pop(0)}]+{bin.pop(0)}"
                 if b == "imm": l += f" #{bin.pop(0)}"
-                if b == "zro": l += f" #0"
-                if b == "one": l += f" #1"
+                if b == "zro": l += " #0"
+                if b == "one": l += " #1"
             print(l)
     print("codes:", len(code))
     print("size:", len(out))

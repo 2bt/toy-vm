@@ -58,7 +58,6 @@ struct MemMap {
 };
 
 
-
 class APU {
 public:
     static constexpr int MIXRATE = 48000;
@@ -205,7 +204,6 @@ int main(int argc, char** argv) {
     dir += "/";
 
     if (!vm.load(dir + "code")) return 1;
-    vm.run(0, interrupt); // init
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Window* window = SDL_CreateWindow(
@@ -249,7 +247,7 @@ int main(int argc, char** argv) {
         mem.input |= !!ks[SDL_SCANCODE_C    ] << INPUT_B;
 
         SDL_RenderClear(renderer);
-        vm.run(2, interrupt); // update
+        vm.run(interrupt);
         apu.next_frame(mem.voices);
         SDL_RenderPresent(renderer);
     }

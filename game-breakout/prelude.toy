@@ -23,15 +23,9 @@ var input @ 1
 
 var voices: Voice[4] @ 2
 
-func preamble():
-    asm "    jmp init"
-    asm "    jsr update"
-
 func sprite(x @ 18, y @ 19, w @ 20, h @ 21, s @ 22, t @ 23, f @ 24):
     asm "    int #0"
 func rand(lo @ 18, hi @ 19):
     asm "    int #1"
 func sqrt(a @ 18):
     asm "    int #2"
-
-

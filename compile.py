@@ -192,6 +192,7 @@ JMP_SWAP = {
 }
 
 
+
 class Parser:
     def __init__(self):
         self.consts       = {}
@@ -201,6 +202,7 @@ class Parser:
         self.var_addr     = {}
         self.var_data     = {}
         self.var_type     = {}
+        self.var_bound    = set()
         self.current_func = None
         # for includes
         self.included   = set()
@@ -259,6 +261,12 @@ class Parser:
         n = t.array or 1
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
+
+    def check_types_for_assign(self, ta, tb, expr):
+        if ta == None: return
+        if ta == tb: return
+        if is_ptr(ta) and is_int(tb) and expr == Imm(0): return
+        self.error("type error")
 
     def global_var(self):
         name = self.eat("id").v
@@ -454,6 +462,9 @@ class Parser:
             self.eat()
             name = self.eat("id").v
             long = f"{self.current_func.name}.{name}"
+            if long in self.var_bound:
+                self.error("variable is bound")
+            self.var_bound.add(long)
             if self.peek("="):
                 self.eat()
                 start, t = self.expr()
@@ -480,6 +491,7 @@ class Parser:
             self.loop += 1
             body = self.block()
             self.loop -= 1
+            self.var_bound.remove(long)
             return For(init, cond, next, body)
         if self.peek("break"):
             self.eat()
@@ -502,8 +514,7 @@ class Parser:
                 return Return(None)
             expr, type = self.expr()
             self.eat("eol")
-            if not (type == self.current_func.type or (is_ptr(self.current_func.type) and expr == Imm(0))):
-                self.error("return type mismatch")
+            self.check_types_for_assign(self.current_func.type, type, expr)
             return Return(expr)
         if self.peek("asm"):
             self.eat()
@@ -531,7 +542,7 @@ class Parser:
             b, tb = self.expr()
             if is_array(tb): self.error("local arrays not allowed")
             if is_struct(tb): self.error("local structs not allowed")
-            if ta != None and not (is_ptr(ta) and is_int(tb) and b == Imm(0)) and ta != tb: self.error("type mismatch")
+            self.check_types_for_assign(ta, tb, b)
             self.var_type[long] = tb
             self.eat("eol")
             return Assign("=", a, b)
@@ -542,12 +553,15 @@ class Parser:
             return a
 
         if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().v in ASSIGN_OPS:
+            if isinstance(a, VarRef) and a.name in self.var_bound:
+                self.error("variable is bound")
             op = self.eat().v
             b, tb = self.expr()
             self.eat("eol")
-            if op == "=" and (ta == tb or is_ptr(ta) and is_int(tb) and b == Imm(0)):
+            if op == "=":
                 if is_array(ta): self.error("array assign not allowed")
                 if is_struct(ta): self.error("struct assign not allowed")
+                self.check_types_for_assign(ta, tb, b)
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -555,7 +569,7 @@ class Parser:
                     if isinstance(b, Imm): b = Imm(b.value * elem_size)
                     else: b = BinOp("*", b, Imm(elem_size))
             else:
-                if not (is_int(ta) and is_int(tb)): self.error("type mismatch")
+                if not is_int(ta) or not is_int(tb): self.error("type error")
             return Assign(op, a, b)
 
         self.error("invalid statement")
@@ -582,7 +596,7 @@ class Parser:
                     if isinstance(b, Imm): b = Imm(b.value * elem_size)
                     else: b = BinOp("*", b, Imm(elem_size))
             else:
-                if not (is_int(ta) and is_int(tb)): self.error("type mismatch", tok)
+                if not is_int(ta) or not is_int(tb): self.error("type error", tok)
             a = BinOp(op, a, b)
         return a, ta
 
@@ -591,6 +605,8 @@ class Parser:
             self.eat()
             a, ta = self.primary()
             if not isinstance(a, (VarRef, Deref)): self.error("& operand must be lvalue")
+            if isinstance(a, VarRef) and a.name in self.var_bound:
+                self.error("variable is bound")
             if is_array(ta): self.error("address of array not allowed")
             return addr_of(a), Type(ta.base, ta.ptr + 1, None)
         if self.peek("("):
@@ -653,7 +669,7 @@ class Parser:
                 self.eat(")")
                 if len(args) != len(func.args): self.error("wrong number of function arguments")
                 for t, n in zip(types, func.args):
-                    if t != self.var_type[n]: self.error("type mismatch")
+                    if t != self.var_type[n]: self.error("type error")
                 self.current_func.calls.add(func.name)
                 return Call(name, args), func.type
 

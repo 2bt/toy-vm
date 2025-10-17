@@ -356,4 +356,3 @@ func update():
     update_sound()
     prev_input = input
     draw_stage()
-

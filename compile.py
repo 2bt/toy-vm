@@ -6,12 +6,87 @@ import argparse
 from collections import namedtuple
 from dataclasses import dataclass, field
 
+##############################
+# tokenization
+##############################
+
+KEYWORDS = {
+    "include", "var", "const", "func", "struct", "if", "elif", "else",
+    "while", "for", "in", "break", "continue", "return", "asm", "or",
+    "and", "not",
+}
+
+token_regex = re.compile(r"""
+    [ \t]*(?P<nl>      \n                          )|
+    [ \t]*(?P<comment> \#.*                        )|
+    [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
+    [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
+    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
+                       [+\-*/%{}()<>\[\]=,.:&|@]   )|
+    [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
+    [ \t]*(?P<other>   [^ \t]+                     )
+""", re.VERBOSE)
+
+Token = namedtuple("Token", "k v loc")
+
+def tokenize(path):
+    src     = path.read_text(encoding="utf-8")
+    out     = []
+    line    = 1
+    i       = 0
+    line_i  = 0
+    newline = True
+    indents = [0]
+    paren_depth = 0
+    while m := token_regex.match(src, i):
+        i = m.end()
+        k = m.lastgroup
+        v = m.group(k)
+        if k == "comment": continue
+        if k == "nl":
+            if paren_depth == 0 and not newline:
+                newline = True
+                out.append(Token("eol", "", (path, line)))
+            line_i = i
+            line += 1
+            continue
+        if newline and paren_depth == 0:
+            newline = False
+            new_indent = m.start(k) - line_i
+            if indents[-1] < new_indent:
+                indents.append(new_indent)
+                out.append(Token("indent", "", (path, line)))
+            while indents[-1] > new_indent:
+                indents.pop()
+                out.append(Token("dedent", "", (path, line)))
+            if new_indent != indents[-1]:
+                sys.exit(f"{path.name}:{line}: inconsistent indentation")
+        if k == "string":
+            line += v.count("\n")
+            v = ast.literal_eval(v)
+        if k == "id" and v in KEYWORDS: k = v
+        if k == "sym":
+            k = v
+            if k in "([{": paren_depth += 1
+            if k in ")]}": paren_depth -= 1
+        out.append(Token(k, v, (path, line)))
+    while indents[-1] > 0:
+        indents.pop()
+        out.append(Token("dedent", "", (path, line)))
+    out.append(Token("eof", "", (path, line)))
+    return out
+
+
+##############################
+# helper
+##############################
+
+
 @dataclass
 class Head:
     toks: list
     i: int = 0
 
-Token    = namedtuple("Token",    "k v loc")
 Type     = namedtuple("Type",     "base ptr array")
 TyStruct = namedtuple("TyStruct", "fields size")
 TyField  = namedtuple("TyField",  "type offset")
@@ -40,74 +115,6 @@ class Func:
     body: list = None
     args: list = field(default_factory=list)
     calls: set = field(default_factory=set)
-
-
-KEYWORDS = {
-    "include", "var", "const", "func", "struct", "if", "elif", "else",
-    "while", "for", "in", "break", "continue", "return", "asm", "or",
-    "and", "not",
-}
-
-token_regex = re.compile(r"""
-    [ \t]*(?P<nl>      \n                          )|
-    [ \t]*(?P<comment> \#.*                        )|
-    [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
-    [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
-    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
-                       [+\-*/%{}()<>\[\]=,.:&|@]   )|
-    [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
-    [ \t]*(?P<other>   [^ \t]+                     )
-""", re.VERBOSE)
-
-
-
-
-def tokenize(path):
-    src     = path.read_text(encoding="utf-8")
-    out     = []
-    indent  = 0
-    line    = 1
-    i       = 0
-    line_i  = 0
-    newline = True
-    paren_depth = 0
-    while m := token_regex.match(src, i):
-        i = m.end()
-        k = m.lastgroup
-        v = m.group(k)
-        if k == "comment": continue
-        if k == "nl":
-            if paren_depth == 0 and not newline:
-                newline = True
-                out.append(Token("eol", "", (path, line)))
-            line_i = i
-            line += 1
-            continue
-        if newline and paren_depth == 0:
-            newline = False
-            new_indent = m.start(k) - line_i
-            # XXX: make this more flexible
-            while indent < new_indent:
-                indent += 4
-                out.append(Token("indent", "", (path, line)))
-            while indent > new_indent:
-                indent -= 4
-                out.append(Token("dedent", "", (path, line)))
-        if k == "string":
-            line += v.count("\n")
-            v = ast.literal_eval(v)
-        if k == "id" and v in KEYWORDS: k = v
-        if k == "sym":
-            k = v
-            if k in "([{": paren_depth += 1
-            if k in ")]}": paren_depth -= 1
-        out.append(Token(k, v, (path, line)))
-
-    while indent > 0:
-        indent -= 4
-        out.append(Token("dedent", "", (path, line)))
-    out.append(Token("eof", "", (path, line)))
-    return out
 
 
 INT = Type("int", 0, None)
@@ -142,7 +149,7 @@ def split_add(e):
             d2, s2, k2 = split_add(b)
             if d1 and d2: d = BinOp("+", d1, d2)
             else: d = d1 or d2
-            if s1 and s2: assert False, "WOOT"
+            assert not s1 or not s2
             return (d, s1 or s2, k1 + k2)
     return (e, None, 0)
 
@@ -150,19 +157,11 @@ def split_add(e):
 PRECEDENCE = {
     "or": 1,
     "and": 2,
-    "<": 3,
-    ">": 3,
-    "<=": 3,
-    ">=": 3,
-    "!=": 3,
-    "==": 3,
+    "<": 3, ">": 3, "<=": 3, ">=": 3, "!=": 3, "==": 3,
     "|": 4,
     "&": 5,
-    "+": 6,
-    "-": 6,
-    "*": 7,
-    "/": 7,
-    "%": 7,
+    "+": 6, "-": 6,
+    "*": 7, "/": 7, "%": 7,
 }
 ARITH_OPS = {
     "|": "ore",
@@ -173,7 +172,7 @@ ARITH_OPS = {
     "/": "div",
     "%": "mod",
 }
-ASSIGN_OPS = { "=": "mov" } | { f"{k}=": v for k, v in ARITH_OPS.items() }
+ASSIGN_OPS = {"=": "mov"} | {f"{k}=": v for k, v in ARITH_OPS.items()}
 CMP_TO_JMP = {
     "<":  ("jlt", "jge"),
     "<=": ("jle", "jgt"),
@@ -191,7 +190,9 @@ JMP_SWAP = {
     "jne": "jne",
 }
 
-
+##############################
+# parser
+##############################
 
 class Parser:
     def __init__(self):
@@ -271,7 +272,7 @@ class Parser:
     def global_var(self):
         name = self.eat("id").v
         if name in self.var_type: self.error(f"variable '{name}' already exists")
-        type = self.type(auto_array_size=True)
+        ty = self.type(auto_array_size=True)
 
         if self.peek("@"): # has address
             self.eat()
@@ -295,10 +296,10 @@ class Parser:
             data = parse_data()
 
             # patch type array length
-            if type.array == -1:
+            if ty.array == -1:
                 if not isinstance(data, list):
                     self.error("data doesn't match type")
-                type = Type(type.base, type.ptr, len(data))
+                ty = Type(ty.base, ty.ptr, len(data))
 
             def null_obj(t):
                 if is_array(t):
@@ -313,11 +314,11 @@ class Parser:
             def unroll(t, d):
                 res = []
                 if is_array(t) and isinstance(d, list):
-                    l = type.array
-                    t = Type(t.base, t.ptr, None)
+                    l = ty.array
+                    inner = Type(t.base, t.ptr, None)
                     if len(d) > l: self.error("too many initializers")
-                    for x in d: res += unroll(t, x)
-                    res += null_obj(t) * (l - len(d))
+                    for x in d: res += unroll(inner, x)
+                    res += null_obj(inner) * (l - len(d))
                     return res
                 if is_struct(t) and isinstance(d, list):
                     res = []
@@ -333,11 +334,11 @@ class Parser:
                     return [d]
                 self.error("data doesn't match type")
 
-            data = unroll(type, data)
+            data = unroll(ty, data)
             if any(x != 0 for x in data): self.var_data[name] = data
 
-        if type.array == -1: self.error("invalid array size")
-        self.var_type[name] = type
+        if ty.array == -1: self.error("invalid array size")
+        self.var_type[name] = ty
 
     def get_struct(self, name):
         if name not in self.structs: self.error(f"unknown struct '{name}'")
@@ -346,7 +347,6 @@ class Parser:
 
     def program(self, path):
         self.included.add(path)
-        # self.head = SimpleNamespace(toks = tokenize(path), i = 0)
         self.head = Head(tokenize(path))
 
         while any(self.peek(k) for k in ["include", "const", "var", "func", "struct"]):
@@ -397,9 +397,9 @@ class Parser:
                     long = f"{func.name}.{name}"
                     if long in self.var_type:
                         self.error(f"variable '{name}' already exists")
-                    self.var_type[long] = type = self.type()
-                    if is_array(type): self.error("local arrays not allowed")
-                    if is_struct(type): self.error("local structs not allowed")
+                    self.var_type[long] = t = self.type()
+                    if is_array(t): self.error("local arrays not allowed")
+                    if is_struct(t): self.error("local structs not allowed")
                     if self.peek("@"):
                         self.eat()
                         self.var_addr[long] = self.const_expr()
@@ -430,7 +430,6 @@ class Parser:
                 while not self.peek("dedent"): stmts.append(self.stmt())
                 self.eat("dedent")
         else:
-            # TODO
             stmts.append(self.stmt())
         return stmts
 
@@ -448,7 +447,6 @@ class Parser:
         return If(cond, then, [])
 
     def stmt(self):
-
         if self.peek("while"):
             self.eat()
             cond, t = self.expr()
@@ -493,29 +491,34 @@ class Parser:
             self.loop -= 1
             self.var_bound.remove(long)
             return For(init, cond, next, body)
+
         if self.peek("break"):
             self.eat()
             self.eat("eol")
             if self.loop == 0: self.error("break outside loop")
             return Break()
+
         if self.peek("continue"):
             self.eat()
             self.eat("eol")
             if self.loop == 0: self.error("continue outside loop")
             return Continue()
+
         if self.peek("if"):
             self.eat()
             return self.after_if()
+
         if self.peek("return"):
             self.eat()
             # TODO: add void return type to functions
             if self.peek("eol"):
                 self.eat()
                 return Return(None)
-            expr, type = self.expr()
+            expr, ty = self.expr()
             self.eat("eol")
-            self.check_types_for_assign(self.current_func.type, type, expr)
+            self.check_types_for_assign(self.current_func.type, ty, expr)
             return Return(expr)
+
         if self.peek("asm"):
             self.eat()
             asm = self.eat("string").v
@@ -563,7 +566,7 @@ class Parser:
                 if is_struct(ta): self.error("struct assign not allowed")
                 self.check_types_for_assign(ta, tb, b)
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
-                # pointer arithmetic
+                # pointer arithmetic scaling
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
                 if elem_size > 1:
                     if isinstance(b, Imm): b = Imm(b.value * elem_size)
@@ -583,7 +586,7 @@ class Parser:
             b, tb = self.expr(p + 1)
             op = tok.v
             if isinstance(a, Imm) and isinstance(b, Imm):
-                # fold constant
+                # constant fold
                 a = Imm(int(eval(f"{a.value} {op} {b.value}")))
                 ta = INT
                 continue
@@ -643,10 +646,9 @@ class Parser:
             self.var_type[name] = Type("int", 0, len(data))
             self.var_data[name]  = data
             node = AddrOf(VarRef(name))
-            type = Type("int", 1, None)
+            ty   = Type("int", 1, None)
 
         else:
-            # constant
             name = self.eat("id").v
             if name in self.consts: return Imm(self.consts[name]), INT
 
@@ -678,20 +680,20 @@ class Parser:
             if self.current_func:
                 long = f"{self.current_func.name}.{name}"
                 if long in self.var_type:
-                    node, type = VarRef(long), self.var_type[long]
+                    node, ty = VarRef(long), self.var_type[long]
             if not node:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
-                node, type = VarRef(name), self.var_type[name]
+                node, ty = VarRef(name), self.var_type[name]
 
         while True:
             if self.peek("["):
                 self.eat()
-                if not is_array(type): self.error("cannot index non-array")
+                if not is_array(ty): self.error("cannot index non-array")
                 idx, tidx = self.expr()
                 if not is_int(tidx): self.error("index must be int")
                 self.eat("]")
-                type = Type(type.base, type.ptr, None)
-                elem_size = self.type_size(type)
+                ty = Type(ty.base, ty.ptr, None)
+                elem_size = self.type_size(ty)
                 if idx != Imm(0):
                     if elem_size > 1:
                         if isinstance(idx, Imm): idx = Imm(idx.value * elem_size)
@@ -700,36 +702,39 @@ class Parser:
 
             elif self.peek("@"):
                 self.eat()
-                if not is_ptr(type): self.error("non-pointer deref")
+                if not is_ptr(ty): self.error("non-pointer deref")
                 node = Deref(node)
-                type = Type(type.base, type.ptr - 1, None)
+                ty   = Type(ty.base, ty.ptr - 1, None)
 
             elif self.peek("."):
                 self.eat()
                 field = self.eat("id").v
-                if is_array(type):
-                    if field == "len": return Imm(type.array), INT
-                    if field == "ptr":
+                if is_array(ty):
+                    if field == "len": return Imm(ty.array), INT
+                    elif field == "ptr":
                         node = AddrOf(node)
-                        type = Type(type.base, type.ptr + 1, None)
+                        ty   = Type(ty.base, ty.ptr + 1, None)
                         continue
-                    if field == "limit":
-                        offset = self.type_size(Type(type.base, type.ptr, None)) * type.array
+                    elif field == "limit":
+                        offset = self.type_size(Type(ty.base, ty.ptr, None)) * ty.array
                         node = BinOp("+", AddrOf(node), Imm(offset))
-                        type = Type(type.base, type.ptr + 1, None)
+                        ty   = Type(ty.base, ty.ptr + 1, None)
                         continue
-
-                if is_ptr(type): # auto pointer deref
+                elif is_ptr(ty): # auto pointer deref
                     node = Deref(node)
-                    type = Type(type.base, type.ptr - 1, None)
-                if not is_struct(type): self.error("request for member of non-struct")
-                f = self.get_struct(type.base).fields.get(field)
-                if not f: self.error(f"struct '{type.base}' has no field '{field}'")
-                type = f.type
+                    ty   = Type(ty.base, ty.ptr - 1, None)
+
+                if not is_struct(ty): self.error("request for member of non-struct")
+                f = self.get_struct(ty.base).fields.get(field)
+                if not f: self.error(f"struct '{ty.base}' has no field '{field}'")
+                ty = f.type
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
 
-            else: return node, type
+            else: return node, ty
 
+##############################
+# peephole optimizer
+##############################
 
 def peephole(lines, tmp_vars):
     for _ in range(2):
@@ -817,6 +822,9 @@ def peephole(lines, tmp_vars):
     return new_lines
 
 
+##############################
+# code generator
+##############################
 
 class Codegen:
     def newtmp(self, *ts):
@@ -848,8 +856,7 @@ class Codegen:
 
     def branch(self, node, T, F):
         if isinstance(node, Imm):
-            if node.value: self.emit(f"    jmp {T}")
-            else: self.emit(f"    jmp {F}")
+            self.emit(f"    jmp {T if node.value else F}")
 
         elif isinstance(node, VarRef):
             self.emit(f"    cmp {node.name}, #0")
@@ -1019,7 +1026,6 @@ class Codegen:
             self.emit(f"    jmp {L}")
             self.emit_label(E)
 
-
         elif isinstance(node, Continue):
             l = self.loop_stack[-1][0]
             self.emit(f"    jmp {l}")
@@ -1071,14 +1077,20 @@ class Codegen:
 
         # functions
         lines = []
-        for name, f in self.funcs.items():
-            self.current_func = f
+
+        if not "tick" in self.funcs: sys.exit("no function 'tick' defined")
+        func_names = list(self.funcs)
+        func_names.remove("tick")
+        func_names.insert(0, "tick")
+
+        for name in func_names:
+            self.current_func = self.funcs[name]
             self.tmp_vars     = {} # use dict to keep original order
             self.lines        = []
             self.emit("")
             self.emit(f"    ; function {name}")
             self.emit(f"{name}:")
-            for st in f.body: self.stmt(st)
+            for st in self.current_func.body: self.stmt(st)
             self.emit("    ret")
             # optimize asm
             lines += peephole(self.lines, self.tmp_vars)
@@ -1109,13 +1121,13 @@ class Codegen:
         addr = max(alloc_vars(name) for name in self.funcs)
 
         # global variables
-        for name, type in ast.var_type.items():
+        for name, ty in ast.var_type.items():
             if name not in ast.var_addr and name not in ast.var_data and "." not in name:
                 self.emit(f"{name} = {addr}")
-                addr += ast.type_size(type)
+                addr += ast.type_size(ty)
 
         # data
-        self.emit(f"")
+        self.emit("")
         self.emit(f"    .data {addr}")
         for name, data in ast.var_data.items():
             self.emit(f"{name}:")
@@ -1129,15 +1141,18 @@ class Codegen:
             self.emit(ln[:-1])
 
         # code
-        self.emit(f"")
-        self.emit(f"    .code")
+        self.emit("")
+        self.emit("    .code")
         return "\n".join(self.lines + lines) + "\n"
 
+
+##############################
+# driver
+##############################
 
 def main(args):
     parser = Parser()
     parser.program(Path(args.src))
-
     asm = Codegen().compile(parser)
     path = args.out or Path(args.src).with_suffix(".asm")
     path.write_text(asm)

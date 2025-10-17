@@ -14,7 +14,7 @@ public:
     };
 
     bool load(std::string const& path);
-    void run(int32_t start, std::function<void(int32_t)> interrupt = [](int32_t){});
+    void run(std::function<void(int32_t)> interrupt = [](int32_t){});
 
     std::array<int32_t, MEM_SIZE> mem = {};
 

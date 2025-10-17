@@ -4,6 +4,13 @@ include "sound.toy"
 
 const Q = 256
 
+const GAME_STATE_NULL    = 0
+const GAME_STATE_PLAYING = 1
+const GAME_STATE_CLEAR   = 2
+const GAME_STATE_DEAD    = 3
+
+var game_state = GAME_STATE_NULL
+
 const BALL_STATE_DEAD     = 0
 const BALL_STATE_FLYING   = 1
 const BALL_STATE_STICKING = 2
@@ -15,9 +22,6 @@ const BLOCK_THEMES = 4
 const BLOCK_TYPE_NORMAL    = 0
 const BLOCK_TYPE_EXTRABALL = 1
 
-const GAME_STATE_PLAYING = 0
-const GAME_STATE_CLEAR   = 1
-const GAME_STATE_DEAD    = 2
 
 const BORDER       = 18
 const BALL_W       = 8
@@ -54,7 +58,7 @@ struct Pad:
     h
     vy
 
-var game_state
+
 var blocks_alive
 var balls_alive
 var balls_spinning
@@ -129,7 +133,7 @@ func init_stage():
             k.type = BLOCK_TYPE_EXTRABALL
             i -= 1
 
-func init():
+func init_game():
     lives = 3
     score = 0
     init_stage()
@@ -259,6 +263,8 @@ func update_ball(b: Ball*):
 
 
 func update_stage():
+    if game_state == GAME_STATE_NULL: init_game()
+
     if game_state == GAME_STATE_PLAYING:
 
         # pad
@@ -302,8 +308,9 @@ func update_stage():
 
     elif game_state == GAME_STATE_CLEAR:
         if is_just_pressed(INPUT_A): init_stage()
+
     elif game_state == GAME_STATE_DEAD:
-        if is_just_pressed(INPUT_A): init()
+        if is_just_pressed(INPUT_A): init_game()
 
     # blocks
     for k in blocks:
@@ -351,7 +358,7 @@ func draw_stage():
     elif game_state == GAME_STATE_DEAD: print(124, 86, "GAME OVER")
 
 
-func update():
+func tick():
     update_stage()
     update_sound()
     prev_input = input

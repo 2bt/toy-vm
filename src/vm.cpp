@@ -259,8 +259,8 @@ int32_t& VM::mem_at(int32_t addr) {
     return mem[addr];
 }
 
-void VM::run(int32_t start, std::function<void(int32_t)> interrupt) {
-    pc = start;
+void VM::run(std::function<void(int32_t)> interrupt) {
+    pc = 0;
     std::vector<int32_t> stack;
     int32_t* a   = &mem_at(0);
     int32_t  b   = 0;

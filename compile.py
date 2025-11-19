@@ -70,6 +70,8 @@ def tokenize(path):
             if k in "([{": paren_depth += 1
             if k in ")]}": paren_depth -= 1
         out.append(Token(k, v, (path, line)))
+    if not out or out[-1].k != "eol":
+        out.append(Token("eol", "", (path, line)))
     while indents[-1] > 0:
         indents.pop()
         out.append(Token("dedent", "", (path, line)))
@@ -1078,12 +1080,21 @@ class Codegen:
         # functions
         lines = []
 
-        if not "tick" in self.funcs: sys.exit("no function 'tick' defined")
-        func_names = list(self.funcs)
-        func_names.remove("tick")
-        func_names.insert(0, "tick")
+        if "tick" in self.funcs:
+            # compile only reachable functions
+            reachable_funcs = {}
+            queue = ["tick"]
+            while queue:
+                f = queue.pop(0)
+                if f in reachable_funcs: continue
+                reachable_funcs[f] = None
+                for c in self.funcs[f].calls:
+                    if c not in reachable_funcs: queue.append(c)
+        else:
+            reachable_funcs = self.funcs
 
-        for name in func_names:
+
+        for name in reachable_funcs:
             self.current_func = self.funcs[name]
             self.tmp_vars     = {} # use dict to keep original order
             self.lines        = []
@@ -1098,8 +1109,8 @@ class Codegen:
             for t in self.tmp_vars: ast.var_type[t] = INT
 
         # variables with fixed addresses
-        addr = 0
         self.lines = ["_R = 0"]
+        addr = 1
         for name, a in ast.var_addr.items():
             assert name not in ast.var_data
             self.emit(f"{name} = {a}")
@@ -1118,7 +1129,7 @@ class Codegen:
                     a += ast.type_size(t)
             cache[name] = a
             return a
-        addr = max(alloc_vars(name) for name in self.funcs)
+        addr = max(alloc_vars(name) for name in reachable_funcs)
 
         # global variables
         for name, ty in ast.var_type.items():

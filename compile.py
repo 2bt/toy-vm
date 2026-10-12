@@ -116,7 +116,7 @@ class Func:
     type: Type = None
     body: list = None
     args: list = field(default_factory=list)
-    calls: set = field(default_factory=set)
+    calls: dict = field(default_factory=dict)
 
 
 INT = Type("int", 0, None)
@@ -674,7 +674,7 @@ class Parser:
                 if len(args) != len(func.args): self.error("wrong number of function arguments")
                 for t, n in zip(types, func.args):
                     if t != self.var_type[n]: self.error("type error")
-                self.current_func.calls.add(func.name)
+                self.current_func.calls[func.name] = None
                 return Call(name, args), func.type
 
             # variable
@@ -1081,20 +1081,20 @@ class Codegen:
         lines = []
 
         if "tick" in self.funcs:
-            # compile only reachable functions
-            reachable_funcs = {}
+            # compile only reachable functions; tick stays first because pc starts at 0
+            reachable = set()
             queue = ["tick"]
             while queue:
-                f = queue.pop(0)
-                if f in reachable_funcs: continue
-                reachable_funcs[f] = None
-                for c in self.funcs[f].calls:
-                    if c not in reachable_funcs: queue.append(c)
+                f = queue.pop()
+                if f in reachable: continue
+                reachable.add(f)
+                queue.extend(self.funcs[f].calls)
+            func_order = ["tick", *(n for n in self.funcs if n in reachable and n != "tick")]
         else:
-            reachable_funcs = self.funcs
+            func_order = list(self.funcs)
 
 
-        for name in reachable_funcs:
+        for name in func_order:
             self.current_func = self.funcs[name]
             self.tmp_vars     = {} # use dict to keep original order
             self.lines        = []
@@ -1129,7 +1129,7 @@ class Codegen:
                     a += ast.type_size(t)
             cache[name] = a
             return a
-        addr = max(alloc_vars(name) for name in reachable_funcs)
+        addr = max(alloc_vars(name) for name in func_order)
 
         # global variables
         for name, ty in ast.var_type.items():

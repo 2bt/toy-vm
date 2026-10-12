@@ -21,6 +21,7 @@ enum AddressMode {
     IDX,        // indirect address + offset
     ZRO,        // immediate 0
     ONE,        // immediate 1
+    NEG,        // immediate -1
     IMM,        // immediate
     NXT,        // next address
     PDA = NIL,  // previous address
@@ -139,10 +140,12 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MUL, IDX, IND },
     { MUL, IDX, IDX },
     { MUL, IDX, IMM },
+    { MUL, IDX, NEG },
     { MUL, PDA, ABS },
     { MUL, PDA, IND },
     { MUL, PDA, IDX },
     { MUL, PDA, IMM },
+    { MUL, PDA, NEG },
 
     { DIV, ABS, ABS },
     { DIV, ABS, IND },
@@ -278,6 +281,7 @@ void VM::run(std::function<void(int32_t)> interrupt) {
         if (oc.a == IDX) { b = mem_at(next()); a = &mem_at(b + next()); };
         if (oc.b == ZRO) b = 0;
         if (oc.b == ONE) b = 1;
+        if (oc.b == NEG) b = -1;
         if (oc.b == IMM) b = next();
         if (oc.b == ABS) b = mem_at(next());
         if (oc.b == IND) b = mem_at(mem_at(next()));
@@ -312,4 +316,3 @@ void VM::run(std::function<void(int32_t)> interrupt) {
     printf("ERROR: step limit reached\n");
     exit(1);
 }
-

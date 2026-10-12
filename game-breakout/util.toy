@@ -50,7 +50,7 @@ func int_to_str(n):
 func putchar(x, y, c):
     sprite(x, y, 8, 8, c % 32 * 8, (c / 32 - 1) * 8, 0)
 
-func print(x, y, msg: int*):
+func draw_text(x, y, msg: int*):
     while msg@:
         putchar(x, y, msg@)
         x += 8

@@ -20,6 +20,7 @@ enum {
     INT_SPRITE = 0,
     INT_RAND,
     INT_SQRT,
+    INT_PRINT,
 };
 
 
@@ -54,6 +55,9 @@ struct MemMap {
             int32_t b;
             int32_t c;
         } math;
+        struct {
+            int32_t msg;
+        } print;
     };
 };
 
@@ -172,6 +176,21 @@ SDL_Texture*  sprites;
 
 
 
+void interrupt_once(int32_t n) {
+    if (n == INT_PRINT) {
+        for (int32_t addr = mem.print.msg; addr >= 0 && addr < VM::MEM_SIZE; ++addr) {
+            int32_t c = vm.mem[addr];
+            if (c == 0) break;
+            putchar(c);
+        }
+        putchar('\n');
+    }
+    else {
+        printf("ERROR: unknown interrupt %d\n", n);
+        exit(1);
+    }
+}
+
 void interrupt(int32_t n) {
     if (n == INT_SPRITE) {
         if (!renderer) return;
@@ -187,23 +206,31 @@ void interrupt(int32_t n) {
     else if (n == INT_SQRT) {
         mem.ret = std::sqrt(mem.math.a);
     }
-    else {
-        printf("ERROR: unknown interrupt %d\n", n);
-        exit(1);
-    }
+    else interrupt_once(n);
 }
 
 
 
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        printf("usage: %s game-dir\n", argv[0]);
+    bool once = false;
+    bool bad = false;
+    std::string dir;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--once") once = true;
+        else if (dir.empty()) dir = arg;
+        else bad = true;
+    }
+    if (bad || dir.empty()) {
+        printf("usage: %s [--once] app-dir\n", argv[0]);
         return 1;
     }
-    std::string dir = argv[1];
-    dir += "/";
 
-    if (!vm.load(dir + "code")) return 1;
+    if (!vm.load(dir + "/code")) return 1;
+    if (once) {
+        vm.run(interrupt_once);
+        return 0;
+    }
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Window* window = SDL_CreateWindow(
@@ -214,7 +241,7 @@ int main(int argc, char** argv) {
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderSetLogicalSize(renderer, SCREEN_W, SCREEN_H);
-    sprites = load_texture(renderer, dir + "sprite.png");
+    sprites = load_texture(renderer, dir + "/sprite.png");
 
     SDL_AudioSpec spec = { APU::MIXRATE, AUDIO_F32, 1, 0, 64, 0, 0, &APU::callback, &apu };
     SDL_OpenAudio(&spec, nullptr);

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TOY = ROOT / "build" / "toy"
 
 HEADER = """
-func print(msg: int* @ 18):
+func print(msg: int* @ 2):
     asm "    int #1"
 
 var digit: int[2]

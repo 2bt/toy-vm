@@ -20,6 +20,7 @@ public:
     };
 
     static constexpr int MIXRATE = 48000;
+    static constexpr int VOICES  = 4;
 
     static void callback(void* u, uint8_t* stream, int bytes) {
         constexpr int SAMPLES_PER_FRAME = MIXRATE / 60;
@@ -38,7 +39,7 @@ public:
         }
     }
 
-    void next_frame(std::array<VoiceInput, 4>const& voice_inputs) {
+    void next_frame(std::array<VoiceInput, VOICES>const& voice_inputs) {
         std::lock_guard<std::mutex> lock(m_mtx);
         m_voice_inputs = voice_inputs;
     }
@@ -100,7 +101,7 @@ private:
         float    noise{};
         uint32_t shift = 1234567;
     };
-    std::array<Voice, 4>      m_voices{};
-    std::array<VoiceInput, 4> m_voice_inputs{};
-    std::mutex                m_mtx{};
+    std::array<Voice, VOICES>      m_voices{};
+    std::array<VoiceInput, VOICES> m_voice_inputs{};
+    std::mutex                     m_mtx{};
 };

@@ -17,9 +17,16 @@ const SNDCMD_WAIT       = 8
 const SNDCMD_LOOP_START = 9
 const SNDCMD_LOOP_END   = 10
 
+struct Voice:
+    pitch
+    pw
+    vol
+    wave
+
+var voices: Voice[4]
 
 struct SoundCommandStream:
-    voice: Voice*
+    index: int
     pos:   int*
     loop:  int*
     wait:  int
@@ -131,9 +138,9 @@ var SOUND_COMMANDS_NOSPIN: int[] = {
 
 
 var sound_command_streams: SoundCommandStream[] = {
-    { &voices[0] },
-    { &voices[1] },
-    { &voices[2] },
+    { 0 },
+    { 1 },
+    { 2 },
 }
 
 var sound_effects: SoundEffect[] = {
@@ -146,16 +153,15 @@ var sound_effects: SoundEffect[] = {
 }
 
 
-func sound(s):
+func play_sound(s):
     var effect = &sound_effects[s]
     effect.stream.pos  = effect.start
     effect.stream.wait = 0
 
 
-
 func update_sound():
     for s in sound_command_streams:
-        var voice = s.voice
+        var voice = &voices[s.index]
         while s.pos:
             if s.wait > 0:
                 s.wait -= 1
@@ -194,4 +200,4 @@ func update_sound():
             elif cmd == SNDCMD_DONE:
                 s.pos = 0
                 break
-
+        sound(s.index, voice.pitch, voice.pw, voice.vol, voice.wave)

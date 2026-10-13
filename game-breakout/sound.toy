@@ -160,9 +160,9 @@ func update_sound():
             if s.wait > 0:
                 s.wait -= 1
                 break
-            var cmd = s.pos@
+            var cmd = s.pos.*
             s.pos += 1
-            var val = s.pos@
+            var val = s.pos.*
             if cmd == SNDCMD_SET_PITCH:
                 voice.pitch = val
                 s.pos += 1

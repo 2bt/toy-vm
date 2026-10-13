@@ -11,7 +11,7 @@ TOY = ROOT / "build" / "toy"
 
 HEADER = """
 func print(msg: int* @ 18):
-    asm "    int #3"
+    asm "    int #1"
 
 var digit: int[2]
 
@@ -64,6 +64,14 @@ class ExecTests(unittest.TestCase):
             func tick():
                 print_n(add(2, 3))
         """), "5\n")
+
+    def test_pointer_deref(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                var p = digit.ptr
+                p.* = 6
+                print_n(p.*)
+        """), "6\n")
 
     def test_while_sum(self):
         self.assertEqual(self.run_toy("""

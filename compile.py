@@ -724,14 +724,14 @@ class Parser:
                         else: idx = BinOp("*", idx, Imm(elem_size))
                     node = Deref(BinOp("+", addr_of(node), idx))
 
-            elif self.peek("@"):
-                self.eat()
-                if not is_ptr(ty): self.error("non-pointer deref")
-                node = Deref(node)
-                ty   = Type(ty.base, ty.ptr - 1, None)
-
             elif self.peek("."):
                 self.eat()
+                if self.peek("*"):
+                    self.eat()
+                    if not is_ptr(ty): self.error("non-pointer deref")
+                    node = Deref(node)
+                    ty = Type(ty.base, ty.ptr - 1, None)
+                    continue
                 field = self.eat("id").v
                 if is_array(ty):
                     if field == "len": return Imm(ty.array), INT

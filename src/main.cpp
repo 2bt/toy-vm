@@ -18,15 +18,15 @@ enum {
 
     INT_PRINT = 1,
     INT_SPRITE,
+    INT_SOUND,
     INT_RAND,
     INT_SQRT,
 };
 
 
 struct MemMap {
-    int32_t                        ret;
-    int32_t                        input;
-    std::array<APU::VoiceInput, 4> voices;
+    int32_t ret;
+    int32_t input;
 
     // interrupts
     union {
@@ -39,6 +39,13 @@ struct MemMap {
             int32_t t;
             int32_t flags;
         } sprite;
+        struct {
+            int32_t i;
+            int32_t pitch;
+            int32_t pw;
+            int32_t vol;
+            int32_t wave;
+        } sound;
         struct {
             int32_t lo;
             int32_t hi;
@@ -71,11 +78,12 @@ SDL_Texture* load_texture(SDL_Renderer* renderer, std::string file) {
 }
 
 
-VM            vm;
-MemMap&       mem = *(MemMap*)vm.mem.data();
-APU           apu;
-SDL_Renderer* renderer;
-SDL_Texture*  sprites;
+VM                                       vm;
+MemMap&                                  mem = *(MemMap*)vm.mem.data();
+std::array<APU::VoiceInput, APU::VOICES> voice_inputs{};
+APU                                      apu;
+SDL_Renderer*                            renderer;
+SDL_Texture*                             sprites;
 
 
 
@@ -100,6 +108,12 @@ void interrupt(int32_t n) {
         SDL_Rect src = { mem.sprite.s, mem.sprite.t, mem.sprite.w, mem.sprite.h };
         SDL_Rect dst = { mem.sprite.x, mem.sprite.y, mem.sprite.w, mem.sprite.h };
         SDL_RenderCopyEx(renderer, sprites, &src, &dst, 0, nullptr, SDL_RendererFlip(mem.sprite.flags));
+    }
+    else if (n == INT_SOUND) {
+        int32_t i = mem.sound.i;
+        if (i >= 0 && i < (int32_t)voice_inputs.size()) {
+            voice_inputs[i] = { mem.sound.pitch, mem.sound.pw, mem.sound.vol, mem.sound.wave };
+        }
     }
     else if (n == INT_RAND) {
         static std::random_device rd;
@@ -178,7 +192,7 @@ int main(int argc, char** argv) {
 
         SDL_RenderClear(renderer);
         vm.run(interrupt);
-        apu.next_frame(mem.voices);
+        apu.next_frame(voice_inputs);
         SDL_RenderPresent(renderer);
     }
 

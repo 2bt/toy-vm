@@ -117,6 +117,7 @@ class Func:
     body: list = None
     args: list = field(default_factory=list)
     calls: dict = field(default_factory=dict)
+    uses: int = 0
 
 
 INT = Type("int", 0, None)
@@ -694,6 +695,7 @@ class Parser:
                 if len(args) != len(func.args): self.error("wrong number of function arguments")
                 for t, n in zip(types, func.args):
                     if t != self.var_type[n]: self.error("type error")
+                func.uses += 1
                 self.current_func.calls[func.name] = None
                 return Call(name, args), func.type
 
@@ -991,6 +993,21 @@ class Codegen:
         assert False, f"unsupported expression {node}"
 
 
+    def should_inline(self, func):
+        if func.uses == 0: return False
+        if len(func.body) == 1 and isinstance(func.body[0], Asm): return True
+        return func.uses == 1
+
+    def inline(self, func):
+        exit = self.label("inline")
+        self.inline_exits.append(exit)
+        saved_func, saved_i = self.current_func, self.tmp_i
+        self.current_func = func
+        for st in func.body: self.stmt(st)
+        self.emit_label(exit)
+        self.inline_exits.pop()
+        self.current_func, self.tmp_i = saved_func, saved_i
+
     def call(self, node):
         func = self.funcs[node.name]
         staged = []
@@ -1004,7 +1021,8 @@ class Codegen:
         for a, e, v in zip(func.args, node.args, staged):
             if not v: v = self.value(e)
             self.emit(f"    mov {a}, {v}")
-        self.emit(f"    jsr {node.name}")
+        if self.should_inline(func): self.inline(func)
+        else: self.emit(f"    jsr {node.name}")
 
 
 
@@ -1075,7 +1093,10 @@ class Codegen:
             if node.expr:
                 v = self.value(node.expr)
                 self.emit(f"    mov _R, {v}")
-            self.emit(f"    ret")
+            if self.inline_exits:
+                self.emit(f"    jmp {self.inline_exits[-1]}")
+            else:
+                self.emit("    ret")
 
         elif isinstance(node, Call):
             self.call(node)
@@ -1090,12 +1111,13 @@ class Codegen:
 
 
     def compile(self, ast):
-        self.lines      = []
-        self.label_i    = 0
-        self.funcs      = ast.funcs
-        self.structs    = ast.structs
-        self.loop_stack = []
-        self.ast        = ast
+        self.lines        = []
+        self.label_i      = 0
+        self.funcs        = ast.funcs
+        self.structs      = ast.structs
+        self.loop_stack   = []
+        self.inline_exits = []
+        self.ast          = ast
 
         # functions
         lines = []
@@ -1115,6 +1137,7 @@ class Codegen:
 
 
         for name in func_order:
+            if self.should_inline(self.funcs[name]): continue
             self.current_func = self.funcs[name]
             self.tmp_vars     = {} # use dict to keep original order
             self.lines        = []

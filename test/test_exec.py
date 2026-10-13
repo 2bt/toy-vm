@@ -200,6 +200,59 @@ class ExecTests(unittest.TestCase):
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
             self.assertGreater(code.stat().st_size, 0)
 
+    def compile_asm(self, source):
+        with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
+            src = Path(directory) / "main.toy"
+            src.write_text(textwrap.dedent(source))
+            compiled = subprocess.run(
+                [sys.executable, ROOT / "compile.py", src],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            return src.with_suffix(".asm").read_text()
+
+    def test_inline_single_call(self):
+        asm = self.compile_asm("""
+            func add1(n):
+                return n + 1
+            func tick():
+                var x = add1(4)
+        """)
+        self.assertNotIn("jsr add1", asm)
+        self.assertNotIn("\nadd1:", asm)
+
+    def test_keep_function_called_twice(self):
+        asm = self.compile_asm("""
+            func add1(n):
+                return n + 1
+            func tick():
+                var x = add1(1)
+                var y = add1(2)
+        """)
+        self.assertIn("jsr add1", asm)
+
+    def test_inline_asm_wrapper_at_every_call(self):
+        asm = self.compile_asm("""
+            func bump(n):
+                asm "    add bump.n, #1"
+            func tick():
+                bump(1)
+                bump(2)
+        """)
+        self.assertNotIn("jsr bump", asm)
+        self.assertNotIn("\nbump:", asm)
+        self.assertEqual(asm.count("add bump.n, #1"), 2)
+
+    def test_inlined_branch_still_runs(self):
+        self.assertEqual(self.run_toy("""
+            func add1(n):
+                if n < 0:
+                    return 0
+                return n + 1
+            func tick():
+                print_n(add1(4))
+        """), "5\n")
+
     def test_assembler_can_run_twice(self):
         script = textwrap.dedent("""
             import sys

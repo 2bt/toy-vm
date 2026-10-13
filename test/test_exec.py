@@ -136,17 +136,89 @@ class ExecTests(unittest.TestCase):
                 print_n(z)
         """), "0\n9\n")
 
-    def test_unknown_variable(self):
+    def compile_text(self, source):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
             src = Path(directory) / "main.toy"
-            src.write_text("func tick():\n    x = 1\n")
-            compiled = subprocess.run(
+            src.write_text(textwrap.dedent(source))
+            return subprocess.run(
                 [sys.executable, ROOT / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
+
+    def test_self_call_is_unknown(self):
+        compiled = self.compile_text("""
+            func tick():
+                tick()
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("unknown function", compiled.stderr)
+
+    def test_unknown_variable(self):
+        compiled = self.compile_text("func tick():\n    x = 1\n")
         self.assertNotEqual(compiled.returncode, 0)
         self.assertIn("unknown variable", compiled.stderr)
 
+    def test_constant_divide_by_zero(self):
+        for expr in ("1 / 0", "1 % 0", "1 / (2 - 2)", "1 % (2 - 2)"):
+            compiled = self.compile_text(f"""
+                func tick():
+                    var n = {expr}
+            """)
+            self.assertNotEqual(compiled.returncode, 0, expr)
+            self.assertIn("division by zero", compiled.stderr)
+
+    def test_constant_math_matches_vm(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                var a = -3
+                var b = 2
+                print_n((-3 % 2) == (a % b))
+                print_n((-3 % 2) == -1)
+                print_n((-3 / 2) == (a / b))
+                print_n((0 or 4) == 1)
+                print_n((5 and 3) == 1)
+                print_n((2 or 0) == 1)
+        """), "1\n1\n1\n1\n1\n1\n")
+
+    def test_explicit_output_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            d = Path(directory)
+            src = d / "main.toy"
+            asm = d / "out.asm"
+            code = d / "out.code"
+            src.write_text("func tick():\n    return\n")
+            compiled = subprocess.run(
+                [sys.executable, ROOT / "compile.py", src, asm],
+                cwd=directory, capture_output=True, text=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            self.assertTrue(asm.is_file())
+            assembled = subprocess.run(
+                [sys.executable, ROOT / "assemble.py", asm, code],
+                cwd=directory, capture_output=True, text=True,
+            )
+            self.assertEqual(assembled.returncode, 0, assembled.stderr)
+            self.assertGreater(code.stat().st_size, 0)
+
+    def test_assembler_can_run_twice(self):
+        script = textwrap.dedent("""
+            import sys
+            from argparse import Namespace
+            from pathlib import Path
+            sys.path.insert(0, {root!r})
+            import assemble
+            for name in ("a", "b"):
+                src = Path(name + ".asm")
+                out = Path(name + ".code")
+                src.write_text("_R = 0\\n.code\\n    ret\\n")
+                assemble.asm(Namespace(src=src, out=out, print=False))
+        """).format(root=str(ROOT))
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=directory, capture_output=True, text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 if __name__ == "__main__":
     unittest.main()

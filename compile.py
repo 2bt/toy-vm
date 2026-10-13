@@ -192,6 +192,25 @@ JMP_SWAP = {
     "jne": "jne",
 }
 
+def fold_imm(op, a, b):
+    # Python and/or return an operand; % follows the divisor. The VM does neither.
+    if op == "and": return int(a != 0 and b != 0)
+    if op == "or": return int(a != 0 or b != 0)
+    if op == "<": return int(a < b)
+    if op == "<=": return int(a <= b)
+    if op == ">": return int(a > b)
+    if op == ">=": return int(a >= b)
+    if op == "==": return int(a == b)
+    if op == "!=": return int(a != b)
+    if op == "|": return a | b
+    if op == "&": return a & b
+    if op == "+": return a + b
+    if op == "-": return a - b
+    if op == "*": return a * b
+    if op == "/": return int(a / b)
+    if op == "%": return a - int(a / b) * b
+    raise AssertionError(op)
+
 ##############################
 # parser
 ##############################
@@ -392,7 +411,6 @@ class Parser:
             elif tok.k == "func":
                 func = Func(self.eat("id").v)
                 if func.name in self.funcs: self.error(f"function '{func.name}' already exists")
-                self.funcs[func.name] = func
 
                 def func_arg():
                     name = self.eat("id").v
@@ -417,6 +435,7 @@ class Parser:
                 func.type = self.type("->")
                 self.current_func = func
                 func.body = self.block()
+                self.funcs[func.name] = func
                 self.current_func = None
 
             else: assert False
@@ -588,8 +607,9 @@ class Parser:
             b, tb = self.expr(p + 1)
             op = tok.v
             if isinstance(a, Imm) and isinstance(b, Imm):
-                # constant fold
-                a = Imm(int(eval(f"{a.value} {op} {b.value}")))
+                if op in ("/", "%") and b.value == 0:
+                    self.error("division by zero", tok)
+                a = Imm(fold_imm(op, a.value, b.value))
                 ta = INT
                 continue
             if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = INT
@@ -1165,7 +1185,7 @@ def main(args):
     parser = Parser()
     parser.program(Path(args.src))
     asm = Codegen().compile(parser)
-    path = args.out or Path(args.src).with_suffix(".asm")
+    path = Path(args.out) if args.out else Path(args.src).with_suffix(".asm")
     path.write_text(asm)
 
 if __name__ == "__main__":

@@ -7,7 +7,8 @@ from collections import namedtuple
 
 OPCODE_TABLE = []
 def load_opcode_table():
-    with open("src/vm.cpp") as f:
+    path = pathlib.Path(__file__).resolve().parent / "src" / "vm.cpp"
+    with path.open() as f:
         while l := f.readline():
             if "OPCODE_TABLE" in l: break
         while l := f.readline():
@@ -48,12 +49,12 @@ def tokenize(line):
 
 
 variables = {}
-nr        = 0
 line      = None
+line_nr   = 0
 
 
 def bad_line():
-    sys.exit(f"{nr}: bad line:\n{line}")
+    sys.exit(f"{line_nr}: bad line:\n{line}")
 
 def expect(ts, t, v):
     match ts:
@@ -129,7 +130,6 @@ def optimize(insts, labels):
             if inst.target not in labels:
                 sys.exit(f"undefined label '{inst.target}'")
             dest = labels[inst.target]
-            assert 0 <= dest <= n
         if op == "ret":
             continue
         if op in ("jmp", "jsr"):
@@ -140,41 +140,39 @@ def optimize(insts, labels):
         else:
             preds[i + 1].append(i)
 
-    Addr = namedtuple("Addr", "mode value offset")
-    UNSET = Addr("unset", None, None)
-    addrs = [UNSET] * n
+    addrs = [None] * n
 
     def outgoing(p):
         inst = insts[p]
         if not inst.op.startswith("j") and inst.a_mode != "nil":
-            return Addr(inst.a_mode, inst.a_value, inst.a_offset)
+            return (inst.a_mode, inst.a_value, inst.a_offset)
         return addrs[p]
 
     changed = True
     while changed:
         changed = False
         for i in range(n):
-            incoming = UNSET
+            incoming = None
             for p in preds[i]:
                 other = outgoing(p)
-                if incoming is UNSET: incoming = other
-                elif other is UNSET: continue
-                elif incoming != other: incoming = None
+                if incoming is None: incoming = other
+                elif other is None: continue
+                elif incoming != other: incoming = ()
             if addrs[i] != incoming:
                 addrs[i] = incoming
                 changed = True
 
     optimized = []
     for i, inst in enumerate(insts):
-        have = None if addrs[i] is UNSET else addrs[i]
+        have = None if addrs[i] is None else addrs[i]
         a_mode, b_mode = inst.a_mode, inst.b_mode
         if have:
             if inst.op == "mov":
-                if a_mode == "abs" and have == Addr("abs", inst.a_value - 1, 0):
+                if a_mode == "abs" and have == ("abs", inst.a_value - 1, 0):
                     a_mode = "nxt"
-                elif a_mode == "idx" and have == Addr("idx", inst.a_value, inst.a_offset - 1):
+                elif a_mode == "idx" and have == ("idx", inst.a_value, inst.a_offset - 1):
                     a_mode = "nxt"
-            elif have == Addr(a_mode, inst.a_value, inst.a_offset):
+            elif have == (a_mode, inst.a_value, inst.a_offset):
                 a_mode = "pda"
         if b_mode == "imm":
             for value, mode in ((0, "zro"), (1, "one"), (-1, "neg")):
@@ -184,17 +182,19 @@ def optimize(insts, labels):
     return optimized
 
 def asm(args):
+    global variables, line_nr, line
+    variables = {}
+    line_nr = 0
+    line = None
     labels    = {}
     insts     = []
     section   = "code"
     data_base = None
     data      = []
 
-    for l in open(args.src):
-        global line
-        global nr
+    for l in args.src.open():
         line = l.rstrip()
-        nr += 1
+        line_nr += 1
         ts = tokenize(line)
 
         match ts:
@@ -222,7 +222,7 @@ def asm(args):
                 ts = rest
                 if section == "code":
                     if name in labels:
-                        sys.exit(f"{nr}: label '{name}' already used")
+                        sys.exit(f"{line_nr}: label '{name}' already used")
                     labels[name] = len(insts)
                 if section == "data":
                     if name in variables: bad_line()
@@ -347,7 +347,7 @@ def asm(args):
     code = []
     for cmd in bin_cmds: code += cmd
 
-    path = args.out or pathlib.Path(args.src).parent / "code"
+    path = args.out or args.src.parent / "code"
     out = bytearray()
     encode(out, data_base or 0)
     encode(out, len(data))
@@ -392,8 +392,8 @@ def asm(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("src")
-    parser.add_argument("out", nargs="?")
+    parser.add_argument("src", type=pathlib.Path)
+    parser.add_argument("out", nargs="?", type=pathlib.Path)
     parser.add_argument("--print", action="store_true")
     args = parser.parse_args()
     asm(args)

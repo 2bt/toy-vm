@@ -386,6 +386,18 @@ class ExecTests(unittest.TestCase):
         self.assertIn("mov b+1, a+1", asm)
         self.assertIn("mov b+2, a+2", asm)
 
+    def test_init_list_struct(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var b: V
+            func tick():
+                b = { 3, 7 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "3\n7\n")
+
     def test_assembler_mov_nxt_nxt(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
             src = Path(directory) / "t.asm"

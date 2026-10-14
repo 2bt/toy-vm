@@ -100,6 +100,8 @@ Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
 Assign   = namedtuple("Assign",   "op a b")
 Copy     = namedtuple("Copy",     "a b n")
+InitList = namedtuple("InitList", "items")  # items: InitList | (expr, type)
+Block    = namedtuple("Block",    "stmts")
 Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
 While    = namedtuple("While",    "cond body")
@@ -590,6 +592,12 @@ class Parser:
             if isinstance(a, VarRef) and a.name in self.var_bound:
                 self.error("variable is bound")
             op = self.eat().v
+            if op == "=" and self.peek() and self.peek().v == "{":
+                if not (is_array(ta) or is_struct(ta)):
+                    self.error("type error")
+                init = self.init_list()
+                self.eat("eol")
+                return Block(self.lower_init(a, ta, init))
             b, tb = self.expr()
             self.eat("eol")
             if op == "=":
@@ -607,6 +615,69 @@ class Parser:
             return Assign(op, a, b)
 
         self.error("invalid statement")
+
+    def init_list(self):
+        self.eat()  # {
+        items = []
+        if not (self.peek() and self.peek().v == "}"):
+            items.append(self.init_list_item())
+            while self.peek() and self.peek().v == ",":
+                self.eat()
+                items.append(self.init_list_item())
+        if not (self.peek() and self.peek().v == "}"):
+            self.error("expected }")
+        self.eat()
+        return InitList(items)
+
+    def init_list_item(self):
+        if self.peek() and self.peek().v == "{":
+            return self.init_list()
+        e, t = self.expr()
+        return (e, t)
+
+    def field_lvalue(self, base, offset):
+        if offset == 0: return base
+        return Deref(BinOp("+", addr_of(base), Imm(offset)))
+
+    def elem_lvalue(self, base, index, elem_ty):
+        if index == 0: return base
+        off = self.type_size(elem_ty) * index
+        return Deref(BinOp("+", addr_of(base), Imm(off)))
+
+    def lower_init(self, dst, ty, init):
+        if not isinstance(init, InitList):
+            self.error("expected { ... }")
+        stmts = []
+        if is_struct(ty):
+            fields = list(self.get_struct(ty.base).fields.values())
+            if len(init.items) != len(fields):
+                self.error("wrong number of initializers")
+            for item, f in zip(init.items, fields):
+                slot = self.field_lvalue(dst, f.offset)
+                stmts += self.lower_init_slot(slot, f.type, item)
+        elif is_array(ty):
+            elem = Type(ty.base, ty.ptr, None)
+            if len(init.items) != ty.array:
+                self.error("wrong number of initializers")
+            for i, item in enumerate(init.items):
+                slot = self.elem_lvalue(dst, i, elem)
+                stmts += self.lower_init_slot(slot, elem, item)
+        else:
+            self.error("type error")
+        return stmts
+
+    def lower_init_slot(self, dst, ty, item):
+        if is_array(ty) or is_struct(ty):
+            if isinstance(item, InitList):
+                return self.lower_init(dst, ty, item)
+            e, tb = item
+            self.check_types_for_assign(ty, tb, e)
+            return [Copy(dst, e, self.type_size(ty))]
+        if isinstance(item, InitList):
+            self.error("type error")
+        e, tb = item
+        self.check_types_for_assign(ty, tb, e)
+        return [Assign("=", dst, e)]
 
     def expr(self, minp=1):
         a, ta = self.unary()
@@ -1066,6 +1137,10 @@ class Codegen:
             assert isinstance(node.b, (VarRef, Deref))
             self.emit_copy(node.a, node.b, node.n)
 
+        elif isinstance(node, Block):
+            for st in node.stmts:
+                self.stmt(st)
+
         elif isinstance(node, While):
             L = self.label("while")
             T = self.label("while_true")
@@ -1147,7 +1222,6 @@ class Codegen:
         self.structs      = ast.structs
         self.loop_stack   = []
         self.inline_exits = []
-        self.ast          = ast
 
         # functions
         lines = []

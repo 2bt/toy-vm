@@ -1,4 +1,5 @@
 .vscode
 build
 code
+!game-breakout/code
 *.asm

@@ -398,6 +398,124 @@ class ExecTests(unittest.TestCase):
                 print_n(b.y)
         """), "3\n7\n")
 
+    def test_init_list_array(self):
+        self.assertEqual(self.run_toy("""
+            var a: int[3]
+            func tick():
+                a = { 1, 2, 3 }
+                print_n(a[0])
+                print_n(a[1])
+                print_n(a[2])
+        """), "1\n2\n3\n")
+
+    def test_init_list_expressions(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var b: V
+            var x = 4
+            var y = 3
+            func tick():
+                b = { x + 1, y * 2 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "5\n6\n")
+
+    def test_init_list_nested(self):
+        self.assertEqual(self.run_toy("""
+            struct Inner:
+                a
+                b
+            struct Outer:
+                i: Inner
+                x
+            var o: Outer
+            func tick():
+                o = { { 8, 9 }, 1 }
+                print_n(o.i.a)
+                print_n(o.i.b)
+                print_n(o.x)
+        """), "8\n9\n1\n")
+
+    def test_init_list_aggregate_slot(self):
+        self.assertEqual(self.run_toy("""
+            struct Inner:
+                a
+                b
+            struct Outer:
+                i: Inner
+                x
+            var u: Outer
+            var o: Outer
+            func tick():
+                u.i.a = 2
+                u.i.b = 3
+                o = { u.i, 1 }
+                print_n(o.i.a)
+                print_n(o.i.b)
+                print_n(o.x)
+        """), "2\n3\n1\n")
+
+    def test_init_list_via_pointer(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var b: V
+            func tick():
+                var p = &b
+                p.* = { 4, 5 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "4\n5\n")
+
+    def test_init_list_indexed(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var vs: V[3]
+            func tick():
+                vs[2] = { 1, 2 }
+                print_n(vs[2].x)
+                print_n(vs[2].y)
+        """), "1\n2\n")
+
+    def test_init_list_wrong_length(self):
+        compiled = self.compile_text("""
+            struct V:
+                x
+                y
+            var b: V
+            func tick():
+                b = { 1 }
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("wrong number of initializers", compiled.stderr)
+
+    def test_init_list_onto_scalar(self):
+        compiled = self.compile_text("""
+            var n
+            func tick():
+                n = { 1 }
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("type error", compiled.stderr)
+
+    def test_init_list_type_mismatch(self):
+        compiled = self.compile_text("""
+            struct V:
+                x
+                y
+            var b: V
+            var p: int*
+            func tick():
+                b = { p, 1 }
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("type error", compiled.stderr)
+
     def test_assembler_mov_nxt_nxt(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
             src = Path(directory) / "t.asm"

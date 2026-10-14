@@ -103,7 +103,7 @@ Copy     = namedtuple("Copy",     "a b n")
 InitList = namedtuple("InitList", "items")  # items: InitList | (expr, type)
 Block    = namedtuple("Block",    "stmts")
 Not      = namedtuple("Not",      "expr")
-Call     = namedtuple("Call",     "name args")
+Call     = namedtuple("Call",     "name setup")  # Block filling formals, then jsr
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
 Break    = namedtuple("Break",    "")
@@ -130,21 +130,11 @@ def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
 def is_ptr(t): return t.array == None and t.ptr > 0
 def is_array(t): return t.array != None
 def is_cond(t): return is_int(t) or is_ptr(t)
+def is_aggregate(t): return is_array(t) or is_struct(t)
 
 def addr_of(e):
     if isinstance(e, Deref): return e.expr
     return AddrOf(e)
-
-def has_call(e):
-    match e:
-        case Imm(_): return False
-        case VarRef(_): return False
-        case AddrOf(_): return False
-        case Call(_, _): return True
-        case Not(e): return has_call(e)
-        case Deref(e): return has_call(e)
-        case BinOp(_, a, b): return has_call(a) or has_call(b)
-    assert False, e
 
 def split_add(e):
     match e:
@@ -238,6 +228,7 @@ class Parser:
         self.var_type     = {}
         self.var_bound    = set()
         self.current_func = None
+        self.call_stack   = []
         # for includes
         self.included   = set()
         self.stack      = []
@@ -427,11 +418,8 @@ class Parser:
                 def func_arg():
                     name = self.eat("id").v
                     long = f"{func.name}.{name}"
-                    if long in self.var_type:
-                        self.error(f"variable '{name}' already exists")
+                    if long in self.var_type: self.error(f"variable '{name}' already exists")
                     self.var_type[long] = t = self.type()
-                    if is_array(t): self.error("local array not allowed")
-                    if is_struct(t): self.error("local struct not allowed")
                     if self.peek("@"):
                         self.eat()
                         self.var_addr[long] = self.const_expr()
@@ -445,8 +433,11 @@ class Parser:
                         func_arg()
                 self.eat(")")
                 func.type = self.type("->")
+                if is_aggregate(func.type): self.error("cannot return aggregate")
                 self.current_func = func
+                self.call_stack.append(func)
                 func.body = self.block()
+                self.call_stack.pop()
                 self.funcs[func.name] = func
                 self.current_func = None
 
@@ -464,7 +455,7 @@ class Parser:
                 self.eat("dedent")
         else:
             stmts.append(self.stmt())
-        return stmts
+        return Block(stmts)
 
     def after_if(self):
         cond, t = self.expr()
@@ -472,12 +463,11 @@ class Parser:
         then = self.block()
         if self.peek("elif"):
             self.eat()
-            return If(cond, then, [self.after_if()])
+            return If(cond, then, Block([self.after_if()]))
         if self.peek("else"):
             self.eat()
-            els = self.block()
-            return If(cond, then, els)
-        return If(cond, then, [])
+            return If(cond, then, self.block())
+        return If(cond, then, None)
 
     def stmt(self):
         if self.peek("while"):
@@ -493,8 +483,7 @@ class Parser:
             self.eat()
             name = self.eat("id").v
             long = f"{self.current_func.name}.{name}"
-            if long in self.var_bound:
-                self.error("variable is bound")
+            if long in self.var_bound: self.error("variable is bound")
             self.var_bound.add(long)
             if self.peek("="):
                 self.eat()
@@ -549,6 +538,7 @@ class Parser:
                 return Return(None)
             expr, ty = self.expr()
             self.eat("eol")
+            if is_aggregate(ty): self.error("cannot return aggregate")
             self.check_types_for_assign(self.current_func.type, ty, expr)
             return Return(expr)
 
@@ -567,20 +557,22 @@ class Parser:
             ta = None
             if self.peek(":"):
                 ta = self.type()
-                if is_array(ta): self.error("local array not allowed")
-                if is_struct(ta): self.error("local struct not allowed")
                 self.var_type[long] = ta
             if not self.peek("="):
                 self.eat("eol")
                 self.var_type[long] = ta or INT
                 return NoOp()
             self.eat("=")
+            if self.peek("{"):
+                if not ta or not (is_aggregate(ta)): self.error("type error")
+                init = self.init_list()
+                self.eat("eol")
+                return self.lower_init(a, ta, init)
             b, tb = self.expr()
-            if is_array(tb): self.error("local array not allowed")
-            if is_struct(tb): self.error("local struct not allowed")
             self.check_types_for_assign(ta, tb, b)
-            self.var_type[long] = tb
+            self.var_type[long] = ta or tb
             self.eat("eol")
+            if is_aggregate(tb): return Copy(a, b, self.type_size(tb))
             return Assign("=", a, b)
 
         a, ta = self.primary()
@@ -588,22 +580,20 @@ class Parser:
             self.eat("eol")
             return a
 
-        if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().v in ASSIGN_OPS:
+        if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().k in ASSIGN_OPS:
             if isinstance(a, VarRef) and a.name in self.var_bound:
                 self.error("variable is bound")
-            op = self.eat().v
-            if op == "=" and self.peek() and self.peek().v == "{":
-                if not (is_array(ta) or is_struct(ta)):
-                    self.error("type error")
+            op = self.eat().k
+            if op == "=" and self.peek("{"):
+                if not (is_aggregate(ta)): self.error("type error")
                 init = self.init_list()
                 self.eat("eol")
-                return Block(self.lower_init(a, ta, init))
+                return self.lower_init(a, ta, init)
             b, tb = self.expr()
             self.eat("eol")
             if op == "=":
                 self.check_types_for_assign(ta, tb, b)
-                if is_array(ta) or is_struct(ta):
-                    return Copy(a, b, self.type_size(ta))
+                if is_aggregate(ta): return Copy(a, b, self.type_size(ta))
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic scaling
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -617,67 +607,48 @@ class Parser:
         self.error("invalid statement")
 
     def init_list(self):
-        self.eat()  # {
+        self.eat("{")
         items = []
-        if not (self.peek() and self.peek().v == "}"):
-            items.append(self.init_list_item())
-            while self.peek() and self.peek().v == ",":
+        if not self.peek("}"):
+            while True:
+                if self.peek("{"): items.append(self.init_list())
+                else: items.append(self.expr())
+                if not self.peek(","): break
                 self.eat()
-                items.append(self.init_list_item())
-        if not (self.peek() and self.peek().v == "}"):
-            self.error("expected }")
-        self.eat()
+                if self.peek("}"): break
+        self.eat("}")
         return InitList(items)
 
-    def init_list_item(self):
-        if self.peek() and self.peek().v == "{":
-            return self.init_list()
-        e, t = self.expr()
-        return (e, t)
-
-    def field_lvalue(self, base, offset):
-        if offset == 0: return base
-        return Deref(BinOp("+", addr_of(base), Imm(offset)))
-
-    def elem_lvalue(self, base, index, elem_ty):
-        if index == 0: return base
-        off = self.type_size(elem_ty) * index
-        return Deref(BinOp("+", addr_of(base), Imm(off)))
-
     def lower_init(self, dst, ty, init):
-        if not isinstance(init, InitList):
-            self.error("expected { ... }")
         stmts = []
         if is_struct(ty):
             fields = list(self.get_struct(ty.base).fields.values())
             if len(init.items) != len(fields):
                 self.error("wrong number of initializers")
             for item, f in zip(init.items, fields):
-                slot = self.field_lvalue(dst, f.offset)
-                stmts += self.lower_init_slot(slot, f.type, item)
+                slot = dst if f.offset == 0 else Deref(BinOp("+", addr_of(dst), Imm(f.offset)))
+                stmts.append(self.lower_init_slot(slot, f.type, item))
         elif is_array(ty):
             elem = Type(ty.base, ty.ptr, None)
             if len(init.items) != ty.array:
                 self.error("wrong number of initializers")
             for i, item in enumerate(init.items):
-                slot = self.elem_lvalue(dst, i, elem)
-                stmts += self.lower_init_slot(slot, elem, item)
+                slot = dst if i == 0 else Deref(BinOp("+", addr_of(dst), Imm(self.type_size(elem) * i)))
+                stmts.append(self.lower_init_slot(slot, elem, item))
         else:
             self.error("type error")
-        return stmts
+        return Block(stmts)
 
     def lower_init_slot(self, dst, ty, item):
-        if is_array(ty) or is_struct(ty):
-            if isinstance(item, InitList):
-                return self.lower_init(dst, ty, item)
+        if is_aggregate(ty):
+            if isinstance(item, InitList): return self.lower_init(dst, ty, item)
             e, tb = item
             self.check_types_for_assign(ty, tb, e)
-            return [Copy(dst, e, self.type_size(ty))]
-        if isinstance(item, InitList):
-            self.error("type error")
+            return Copy(dst, e, self.type_size(ty))
+        if isinstance(item, InitList): self.error("type error")
         e, tb = item
         self.check_types_for_assign(ty, tb, e)
-        return [Assign("=", dst, e)]
+        return Assign("=", dst, e)
 
     def expr(self, minp=1):
         a, ta = self.unary()
@@ -760,31 +731,40 @@ class Parser:
                 func = self.funcs.get(name)
                 if not func: self.error(f"unknown function '{name}'")
                 self.eat()
-                args = []
-                types = []
+                if any(f.name == name for f in self.call_stack): self.error("recursive call")
+                for f in self.call_stack: f.calls[name] = None
+                self.call_stack.append(func)
+                setup = []
+                n_args = 0
                 if not self.peek(")"):
-                    e, t = self.expr()
-                    args.append(e)
-                    types.append(t)
-                    while self.peek(","):
+                    while True:
+                        if n_args >= len(func.args): self.error("wrong number of function arguments")
+                        formal = func.args[n_args]
+                        ty = self.var_type[formal]
+                        dst = VarRef(formal)
+                        if self.peek("{"):
+                            if not is_aggregate(ty): self.error("type error")
+                            setup.append(self.lower_init(dst, ty, self.init_list()))
+                        else:
+                            e, t = self.expr()
+                            self.check_types_for_assign(ty, t, e)
+                            if is_aggregate(ty): setup.append(Copy(dst, e, self.type_size(ty)))
+                            else: setup.append(Assign("=", dst, e))
+                        n_args += 1
+                        if not self.peek(","): break
                         self.eat()
-                        e, t = self.expr()
-                        args.append(e)
-                        types.append(t)
                 self.eat(")")
-                if len(args) != len(func.args): self.error("wrong number of function arguments")
-                for t, n in zip(types, func.args):
-                    if t != self.var_type[n]: self.error("type error")
+                self.call_stack.pop()
+                if n_args != len(func.args): self.error("wrong number of function arguments")
                 func.uses += 1
-                self.current_func.calls[func.name] = None
-                return Call(name, args), func.type
+                return Call(name, Block(setup)), func.type
 
             # variable
             node = None
             if self.current_func:
-                long = f"{self.current_func.name}.{name}"
-                if long in self.var_type:
-                    node, ty = VarRef(long), self.var_type[long]
+                long_name = f"{self.current_func.name}.{name}"
+                if long_name in self.var_type:
+                    node, ty = VarRef(long_name), self.var_type[long_name]
             if not node:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
                 node, ty = VarRef(name), self.var_type[name]
@@ -937,7 +917,7 @@ class Codegen:
             if t.startswith("[") and t[1:-1] in self.tmp_vars: return t[1:-1]
         t = f"{self.current_func.name}._T{self.tmp_i}"
         self.tmp_i += 1
-        self.tmp_vars[t] = ()
+        self.tmp_vars[t] = INT
         return t
 
     def label(self, base):
@@ -1060,8 +1040,8 @@ class Codegen:
                     if t != a: self.emit(f"    mov {t}, {a}")
                     self.emit(f"    {op} {t}, {b}")
                 else:
-                    t = self.newtmp(a, b)
-                    if t == a: self.emit(f"    {op} {t}, {b}")
+                    t = self.newtmp(b, a)
+                    if   t == a: self.emit(f"    {op} {t}, {b}")
                     elif t == b: self.emit(f"    {op} {t}, {a}")
                     else:
                         self.emit(f"    mov {t}, {a}")
@@ -1091,7 +1071,7 @@ class Codegen:
 
     def should_inline(self, func):
         if func.uses == 0: return False
-        if len(func.body) == 1 and isinstance(func.body[0], Asm): return True
+        if len(func.body.stmts) == 1 and isinstance(func.body.stmts[0], Asm): return True
         return func.uses == 1
 
     def inline(self, func):
@@ -1099,31 +1079,25 @@ class Codegen:
         self.inline_exits.append(exit)
         saved_func, saved_i = self.current_func, self.tmp_i
         self.current_func = func
-        for st in func.body: self.stmt(st)
+        self.stmt(func.body)
         self.emit_label(exit)
         self.inline_exits.pop()
         self.current_func, self.tmp_i = saved_func, saved_i
 
     def call(self, node):
-        func = self.funcs[node.name]
-        staged = []
-        for e in node.args:
-            t = None
-            if has_call(e):
-                v = self.value(e)
-                t = self.newtmp(v)
-                if t != v: self.emit(f"    mov {t}, {v}")
-            staged.append(t)
-        for a, e, v in zip(func.args, node.args, staged):
-            if not v: v = self.value(e)
-            self.emit(f"    mov {a}, {v}")
-        if self.should_inline(func): self.inline(func)
+        # Setup temps die at each arg and after the call; keep outer live _T*.
+        saved = self.tmp_i
+        for st in node.setup.stmts:
+            self.tmp_i = saved
+            self.stmt(st, reset_tmp=False)
+        if self.should_inline(self.funcs[node.name]): self.inline(self.funcs[node.name])
         else: self.emit(f"    jsr {node.name}")
+        self.tmp_i = saved
 
 
 
-    def stmt(self, node):
-        self.tmp_i = 0 # reuse temporary variables
+    def stmt(self, node, reset_tmp=True):
+        if reset_tmp: self.tmp_i = 0 # reuse temporary variables across statements
 
         if isinstance(node, Assign):
             assert isinstance(node.a, (VarRef, Deref))
@@ -1139,7 +1113,7 @@ class Codegen:
 
         elif isinstance(node, Block):
             for st in node.stmts:
-                self.stmt(st)
+                self.stmt(st, reset_tmp=reset_tmp)
 
         elif isinstance(node, While):
             L = self.label("while")
@@ -1149,7 +1123,7 @@ class Codegen:
             self.branch(node.cond, T, E)
             self.emit_label(T)
             self.loop_stack.append((L, E))
-            for st in node.body: self.stmt(st)
+            self.stmt(node.body)
             self.loop_stack.pop()
             self.emit(f"    jmp {L}")
             self.emit_label(E)
@@ -1164,7 +1138,7 @@ class Codegen:
             self.branch(node.cond, T, E)
             self.emit_label(T)
             self.loop_stack.append((N, E))
-            for st in node.body: self.stmt(st)
+            self.stmt(node.body)
             self.loop_stack.pop()
             self.emit_label(N)
             self.stmt(node.next)
@@ -1185,11 +1159,11 @@ class Codegen:
             E = self.label("if_end")
             self.branch(node.cond, T, F)
             self.emit_label(T)
-            for st in node.then: self.stmt(st)
+            self.stmt(node.then)
             if node.els:
                 self.emit(f"    jmp {E}")
                 self.emit_label(F)
-                for st in node.els: self.stmt(st)
+                self.stmt(node.els)
                 self.emit_label(E)
             else:
                 self.emit_label(F)
@@ -1248,12 +1222,12 @@ class Codegen:
             self.emit("")
             self.emit(f"    ; function {name}")
             self.emit(f"{name}:")
-            for st in self.current_func.body: self.stmt(st)
+            self.stmt(self.current_func.body)
             self.emit("    ret")
             # optimize asm
             lines += peephole(self.lines, self.tmp_vars)
             # add temporary variables to locals
-            for t in self.tmp_vars: ast.var_type[t] = INT
+            for t, ty in self.tmp_vars.items(): ast.var_type[t] = ty
 
         # variables with fixed addresses
         self.lines = ["_R = 0"]

@@ -5,21 +5,24 @@ func abs(x):
     return -x
 
 
-func init():
+struct Vec:
+    x: int
+    y: int
 
-struct A:
-    x
-    y
-    z
+struct Player:
+    pos: Vec
+    lives: int
 
-var a: A = { 1, 2, 3 }
-var b: A
+
+
+var player: Player = { {0, 1} }
+
+var t = 100
 
 func tick():
-    a.x = a.y * (a.z + 4)
+    t += 10
+
+    player.pos = { 1, t * 10 }
 
 
-    b = a
-    var foo = 4
-    for i = 2, 10:
-        a.x = i
+

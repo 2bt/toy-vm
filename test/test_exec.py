@@ -65,6 +65,80 @@ class ExecTests(unittest.TestCase):
                 print_n(add(2, 3))
         """), "5\n")
 
+    def test_nested_calls_distinct(self):
+        # Arg-position calls attribute to the callee being prepared so formals
+        # don't overlap callees; LTR into formals is then safe.
+        self.assertEqual(self.run_toy("""
+            func add(a, b):
+                return a + b
+            func mul(a, b):
+                return a * b
+            func tick():
+                print_n(add(mul(2, 3), mul(1, 1)))
+        """), "7\n")
+
+    def test_call_preserves_live_temps(self):
+        # Left side leaves a live _T; call setup must not reuse it (tmp_i=0).
+        # print_n is single-digit: (9-2) - f(1+1) == 5.
+        self.assertEqual(self.run_toy("""
+            var x = 9
+            var y = 2
+            var a = 1
+            var b = 1
+            func f(n):
+                return n
+            func tick():
+                print_n((x - y) - f(a + b))
+                print_n(f(0))
+        """), "5\n0\n")
+
+    def test_call_reuses_temps_across_setup(self):
+        # f(x-y) - f(a+b): after each call, setup temps are dead. Save/restore
+        # of tmp_i should need only _T0 for the first call result (not _T1).
+        with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
+            src = Path(directory) / "main.toy"
+            src.write_text(HEADER + textwrap.dedent("""
+                var x = 9
+                var y = 2
+                var a = 1
+                var b = 1
+                func f(n):
+                    return n
+                func tick():
+                    print_n(f(x - y) - f(a + b))
+                    print_n(f(0))
+            """))
+            compiled = subprocess.run(
+                [sys.executable, ROOT / "compile.py", src],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            asm = src.with_suffix(".asm").read_text()
+            self.assertIn("tick._T0", asm)
+            self.assertNotIn("tick._T1", asm)
+
+    def test_nested_same_function_forbidden(self):
+        compiled = self.compile_text("""
+            func add(a, b):
+                return a + b
+            func tick():
+                add(add(5, 1), add(1, 1))
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("recursive call", compiled.stderr)
+
+    def test_quasi_recursion_forbidden(self):
+        compiled = self.compile_text("""
+            func a(x):
+                return x
+            func b(x):
+                return a(x)
+            func tick():
+                a(b(a(1)))
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("recursive call", compiled.stderr)
+
     def test_pointer_deref(self):
         self.assertEqual(self.run_toy("""
             func tick():
@@ -394,6 +468,99 @@ class ExecTests(unittest.TestCase):
             var b: V
             func tick():
                 b = { 3, 7 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "3\n7\n")
+
+    def test_local_struct(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            func tick():
+                var b: V = { 3, 7 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "3\n7\n")
+
+    def test_local_array(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                var a: int[3] = { 1, 2, 3 }
+                print_n(a[0])
+                print_n(a[1])
+                print_n(a[2])
+        """), "1\n2\n3\n")
+
+    def test_local_struct_copy(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var g: V = { 4, 5 }
+            func tick():
+                var b: V = g
+                print_n(b.x)
+                print_n(b.y)
+        """), "4\n5\n")
+
+    def test_cannot_return_struct(self):
+        compiled = self.compile_text("""
+            struct V:
+                x
+                y
+            func f() -> V:
+                var b: V
+                return b
+            func tick():
+                f()
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("cannot return aggregate", compiled.stderr)
+
+    def test_struct_arg(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            func show(v: V):
+                print_n(v.x)
+                print_n(v.y)
+            func tick():
+                var a: V = { 3, 7 }
+                show(a)
+        """), "3\n7\n")
+
+    def test_struct_arg_init_list(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            func show(v: V):
+                print_n(v.x)
+                print_n(v.y)
+            func tick():
+                show({ 3, 7 })
+        """), "3\n7\n")
+
+    def test_array_arg_init_list(self):
+        self.assertEqual(self.run_toy("""
+            func show(a: int[3]):
+                print_n(a[0])
+                print_n(a[1])
+                print_n(a[2])
+            func tick():
+                show({ 1, 2, 3 })
+        """), "1\n2\n3\n")
+
+    def test_init_list_trailing_comma(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var b: V
+            func tick():
+                b = { 3, 7, }
                 print_n(b.x)
                 print_n(b.y)
         """), "3\n7\n")

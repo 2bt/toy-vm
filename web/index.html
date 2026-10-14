@@ -417,8 +417,7 @@ let code = null;
 let sprites = null;
 let keys = new Set();
 let voiceInputs = null;
-let lastTime = 0;
-let accumulator = 0;
+let nextFrameTime = 0;
 
 function showError(msg) {
   errEl.textContent = msg || "";
@@ -485,13 +484,12 @@ function pollInput() {
 
 function frame(timestamp) {
   if (!running) return;
-  if (!lastTime) lastTime = timestamp;
-  const delta = timestamp - lastTime;
-  lastTime = timestamp;
-  accumulator += delta;
+  if (!nextFrameTime) nextFrameTime = timestamp;
 
-  if (accumulator >= FRAME_MS) {
-    accumulator %= FRAME_MS;
+  if (timestamp >= nextFrameTime) {
+    nextFrameTime += FRAME_MS;
+    // Behind: skip catch-up rather than running multiple sim steps
+    if (nextFrameTime < timestamp) nextFrameTime = timestamp;
     try {
       pollInput();
       ctx.fillStyle = "#000";
@@ -535,8 +533,7 @@ async function startGame(gameId) {
     gamesEl.style.display = "none";
     document.querySelector("#ui h1").style.display = "none";
     playEl.style.display = "block";
-    lastTime = 0;
-    accumulator = 0;
+    nextFrameTime = 0;
     running = true;
     raf = requestAnimationFrame(frame);
   } catch (e) {

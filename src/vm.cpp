@@ -68,6 +68,7 @@ constexpr Opcode OPCODE_TABLE[] = {
     { MOV, NXT, IDX },
     { MOV, NXT, IMM },
     { MOV, NXT, ZRO },
+    { MOV, NXT, NXT },
 
     { CMP, ABS, ABS },
     { CMP, ABS, IND },
@@ -267,6 +268,7 @@ void VM::run(std::function<void(int32_t)> interrupt) {
     std::vector<int32_t> stack;
     int32_t* a   = &mem_at(0);
     int32_t  b   = 0;
+    int32_t  c   = 0;
     int32_t  res = 0;
     for (size_t steps = 0; steps < STEP_LIMIT; ++steps) {
         int32_t o = next();
@@ -275,17 +277,18 @@ void VM::run(std::function<void(int32_t)> interrupt) {
             exit(1);
         }
         Opcode oc = OPCODE_TABLE[o];
-        if (oc.a == NXT) ++a;
         if (oc.a == ABS) a = &mem_at(next());
         if (oc.a == IND) a = &mem_at(mem_at(next()));
+        if (oc.a == NXT) ++a;
         if (oc.a == IDX) { b = mem_at(next()); a = &mem_at(b + next()); };
         if (oc.b == ZRO) b = 0;
         if (oc.b == ONE) b = 1;
         if (oc.b == NEG) b = -1;
         if (oc.b == IMM) b = next();
-        if (oc.b == ABS) b = mem_at(next());
-        if (oc.b == IND) b = mem_at(mem_at(next()));
-        if (oc.b == IDX) { b = mem_at(next()); b = mem_at(b + next()); };
+        if (oc.b == ABS) b = mem_at(c = next());
+        if (oc.b == IND) b = mem_at(c = mem_at(next()));
+        if (oc.b == IDX) { b = mem_at(next()); b = mem_at(c = b + next()); };
+        if (oc.b == NXT) b = mem_at(++c);
         switch (oc.o) {
         case MOV: res = *a = b; break;
         case ADD: res = *a += b; break;

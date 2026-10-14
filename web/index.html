@@ -99,6 +99,7 @@ const OPCODE_TABLE = (() => {
   op(MOV, NXT, IDX);
   op(MOV, NXT, IMM);
   op(MOV, NXT, ZRO);
+  op(MOV, NXT, NXT);
 
   op(CMP, ABS, ABS);
   op(CMP, ABS, IND);
@@ -275,7 +276,7 @@ function loadProgram(bytes) {
 function runVM(mem, code) {
   let pc = 0;
   const stack = [];
-  let ai = 0, b = 0, res = 0;
+  let ai = 0, b = 0, c = 0, res = 0;
   const next = () => {
     if (pc < 0 || pc >= code.length) throw new Error("bad pc " + pc);
     return code[pc++];
@@ -289,17 +290,18 @@ function runVM(mem, code) {
     const o = next();
     if (o < 0 || o >= OPCODE_TABLE.length) throw new Error("illegal opcode " + o);
     const [op, am, bm] = OPCODE_TABLE[o];
-    if (am === NXT) ai = (ai + 1) | 0;
     if (am === ABS) ai = at(next());
     if (am === IND) ai = at(mem[at(next())]);
+    if (am === NXT) ai = (ai + 1) | 0;
     if (am === IDX) { b = mem[at(next())]; ai = at((b + next()) | 0); }
     if (bm === ZRO) b = 0;
     if (bm === ONE) b = 1;
     if (bm === NEG) b = -1;
     if (bm === IMM) b = next();
-    if (bm === ABS) b = mem[at(next())];
-    if (bm === IND) b = mem[at(mem[at(next())])];
-    if (bm === IDX) { b = mem[at(next())]; b = mem[at((b + next()) | 0)]; }
+    if (bm === ABS) { c = at(next()); b = mem[c]; }
+    if (bm === IND) { c = at(mem[at(next())]); b = mem[c]; }
+    if (bm === IDX) { b = mem[at(next())]; c = at((b + next()) | 0); b = mem[c]; }
+    if (bm === NXT) { c = (c + 1) | 0; b = mem[at(c)]; }
     switch (op) {
       case MOV: res = mem[ai] = b; break;
       case ADD: res = mem[ai] = (mem[ai] + b) | 0; break;

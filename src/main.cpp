@@ -164,7 +164,9 @@ int main(int argc, char** argv) {
     SDL_OpenAudio(&spec, nullptr);
     SDL_PauseAudio(0);
 
-    bool running = true;
+    constexpr Uint32 FRAME_MS = 1000 / 60;
+    Uint32           last_tick = SDL_GetTicks();
+    bool             running = true;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -178,6 +180,11 @@ int main(int argc, char** argv) {
                 break;
             }
         }
+
+        Uint32 now = SDL_GetTicks();
+        Uint32 elapsed = now - last_tick;
+        if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
+        last_tick = SDL_GetTicks();
 
         // input
         uint8_t const* ks = SDL_GetKeyboardState(nullptr);

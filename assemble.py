@@ -24,7 +24,9 @@ def load_opcode_table():
 
 load_opcode_table()
 
-Inst = namedtuple("Inst", "op target a_mode a_value a_offset b_mode b_value b_offset")
+Operand = namedtuple("Operand", "mode value offset", defaults=(0, 0))
+Inst = namedtuple("Inst", "op target a b")
+NIL  = Operand("nil")
 
 
 token_regex = re.compile(r"""
@@ -120,6 +122,7 @@ def encode(out: bytearray, v: int):
 #         u >>= 7
 #     out.append(u)
 
+
 def optimize(insts, labels):
     n = len(insts)
     preds = [[] for _ in range(n + 1)]  # n is the exit
@@ -140,52 +143,68 @@ def optimize(insts, labels):
         else:
             preds[i + 1].append(i)
 
-    addrs = [None] * n
+    def merge(slots, outgoing):
+        changed = True
+        while changed:
+            changed = False
+            for i in range(n):
+                incoming = None
+                for p in preds[i]:
+                    other = outgoing(p, slots)
+                    if incoming is None: incoming = other
+                    elif other is None: continue
+                    elif incoming != other: incoming = ()
+                if slots[i] != incoming:
+                    slots[i] = incoming
+                    changed = True
 
-    def outgoing(p):
+    # VM dest pointer `a` and source cursor `c` reaching each instruction
+    incoming_a = [None] * n
+    def outgoing_a(p, slots):
         inst = insts[p]
-        if not inst.op.startswith("j") and inst.a_mode != "nil":
-            return (inst.a_mode, inst.a_value, inst.a_offset)
-        return addrs[p]
+        if not inst.op.startswith("j") and inst.a.mode != "nil": return inst.a
+        return slots[p]
+    merge(incoming_a, outgoing_a)
 
-    changed = True
-    while changed:
-        changed = False
-        for i in range(n):
-            incoming = None
-            for p in preds[i]:
-                other = outgoing(p)
-                if incoming is None: incoming = other
-                elif other is None: continue
-                elif incoming != other: incoming = ()
-            if addrs[i] != incoming:
-                addrs[i] = incoming
-                changed = True
+    incoming_c = [None] * n
+    def outgoing_c(p, slots):
+        inst = insts[p]
+        if inst.b.mode in ("abs", "ind", "idx"): return inst.b
+        return slots[p]
+    merge(incoming_c, outgoing_c)
+
+    def is_nxt(have, o):
+        if have == Operand("abs", o.value - 1) and o.mode == "abs": return True
+        if have == Operand("idx", o.value, o.offset - 1) and o.mode == "idx": return True
+        if have == Operand("ind", o.value) and o.mode == "idx" and o.offset == 1: return True
+        return False
 
     optimized = []
     for i, inst in enumerate(insts):
-        have = None if addrs[i] is None else addrs[i]
-        a_mode, b_mode = inst.a_mode, inst.b_mode
-        if have:
-            if inst.op == "mov":
-                if a_mode == "abs" and have == ("abs", inst.a_value - 1, 0):
-                    a_mode = "nxt"
-                elif a_mode == "idx" and have == ("idx", inst.a_value, inst.a_offset - 1):
-                    a_mode = "nxt"
-            elif have == (a_mode, inst.a_value, inst.a_offset):
-                a_mode = "pda"
-        if b_mode == "imm":
+        have_a = None if incoming_a[i] is None else incoming_a[i]
+        have_c = None if incoming_c[i] is None else incoming_c[i]
+        a, b = inst.a, inst.b
+        if have_a:
+            if inst.op == "mov" and is_nxt(have_a, a):
+                a = a._replace(mode="nxt")
+            elif inst.op != "mov" and have_a == a:
+                a = a._replace(mode="pda")
+        if inst.op == "mov" and a.mode == "nxt" and have_c and is_nxt(have_c, b):
+            if (inst.op, "nxt", "nxt") in OPCODE_TABLE:
+                b = b._replace(mode="nxt")
+        if b.mode == "imm":
             for value, mode in ((0, "zro"), (1, "one"), (-1, "neg")):
-                if inst.b_value == value and (inst.op, a_mode, mode) in OPCODE_TABLE:
-                    b_mode = mode
-        optimized.append(inst._replace(a_mode=a_mode, b_mode=b_mode))
+                if b.value == value and (inst.op, a.mode, mode) in OPCODE_TABLE:
+                    b = b._replace(mode=mode)
+        optimized.append(inst._replace(a=a, b=b))
     return optimized
+
 
 def asm(args):
     global variables, line_nr, line
     variables = {}
-    line_nr = 0
-    line = None
+    line_nr   = 0
+    line      = None
     labels    = {}
     insts     = []
     section   = "code"
@@ -243,14 +262,9 @@ def asm(args):
                 ts = rest
             case _: bad_line()
 
-        is_jump  = op.startswith("j")
-        target   = None
-        a_mode   = "nil"
-        a_value  = 0
-        a_offset = 0
-        b_mode   = "nil"
-        b_value  = 0
-        b_offset = 0
+        is_jump = op.startswith("j")
+        target  = None
+        a, b    = NIL, NIL
 
         # operand a
         match ts:
@@ -259,79 +273,71 @@ def asm(args):
             # label
             case [("name", label)] if is_jump:
                 ts = []
-                b_mode = "imm" # label is actually operand b
+                b = Operand("imm")  # label is actually operand b
                 target = label
 
             # immediate
             case [("sym", "#"), *rest]:
-                b_mode = "imm" # XXX: only INT uses immediate
-                b_value, ts = eval_expression(rest)
+                # XXX: only INT uses immediate
+                value, ts = eval_expression(rest)
+                b = Operand("imm", value)
 
             # indirect
             case [("sym", "["), *rest]:
-                a_mode = "ind"
-                a_value, ts = eval_expression(rest)
+                value, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
-                # offset
+                a = Operand("ind", value)
                 match ts:
                     case [("sym", "+"), *rest]:
-                        a_mode = "idx"
-                        a_offset, ts = eval_expression(rest)
+                        offset, ts = eval_expression(rest)
+                        a = Operand("idx", value, offset)
 
             # absolute
             case rest:
-                a_mode = "abs"
-                a_value, ts = eval_expression(rest)
+                value, ts = eval_expression(rest)
+                a = Operand("abs", value)
 
         # operand b
         match ts:
             # immediate
             case [("sym", ","), ("sym", "#"), *rest]:
-                b_mode = "imm"
-                b_value, ts = eval_expression(rest)
+                value, ts = eval_expression(rest)
+                b = Operand("imm", value)
 
             # indirect
             case [("sym", ","), ("sym", "["), *rest]:
-                b_mode = "ind"
-                b_value, ts = eval_expression(rest)
+                value, ts = eval_expression(rest)
                 ts = expect(ts, "sym", "]")
-                # offset
+                b = Operand("ind", value)
                 match ts:
                     case [("sym", "+"), *rest]:
-                        b_mode = "idx"
-                        b_offset, ts = eval_expression(rest)
+                        offset, ts = eval_expression(rest)
+                        b = Operand("idx", value, offset)
 
             # absolute
             case [("sym", ","), *rest]:
-                b_mode = "abs"
-                b_value, ts = eval_expression(rest)
+                value, ts = eval_expression(rest)
+                b = Operand("abs", value)
 
         if ts: bad_line()
-        insts.append(Inst(
-            op, target,
-            a_mode, a_value, a_offset,
-            b_mode, b_value, b_offset,
-        ))
+        insts.append(Inst(op, target, a, b))
 
     insts = optimize(insts, labels)
     bin_cmds = []
     jumps = []
     for i, inst in enumerate(insts):
-        op = inst.op
-        a_mode, a_value, a_offset = inst.a_mode, inst.a_value, inst.a_offset
-        b_mode, b_value, b_offset = inst.b_mode, inst.b_value, inst.b_offset
-        if inst.target:
-            jumps.append((i, inst.target))
+        op, target, a, b = inst
+        if target: jumps.append((i, target))
         try:
-            opc = OPCODE_TABLE.index((op, a_mode, b_mode))
+            opc = OPCODE_TABLE.index((op, a.mode, b.mode))
         except ValueError:
-            print(op, a_mode, b_mode)
+            print(op, a.mode, b.mode)
             bad_line()
         bin_cmd = [opc]
-        if a_mode in ("abs", "ind", "idx"): bin_cmd.append(a_value)
-        if a_mode == "idx": bin_cmd.append(a_offset)
-        if b_mode in ("abs", "ind", "idx", "imm"): bin_cmd.append(b_value)
-        if b_mode == "idx": bin_cmd.append(b_offset)
+        if a.mode in ("abs", "ind", "idx"): bin_cmd.append(a.value)
+        if a.mode == "idx": bin_cmd.append(a.offset)
+        if b.mode in ("abs", "ind", "idx", "imm"): bin_cmd.append(b.value)
+        if b.mode == "idx": bin_cmd.append(b.offset)
         bin_cmds.append(bin_cmd)
 
     # fix labels
@@ -384,6 +390,7 @@ def asm(args):
                 if b == "zro": l += " #0"
                 if b == "one": l += " #1"
                 if b == "neg": l += " #-1"
+                if b == "nxt": l += " ++%"
             print(l)
     print("codes:", len(code))
     print("size:", len(out))

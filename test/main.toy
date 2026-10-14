@@ -13,10 +13,13 @@ struct A:
     z
 
 var a: A = { 1, 2, 3 }
+var b: A
 
 func tick():
     a.x = a.y * (a.z + 4)
 
+
+    b = a
     var foo = 4
     for i = 2, 10:
         a.x = i

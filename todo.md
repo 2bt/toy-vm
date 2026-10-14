@@ -4,12 +4,11 @@ music routine
 
 
 compiler
-+ [ ] make functions available before they are defined
-  + [ ] store last token of each arg for error logging
-  + [ ] resolve function calls after parsing
-  + [ ] only compile used functions
++ [ ] store last token of each arg for error logging
++ [ ] resolve function calls after parsing (?)
++ [ ] only compile used functions
 
 + better structs and array
 + [ ] local variables
-+ [ ] assign
-+ [ ] init via x = { ... }
++ [x] assign (structs / fixed arrays, word-wise copy)
++ [ ] init via x = { ... } (full expressions per slot)

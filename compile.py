@@ -99,6 +99,7 @@ AddrOf   = namedtuple("AddrOf",   "lv")
 Deref    = namedtuple("Deref",    "expr")
 BinOp    = namedtuple("BinOp",    "op a b")
 Assign   = namedtuple("Assign",   "op a b")
+Copy     = namedtuple("Copy",     "a b n")
 Not      = namedtuple("Not",      "expr")
 Call     = namedtuple("Call",     "name args")
 While    = namedtuple("While",    "cond body")
@@ -155,6 +156,14 @@ def split_add(e):
             assert not s1 or not s2
             return (d, s1 or s2, k1 + k2)
     return (e, None, 0)
+
+def lvalue_at(reg, sym, off):
+    if reg:
+        a = f"[{reg}]"
+        if sym: a += f"+{sym}"
+        if off: a += f"+{off}"
+        return a
+    return f"{sym}+{off}" if off else sym
 
 
 PRECEDENCE = {
@@ -419,8 +428,8 @@ class Parser:
                     if long in self.var_type:
                         self.error(f"variable '{name}' already exists")
                     self.var_type[long] = t = self.type()
-                    if is_array(t): self.error("local arrays not allowed")
-                    if is_struct(t): self.error("local structs not allowed")
+                    if is_array(t): self.error("local array not allowed")
+                    if is_struct(t): self.error("local struct not allowed")
                     if self.peek("@"):
                         self.eat()
                         self.var_addr[long] = self.const_expr()
@@ -556,8 +565,8 @@ class Parser:
             ta = None
             if self.peek(":"):
                 ta = self.type()
-                if is_array(ta): self.error("local arrays not allowed")
-                if is_struct(ta): self.error("local structs not allowed")
+                if is_array(ta): self.error("local array not allowed")
+                if is_struct(ta): self.error("local struct not allowed")
                 self.var_type[long] = ta
             if not self.peek("="):
                 self.eat("eol")
@@ -565,8 +574,8 @@ class Parser:
                 return NoOp()
             self.eat("=")
             b, tb = self.expr()
-            if is_array(tb): self.error("local arrays not allowed")
-            if is_struct(tb): self.error("local structs not allowed")
+            if is_array(tb): self.error("local array not allowed")
+            if is_struct(tb): self.error("local struct not allowed")
             self.check_types_for_assign(ta, tb, b)
             self.var_type[long] = tb
             self.eat("eol")
@@ -584,9 +593,9 @@ class Parser:
             b, tb = self.expr()
             self.eat("eol")
             if op == "=":
-                if is_array(ta): self.error("array assign not allowed")
-                if is_struct(ta): self.error("struct assign not allowed")
                 self.check_types_for_assign(ta, tb, b)
+                if is_array(ta) or is_struct(ta):
+                    return Copy(a, b, self.type_size(ta))
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic scaling
                 elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
@@ -921,6 +930,30 @@ class Codegen:
             self.emit(f"    jeq {F}")
 
 
+    def lvalue_base(self, node):
+        """Return (reg|None, sym|None, off) for the first word of an lvalue."""
+        if isinstance(node, VarRef):
+            return None, node.name, 0
+        assert isinstance(node, Deref)
+        dyn, sym, off = split_add(node.expr)
+        if not dyn:
+            return None, sym, off
+        reg = self.value(dyn)
+        if reg.startswith("["):
+            t = self.newtmp()
+            self.emit(f"    mov {t}, {reg}")
+            reg = t
+        return reg, sym, off
+
+    def emit_copy(self, a, b, n):
+        ar, asym, aoff = self.lvalue_base(a)
+        br, bsym, boff = self.lvalue_base(b)
+        for i in range(n):
+            dst = lvalue_at(ar, asym, aoff + i)
+            src = lvalue_at(br, bsym, boff + i)
+            if dst != src:
+                self.emit(f"    mov {dst}, {src}")
+
     def value(self, node):
         if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, VarRef): return node.name
@@ -930,16 +963,8 @@ class Codegen:
             return f"#{v}"
 
         if isinstance(node, Deref):
-            dyn, sym, off = split_add(node.expr)
-            if not dyn: return f"{sym}+{off}"
-            a = self.value(dyn)
-            if a.startswith("["):
-                t, a = a, self.newtmp()
-                self.emit(f"    mov {a}, {t}")
-            a = f"[{a}]"
-            if sym: a += f"+{sym}"
-            if off: a += f"+{off}"
-            return a
+            reg, sym, off = self.lvalue_base(node)
+            return lvalue_at(reg, sym, off)
 
         if isinstance(node, Not):
             t = self.newtmp()
@@ -1035,6 +1060,11 @@ class Codegen:
             b = self.value(node.b)
             op = ASSIGN_OPS[node.op]
             if a != b or node.op != "=": self.emit(f"    {op} {a}, {b}")
+
+        elif isinstance(node, Copy):
+            assert isinstance(node.a, (VarRef, Deref))
+            assert isinstance(node.b, (VarRef, Deref))
+            self.emit_copy(node.a, node.b, node.n)
 
         elif isinstance(node, While):
             L = self.label("while")

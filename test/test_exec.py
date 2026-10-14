@@ -261,6 +261,156 @@ class ExecTests(unittest.TestCase):
                 print_n(add1(4))
         """), "5\n")
 
+    def test_struct_assign(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V
+            var b: V
+            func tick():
+                a.x = 3
+                a.y = 7
+                b = a
+                print_n(b.x)
+                print_n(b.y)
+        """), "3\n7\n")
+
+    def test_array_assign(self):
+        self.assertEqual(self.run_toy("""
+            var a: int[3]
+            var b: int[3]
+            func tick():
+                a[0] = 1
+                a[1] = 2
+                a[2] = 3
+                b = a
+                print_n(b[0])
+                print_n(b[1])
+                print_n(b[2])
+        """), "1\n2\n3\n")
+
+    def test_struct_assign_via_pointer(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V
+            var b: V
+            func tick():
+                a.x = 4
+                a.y = 5
+                var p = &b
+                p.* = a
+                print_n(b.x)
+                print_n(b.y)
+        """), "4\n5\n")
+
+    def test_struct_assign_indexed(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var vs: V[3]
+            func tick():
+                vs[0].x = 1
+                vs[0].y = 2
+                vs[2] = vs[0]
+                print_n(vs[2].x)
+                print_n(vs[2].y)
+        """), "1\n2\n")
+
+    def test_struct_assign_nested_field(self):
+        self.assertEqual(self.run_toy("""
+            struct Inner:
+                a
+                b
+            struct Outer:
+                i: Inner
+                x
+            var u: Outer
+            var v: Outer
+            func tick():
+                u.i.a = 8
+                u.i.b = 9
+                u.x = 1
+                v.i = u.i
+                print_n(v.i.a)
+                print_n(v.i.b)
+                print_n(v.x)
+        """), "8\n9\n0\n")
+
+    def test_struct_assign_pointer_to_pointer(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V
+            var b: V
+            func tick():
+                a.x = 6
+                a.y = 7
+                var src = &a
+                var dst = &b
+                dst.* = src.*
+                print_n(b.x)
+                print_n(b.y)
+        """), "6\n7\n")
+
+    def test_struct_self_assign(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V
+            func tick():
+                a.x = 2
+                a.y = 3
+                a = a
+                print_n(a.x)
+                print_n(a.y)
+        """), "2\n3\n")
+
+    def test_struct_assign_emits_word_moves(self):
+        asm = self.compile_asm("""
+            struct V:
+                x
+                y
+                z
+            var a: V
+            var b: V
+            func tick():
+                b = a
+        """)
+        self.assertGreaterEqual(asm.count("mov b"), 3)
+        self.assertIn("mov b+1, a+1", asm)
+        self.assertIn("mov b+2, a+2", asm)
+
+    def test_assembler_mov_nxt_nxt(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
+            src = Path(directory) / "t.asm"
+            out = Path(directory) / "code"
+            src.write_text(textwrap.dedent("""\
+                _R = 0
+                a = 10
+                b = 20
+                .code
+                    mov b, a
+                    mov b+1, a+1
+                    mov b+2, a+2
+                    ret
+            """))
+            result = subprocess.run(
+                [sys.executable, ROOT / "assemble.py", src, out, "--print"],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # first mov keeps both operands; the next two should be opcode-only
+            self.assertIn("mov ++%, ++%", result.stdout)
+            self.assertEqual(result.stdout.count("mov ++%, ++%"), 2)
+            # mov abs,abs (3) + two nxt,nxt (1 each) + ret (1)
+            self.assertIn("codes: 6", result.stdout)
+
     def test_assembler_can_run_twice(self):
         script = textwrap.dedent("""
             import sys

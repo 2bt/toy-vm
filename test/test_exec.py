@@ -71,6 +71,36 @@ class ExecTests(unittest.TestCase):
                 ))
         """), "ok\nab\nc\n4\nxy\n")
 
+    def test_string_index_const(self):
+        self.assertEqual(self.run_toy("""
+            const C = "hello"[2]
+            func tick():
+                digit[0] = C
+                digit[1] = 0
+                print(digit)
+                digit[0] = "hello"[0]
+                print(digit)
+                print_n("hi".len)
+                digit[0] = ("ab" "c")[1]
+                print(digit)
+        """), "l\nh\n3\nb\n")
+
+    def test_string_init_padded_array(self):
+        self.assertEqual(self.run_toy("""
+            var g: int[8] = "hi"
+            var inferred = "hey"
+            func tick():
+                var l: int[8] = "hello"
+                var m: int[] = "ab"
+                print(g)
+                print(l)
+                print(inferred)
+                print(m)
+                print_n(g.len - 3)
+                print_n(l[5])
+                print_n(m.len)
+        """), "hi\nhello\nhey\nab\n5\n0\n3\n")
+
     def test_char_literal(self):
         self.assertEqual(self.run_toy("""
             func tick():

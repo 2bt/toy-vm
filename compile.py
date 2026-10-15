@@ -121,6 +121,7 @@ If       = namedtuple("If",       "cond then els")
 Return   = namedtuple("Return",   "expr")
 Asm      = namedtuple("Asm",      "asm")
 NoOp     = namedtuple("NoOp",     "")
+StrLit   = namedtuple("StrLit",   "data")  # ints including trailing 0; type int[len]
 
 @dataclass
 class Func:
@@ -289,42 +290,98 @@ class Parser:
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
 
+    def intern_str(self, e):
+        """Turn a StrLit into a named global array (for address/copy use)."""
+        name = f"_str_{len(self.var_data)}"
+        self.var_type[name] = Type("int", 0, len(e.data))
+        self.var_data[name] = e.data
+        return VarRef(name)
+
+    def str_data_for_array(self, e, ty):
+        """Pad/truncate-check a StrLit for an int[N] destination. Returns data list."""
+        if not is_array(ty) or ty.base != "int" or ty.ptr != 0:
+            self.error("type error")
+        if ty.array == -1:
+            return e.data, Type(ty.base, ty.ptr, len(e.data))
+        if len(e.data) > ty.array:
+            self.error("type error")
+        return e.data + [0] * (ty.array - len(e.data)), ty
+
     def check_assign(self, want, e, t):
         """Decay array→ptr if want is a pointer, then type-check. Returns (e, t)."""
         if want is not None and is_ptr(want) and is_array(t):
+            if isinstance(e, StrLit): e = self.intern_str(e)
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
+        elif isinstance(e, StrLit) and (want is None or is_array(want)):
+            if want is None:
+                return self.intern_str(e), t
+            data, want = self.str_data_for_array(e, want)
+            return self.intern_str(StrLit(data)), want
         if want is not None and want != t:
             if not (is_ptr(want) and is_int(t) and e == Imm(0)):
                 self.error("type error")
         return e, t
 
-    def global_var(self):
-        name = self.eat("id").v
-        if name in self.var_type: self.error(f"variable '{name}' already exists")
-        ty = self.type(auto_array_size=True)
+    def resolve_var_type(self, annotated, inferred=None):
+        """Combine optional ': Type' with inferred rhs type. Rejects unsized arrays."""
+        if annotated is None:
+            ty = inferred or INT
+        elif annotated.array == -1:
+            if not (inferred and is_array(inferred)):
+                self.error("invalid array size")
+            ty = Type(annotated.base, annotated.ptr, inferred.array)
+        else:
+            ty = annotated
+        if is_array(ty) and ty.array == -1:
+            self.error("invalid array size")
+        return ty
 
-        if self.peek("@"): # has address
+    def var_decl(self, name, local=False):
+        """Shared global/local var parsing. Returns a stmt for locals, None for globals."""
+        if name in self.var_type: self.error(f"variable '{name}' already exists")
+        ty = self.type(auto_array_size=True) if self.peek(":") else None
+        dst = VarRef(name)
+
+        if self.peek("@"):
+            if local: self.error("@ only allowed on globals")
             self.eat()
             self.var_addr[name] = self.const_expr()
+            self.var_type[name] = self.resolve_var_type(ty)
+            return
 
-        elif self.peek("="): # has data
-            self.eat()
-            if self.peek("string"):
-                data = list(map(ord, self.eat("string").v)) + [0]
-                if ty.array == -1: ty = Type(ty.base, ty.ptr, len(data))
-                elif not is_array(ty) or ty.array != len(data):
-                    self.error("type error")
-            elif self.peek("{"):
-                init = self.init_list()
-                if ty.array == -1: ty = Type(ty.base, ty.ptr, len(init.items))
-                data = self.const_init_data(ty, init)
-            else:
-                if ty.array == -1: self.error("invalid array size")
-                data = self.const_init_slot(ty, self.expr())
+        if not self.peek("="):
+            self.var_type[name] = self.resolve_var_type(ty)
+            return NoOp()
+
+        self.eat("=")
+        if self.peek("{"):
+            if ty is None or not is_aggregate(ty): self.error("type error")
+            init = self.init_list()
+            if ty.array == -1: ty = Type(ty.base, ty.ptr, len(init.items))
+            self.var_type[name] = ty
+            if local: return self.lower_init(dst, ty, init)
+            data = self.const_init_data(ty, init)
             if any(x != 0 for x in data): self.var_data[name] = data
+            return
 
-        if ty.array == -1: self.error("invalid array size")
-        self.var_type[name] = ty
+        e, t = self.expr()
+        if not local and isinstance(e, StrLit):
+            # Global string: store bytes in this var (no extra _str_* copy).
+            if ty is None: data, ty = e.data, Type("int", 0, len(e.data))
+            elif is_array(ty): data, ty = self.str_data_for_array(e, ty)
+            else: self.error("type error")
+            self.var_type[name] = ty
+            if any(x != 0 for x in data): self.var_data[name] = data
+            return
+
+        e, t = self.check_assign(ty, e, t)
+        self.var_type[name] = ty = self.resolve_var_type(ty, t)
+        if local:
+            if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
+            return Assign("=", dst, e)
+        data = self.const_init_slot(ty, (e, t))
+        if any(x != 0 for x in data): self.var_data[name] = data
+        return None
 
     def get_struct(self, name):
         if name not in self.structs: self.error(f"unknown struct '{name}'")
@@ -353,7 +410,7 @@ class Parser:
                 self.eat("eol")
 
             elif tok.k == "var":
-                self.global_var()
+                self.var_decl(self.eat("id").v, local=False)
                 self.eat("eol")
 
             elif tok.k == "struct":
@@ -514,27 +571,9 @@ class Parser:
             self.eat()
             name = self.eat("id").v
             long = f"{self.current_func.name}.{name}"
-            if long in self.var_type: self.error(f"variable '{name}' already exists")
-            a = VarRef(long)
-            ta = None
-            if self.peek(":"):
-                ta = self.type()
-                self.var_type[long] = ta
-            if not self.peek("="):
-                self.eat("eol")
-                self.var_type[long] = ta or INT
-                return NoOp()
-            self.eat("=")
-            if self.peek("{"):
-                if not ta or not (is_aggregate(ta)): self.error("type error")
-                init = self.init_list()
-                self.eat("eol")
-                return self.lower_init(a, ta, init)
-            b, tb = self.check_assign(ta, *self.expr())
-            self.var_type[long] = ta or tb
+            stmt = self.var_decl(long, local=True)
             self.eat("eol")
-            if is_aggregate(tb): return Copy(a, b, self.type_size(tb))
-            return Assign("=", a, b)
+            return stmt
 
         a, ta = self.primary()
         if isinstance(a, Call):
@@ -651,6 +690,7 @@ class Parser:
             elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = INT
             elif op in ("+", "-") and is_int(tb):
                 if is_array(ta):
+                    if isinstance(a, StrLit): a = self.intern_str(a)
                     a, ta = addr_of(a), Type(ta.base, ta.ptr + 1, None)
                 if is_ptr(ta):
                     # pointer arithmetic
@@ -698,16 +738,24 @@ class Parser:
             if self.peek("["):
                 self.eat()
                 if is_array(ty):
-                    base, from_ptr = addr_of(node), False
+                    from_ptr = False
                     ty = Type(ty.base, ty.ptr, None)
                 elif is_ptr(ty):
-                    base, from_ptr = node, True
+                    from_ptr = True
                     ty = Type(ty.base, ty.ptr - 1, None)
                 else:
                     self.error("cannot index")
                 idx, tidx = self.expr()
                 if not is_int(tidx): self.error("index must be int")
                 self.eat("]")
+                # Const index into string literal -> immediate
+                if isinstance(node, StrLit) and isinstance(idx, Imm):
+                    i = idx.value
+                    if i < 0 or i >= len(node.data): self.error("index out of bounds")
+                    node, ty = Imm(node.data[i]), ty
+                    continue
+                if isinstance(node, StrLit): node = self.intern_str(node)
+                base = node if from_ptr else addr_of(node)
                 elem_size = self.type_size(ty)
                 if idx != Imm(0):
                     if elem_size > 1:
@@ -729,10 +777,12 @@ class Parser:
                 if is_array(ty):
                     if field == "len": return Imm(ty.array), INT
                     elif field == "ptr":
+                        if isinstance(node, StrLit): node = self.intern_str(node)
                         node = AddrOf(node)
                         ty   = Type(ty.base, ty.ptr + 1, None)
                         continue
                     elif field == "limit":
+                        if isinstance(node, StrLit): node = self.intern_str(node)
                         offset = self.type_size(Type(ty.base, ty.ptr, None)) * ty.array
                         node = BinOp("+", AddrOf(node), Imm(offset))
                         ty   = Type(ty.base, ty.ptr + 1, None)
@@ -760,14 +810,10 @@ class Parser:
             else: n = int(v)
             return Imm(n), INT
 
-        # string literal -> int*
+        # string literal -> int[N] (N includes trailing 0)
         if self.peek("string"):
             data = list(map(ord, self.eat().v)) + [0]
-            name = f"_str_{len(self.var_data)}"
-            self.var_type[name] = Type("int", 0, len(data))
-            self.var_data[name]  = data
-            node = AddrOf(VarRef(name))
-            ty   = Type("int", 1, None)
+            node, ty = StrLit(data), Type("int", 0, len(data))
 
         else:
             name = self.eat("id").v

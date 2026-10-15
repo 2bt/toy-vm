@@ -57,6 +57,14 @@ class ExecTests(unittest.TestCase):
                 print("ok")
         """), "ok\n")
 
+    def test_char_literal(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                print_n('5' - '0')
+                print_n('A' - 60)
+                print_n('\\n' - 5)
+        """), "5\n5\n5\n")
+
     def test_call_and_add(self):
         self.assertEqual(self.run_toy("""
             func add(a, b):

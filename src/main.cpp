@@ -31,6 +31,9 @@ struct MemMap {
     // interrupts
     union {
         struct {
+            int32_t msg;
+        } print;
+        struct {
             int32_t x;
             int32_t y;
             int32_t w;
@@ -55,9 +58,6 @@ struct MemMap {
             int32_t b;
             int32_t c;
         } math;
-        struct {
-            int32_t msg;
-        } print;
     };
 };
 

@@ -16,7 +16,7 @@ var format_str: int[10]
 
 func int_to_str(n):
     if n == 0:
-        format_str[0] = 48
+        format_str[0] = '0'
         format_str[1] = 0
         return 1
 
@@ -24,13 +24,13 @@ func int_to_str(n):
     var p = format_str.ptr
     if n < 0:
         n *= -1
-        p.* = 45    # sign
+        p.* = '-'
         p += 1
         len += 1
 
     var q = p
     while n:
-        p.* = n % 10 + 48
+        p.* = n % 10 + '0'
         n /= 10
         p += 1
         len += 1

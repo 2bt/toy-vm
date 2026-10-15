@@ -24,6 +24,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
                        [+\-*/%{}()<>\[\]=,.:&|@]   )|
     [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
+    [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
 
@@ -64,7 +65,10 @@ def tokenize(path):
         if k == "string":
             line += v.count("\n")
             v = ast.literal_eval(v)
+        if k == "char":
+            k, v = "num", str(ord(ast.literal_eval(v)))
         if k == "id" and v in KEYWORDS: k = v
+
         if k == "sym":
             k = v
             if k in "([{": paren_depth += 1

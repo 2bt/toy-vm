@@ -17,24 +17,6 @@ const SNDCMD_WAIT       = 8
 const SNDCMD_LOOP_START = 9
 const SNDCMD_LOOP_END   = 10
 
-struct Voice:
-    pitch
-    pw
-    vol
-    wave
-
-var voices: Voice[4]
-
-struct SoundCommandStream:
-    index: int
-    pos:   int*
-    loop:  int*
-    wait:  int
-
-struct SoundEffect:
-    stream: SoundCommandStream*
-    start:  int*
-
 var SOUND_COMMANDS_BING: int[] = {
     SNDCMD_SET_WAVE,    WAVE_NOISE,
     SNDCMD_SET_VOL,     60,
@@ -136,6 +118,20 @@ var SOUND_COMMANDS_NOSPIN: int[] = {
     SNDCMD_DONE,
 }
 
+struct SoundCommandStream:
+    index:  int
+    pos:    int*
+    loop:   int*
+    wait:   int
+    # voice state
+    pitch:  int
+    pw:     int
+    vol:    int
+    wave:   int
+
+struct SoundEffect:
+    index: int
+    start: int*
 
 var sound_command_streams: SoundCommandStream[] = {
     { 0 },
@@ -144,24 +140,24 @@ var sound_command_streams: SoundCommandStream[] = {
 }
 
 var sound_effects: SoundEffect[] = {
-    { &sound_command_streams[0], SOUND_COMMANDS_BING.ptr    },
-    { &sound_command_streams[1], SOUND_COMMANDS_BLOCK.ptr   },
-    { &sound_command_streams[1], SOUND_COMMANDS_UNSTICK.ptr },
-    { &sound_command_streams[1], SOUND_COMMANDS_DIE.ptr     },
-    { &sound_command_streams[2], SOUND_COMMANDS_SPIN.ptr    },
-    { &sound_command_streams[2], SOUND_COMMANDS_NOSPIN.ptr  },
+    { 0, SOUND_COMMANDS_BING.ptr    },
+    { 1, SOUND_COMMANDS_BLOCK.ptr   },
+    { 1, SOUND_COMMANDS_UNSTICK.ptr },
+    { 1, SOUND_COMMANDS_DIE.ptr     },
+    { 2, SOUND_COMMANDS_SPIN.ptr    },
+    { 2, SOUND_COMMANDS_NOSPIN.ptr  },
 }
 
 
 func play_sound(s):
     var effect = &sound_effects[s]
-    effect.stream.pos  = effect.start
-    effect.stream.wait = 0
+    var stream = &sound_command_streams[effect.index]
+    stream.pos  = effect.start
+    stream.wait = 0
 
 
 func update_sound():
     for s in sound_command_streams:
-        var voice = &voices[s.index]
         while s.pos:
             if s.wait > 0:
                 s.wait -= 1
@@ -170,25 +166,25 @@ func update_sound():
             s.pos += 1
             var val = s.pos.*
             if cmd == SNDCMD_SET_PITCH:
-                voice.pitch = val
+                s.pitch = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_PITCH:
-                voice.pitch += val
+                s.pitch += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_VOL:
-                voice.vol = val
+                s.vol = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_VOL:
-                voice.vol += val
+                s.vol += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_PW:
-                voice.pw = val
+                s.pw = val
                 s.pos += 1
             elif cmd == SNDCMD_INC_PW:
-                voice.pw += val
+                s.pw += val
                 s.pos += 1
             elif cmd == SNDCMD_SET_WAVE:
-                voice.wave = val
+                s.wave = val
                 s.pos += 1
             elif cmd == SNDCMD_WAIT:
                 s.wait = val
@@ -200,4 +196,4 @@ func update_sound():
             elif cmd == SNDCMD_DONE:
                 s.pos = 0
                 break
-        sound(s.index, voice.pitch, voice.pw, voice.vol, voice.wave)
+        sound(s.index, s.pitch, s.pw, s.vol, s.wave)

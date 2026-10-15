@@ -350,7 +350,7 @@ func draw_stage():
     draw_text(5, 180 - 18 + 5, "SCORE")
     var len = int_to_str(score)
     for i = 0, 4 - len:
-        putchar(5 + 8*6 + i * 8, 180 - 18 + 5, 48)
+        putchar(5 + 8*6 + i * 8, 180 - 18 + 5, '0')
 
     draw_text(5 + 8*10 - len * 8, 180 - 18 + 5, format_str.ptr)
 

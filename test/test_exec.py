@@ -649,14 +649,26 @@ class ExecTests(unittest.TestCase):
                 print_n(vs[2].y)
         """), "1\n2\n")
 
-    def test_init_list_wrong_length(self):
+    def test_init_list_pads_short(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var b: V
+            func tick():
+                b = { 3 }
+                print_n(b.x)
+                print_n(b.y)
+        """), "3\n0\n")
+
+    def test_init_list_too_many(self):
         compiled = self.compile_text("""
             struct V:
                 x
                 y
             var b: V
             func tick():
-                b = { 1 }
+                b = { 1, 2, 3 }
         """)
         self.assertNotEqual(compiled.returncode, 0)
         self.assertIn("wrong number of initializers", compiled.stderr)

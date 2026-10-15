@@ -22,7 +22,10 @@ var t = 100
 func tick():
     t += 10
 
+    var s: Player[2]
+
     player.pos = { 1, t * 10 }
+    s[0] = player
 
-
+    print("Hello, world!")
 

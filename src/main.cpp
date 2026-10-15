@@ -9,12 +9,13 @@ enum {
     SCREEN_W = 320,
     SCREEN_H = 180,
 
-    INPUT_UP = 0,
-    INPUT_DOWN,
-    INPUT_LEFT,
-    INPUT_RIGHT,
-    INPUT_A,
-    INPUT_B,
+    BTN_UP = 0,
+    BTN_DOWN,
+    BTN_LEFT,
+    BTN_RIGHT,
+    BTN_A,
+    BTN_B,
+    BTN_MENU,
 
     INT_PRINT = 1,
     INT_SPRITE,
@@ -189,13 +190,14 @@ int main(int argc, char** argv) {
         // input
         uint8_t const* ks = SDL_GetKeyboardState(nullptr);
         mem.input = 0;
-        mem.input |= !!ks[SDL_SCANCODE_LEFT ] << INPUT_LEFT;
-        mem.input |= !!ks[SDL_SCANCODE_RIGHT] << INPUT_RIGHT;
-        mem.input |= !!ks[SDL_SCANCODE_UP   ] << INPUT_UP;
-        mem.input |= !!ks[SDL_SCANCODE_DOWN ] << INPUT_DOWN;
-        mem.input |= !!ks[SDL_SCANCODE_X    ] << INPUT_A;
-        mem.input |= !!ks[SDL_SCANCODE_Z    ] << INPUT_B;
-        mem.input |= !!ks[SDL_SCANCODE_C    ] << INPUT_B;
+        mem.input |= !!ks[SDL_SCANCODE_LEFT  ] << BTN_LEFT;
+        mem.input |= !!ks[SDL_SCANCODE_RIGHT ] << BTN_RIGHT;
+        mem.input |= !!ks[SDL_SCANCODE_UP    ] << BTN_UP;
+        mem.input |= !!ks[SDL_SCANCODE_DOWN  ] << BTN_DOWN;
+        mem.input |= !!ks[SDL_SCANCODE_X     ] << BTN_A;
+        mem.input |= !!ks[SDL_SCANCODE_Z     ] << BTN_B;
+        mem.input |= !!ks[SDL_SCANCODE_C     ] << BTN_B;
+        mem.input |= !!ks[SDL_SCANCODE_RETURN] << BTN_MENU;
 
         SDL_RenderClear(renderer);
         vm.run(interrupt);

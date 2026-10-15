@@ -18,7 +18,7 @@ var digit: int[2]
 func print_n(n):
     digit[0] = n + 48
     digit[1] = 0
-    print(digit.ptr)
+    print(digit)
 """
 
 
@@ -56,6 +56,20 @@ class ExecTests(unittest.TestCase):
             func tick():
                 print("ok")
         """), "ok\n")
+
+    def test_adjacent_string_literals(self):
+        self.assertEqual(self.run_toy("""
+            var level: int[] = "ab\\n" "c"
+            var x = (10 + 3) / 3
+            func tick():
+                print("o" "k")
+                print(level)
+                print_n(x)
+                print((
+                    "x"
+                    "y"
+                ))
+        """), "ok\nab\nc\n4\nxy\n")
 
     def test_char_literal(self):
         self.assertEqual(self.run_toy("""
@@ -154,6 +168,16 @@ class ExecTests(unittest.TestCase):
                 p.* = 6
                 print_n(p.*)
         """), "6\n")
+
+    def test_pointer_index_and_postfix_paren(self):
+        self.assertEqual(self.run_toy("""
+            var a: int[3] = {3, 5, 7}
+            func tick():
+                var p = a.ptr
+                print_n(p[1])
+                print_n((p + 2).*)
+                print_n((a + 1)[0])
+        """), "5\n7\n5\n")
 
     def test_while_sum(self):
         self.assertEqual(self.run_toy("""

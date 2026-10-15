@@ -52,9 +52,22 @@ const MEM_SIZE = 1 << 20;
 const STEP_LIMIT = 1000000;
 const VOICES = 4;
 
-const INPUT_UP = 0, INPUT_DOWN = 1, INPUT_LEFT = 2, INPUT_RIGHT = 3, INPUT_A = 4, INPUT_B = 5;
-const INT_PRINT = 1, INT_SPRITE = 2, INT_SOUND = 3, INT_RAND = 4, INT_SQRT = 5;
-const FLIP_H = 1, FLIP_V = 2;
+const BTN_UP = 0;
+const BTN_DOWN = 1;
+const BTN_LEFT = 2;
+const BTN_RIGHT = 3;
+const BTN_A = 4;
+const BTN_B = 5;
+const BTN_MENU = 6;
+
+const INT_PRINT = 1;
+const INT_SPRITE = 2;
+const INT_SOUND = 3;
+const INT_RAND = 4;
+const INT_SQRT = 5;
+
+const FLIP_H = 1;
+const FLIP_V = 2;
 
 // Address modes / ops — match src/vm.cpp
 const NIL = 0, ABS = 1, IND = 2, IDX = 3, ZRO = 4, ONE = 5, NEG = 6, IMM = 7, NXT = 8, PDA = NIL;
@@ -425,16 +438,16 @@ function showError(msg) {
   errEl.textContent = msg || "";
 }
 
+// Browsers block audio until a click/key — only call this from input handlers.
 async function ensureAudio() {
-  if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 48000 });
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-  if (!apuNode) {
-    const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
-    await audioCtx.audioWorklet.addModule(url);
-    URL.revokeObjectURL(url);
-    apuNode = new AudioWorkletNode(audioCtx, "toy-apu");
-    apuNode.connect(audioCtx.destination);
-  }
+  if (audioCtx) return;
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  await audioCtx.resume();
+  const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
+  await audioCtx.audioWorklet.addModule(url);
+  URL.revokeObjectURL(url);
+  apuNode = new AudioWorkletNode(audioCtx, "toy-apu");
+  apuNode.connect(audioCtx.destination);
 }
 
 function interrupt(n) {
@@ -474,14 +487,15 @@ function interrupt(n) {
 }
 
 function pollInput() {
-  let input = 0;
-  if (keys.has("ArrowLeft") || keys.has("a")) input |= 1 << INPUT_LEFT;
-  if (keys.has("ArrowRight") || keys.has("d")) input |= 1 << INPUT_RIGHT;
-  if (keys.has("ArrowUp") || keys.has("w")) input |= 1 << INPUT_UP;
-  if (keys.has("ArrowDown") || keys.has("s")) input |= 1 << INPUT_DOWN;
-  if (keys.has("x")) input |= 1 << INPUT_A;
-  if (keys.has("z") || keys.has("c")) input |= 1 << INPUT_B;
-  mem[1] = input;
+  let b = 0;
+  if (keys.has("ArrowLeft") || keys.has("a")) b |= 1 << BTN_LEFT;
+  if (keys.has("ArrowRight") || keys.has("d")) b |= 1 << BTN_RIGHT;
+  if (keys.has("ArrowUp") || keys.has("w")) b |= 1 << BTN_UP;
+  if (keys.has("ArrowDown") || keys.has("s")) b |= 1 << BTN_DOWN;
+  if (keys.has("x")) b |= 1 << BTN_A;
+  if (keys.has("z") || keys.has("c")) b |= 1 << BTN_B;
+  if (keys.has("Enter")) b |= 1 << BTN_MENU;
+  mem[1] = b;
 }
 
 function frame(timestamp) {
@@ -507,6 +521,13 @@ function frame(timestamp) {
   raf = requestAnimationFrame(frame);
 }
 
+function setGameQuery(gameId) {
+  const url = new URL(location.href);
+  if (gameId) url.searchParams.set("game", gameId);
+  else url.searchParams.delete("game");
+  history.replaceState(null, "", url);
+}
+
 function stopGame() {
   running = false;
   cancelAnimationFrame(raf);
@@ -515,12 +536,12 @@ function stopGame() {
   playEl.style.display = "none";
   gamesEl.style.display = "flex";
   document.querySelector("#ui h1").style.display = "";
+  setGameQuery(null);
 }
 
 async function startGame(gameId) {
   showError("");
   try {
-    await ensureAudio();
     const base = "../" + gameId + "/";
     const [codeRes, spriteRes] = await Promise.all([
       fetch(base + "code"),
@@ -535,6 +556,7 @@ async function startGame(gameId) {
     gamesEl.style.display = "none";
     document.querySelector("#ui h1").style.display = "none";
     playEl.style.display = "block";
+    setGameQuery(gameId);
     nextFrameTime = 0;
     running = true;
     raf = requestAnimationFrame(frame);
@@ -550,7 +572,12 @@ for (const g of GAMES) {
   gamesEl.appendChild(btn);
 }
 
+const bootGame = new URLSearchParams(location.search).get("game");
+if (bootGame) startGame(bootGame);
+
+window.addEventListener("pointerdown", () => ensureAudio());
 window.addEventListener("keydown", (e) => {
+  ensureAudio();
   keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key);
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Escape"].includes(e.key)) e.preventDefault();
   if (e.key === "Escape" && running) stopGame();

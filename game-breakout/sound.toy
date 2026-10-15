@@ -140,12 +140,12 @@ var sound_command_streams: SoundCommandStream[] = {
 }
 
 var sound_effects: SoundEffect[] = {
-    { 0, SOUND_COMMANDS_BING.ptr    },
-    { 1, SOUND_COMMANDS_BLOCK.ptr   },
-    { 1, SOUND_COMMANDS_UNSTICK.ptr },
-    { 1, SOUND_COMMANDS_DIE.ptr     },
-    { 2, SOUND_COMMANDS_SPIN.ptr    },
-    { 2, SOUND_COMMANDS_NOSPIN.ptr  },
+    { 0, SOUND_COMMANDS_BING    },
+    { 1, SOUND_COMMANDS_BLOCK   },
+    { 1, SOUND_COMMANDS_UNSTICK },
+    { 1, SOUND_COMMANDS_DIE     },
+    { 2, SOUND_COMMANDS_SPIN    },
+    { 2, SOUND_COMMANDS_NOSPIN  },
 }
 
 

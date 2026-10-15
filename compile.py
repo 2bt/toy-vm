@@ -23,7 +23,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
                        [+\-*/%{}()<>\[\]=,.:&|@]   )|
-    [ \t]*(?P<string>  "(?:[^"]|\\.)*"             )|
+    [ \t]*(?P<string>  "(?:[^"\\\n]|\\.)*"         )|
     [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
@@ -63,8 +63,13 @@ def tokenize(path):
             if new_indent != indents[-1]:
                 sys.exit(f"{path.name}:{line}: inconsistent indentation")
         if k == "string":
-            line += v.count("\n")
             v = ast.literal_eval(v)
+            # Adjacent literals concatenate (like C/Python). Works across lines
+            # inside ()/[]/{} where newlines are not turned into eol tokens.
+            if out and out[-1].k == "string":
+                prev = out[-1]
+                out[-1] = Token("string", prev.v + v, prev.loc)
+                continue
         if k == "char":
             k, v = "num", str(ord(ast.literal_eval(v)))
         if k == "id" and v in KEYWORDS: k = v
@@ -284,11 +289,14 @@ class Parser:
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
 
-    def check_types_for_assign(self, ta, tb, expr):
-        if ta == None: return
-        if ta == tb: return
-        if is_ptr(ta) and is_int(tb) and expr == Imm(0): return
-        self.error("type error")
+    def check_assign(self, want, e, t):
+        """Decay array→ptr if want is a pointer, then type-check. Returns (e, t)."""
+        if want is not None and is_ptr(want) and is_array(t):
+            e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
+        if want is not None and want != t:
+            if not (is_ptr(want) and is_int(t) and e == Imm(0)):
+                self.error("type error")
+        return e, t
 
     def global_var(self):
         name = self.eat("id").v
@@ -493,7 +501,7 @@ class Parser:
             expr, ty = self.expr()
             self.eat("eol")
             if is_aggregate(ty): self.error("cannot return aggregate")
-            self.check_types_for_assign(self.current_func.type, ty, expr)
+            expr, ty = self.check_assign(self.current_func.type, expr, ty)
             return Return(expr)
 
         if self.peek("asm"):
@@ -522,8 +530,7 @@ class Parser:
                 init = self.init_list()
                 self.eat("eol")
                 return self.lower_init(a, ta, init)
-            b, tb = self.expr()
-            self.check_types_for_assign(ta, tb, b)
+            b, tb = self.check_assign(ta, *self.expr())
             self.var_type[long] = ta or tb
             self.eat("eol")
             if is_aggregate(tb): return Copy(a, b, self.type_size(tb))
@@ -546,7 +553,7 @@ class Parser:
             b, tb = self.expr()
             self.eat("eol")
             if op == "=":
-                self.check_types_for_assign(ta, tb, b)
+                b, tb = self.check_assign(ta, b, tb)
                 if is_aggregate(ta): return Copy(a, b, self.type_size(ta))
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic scaling
@@ -605,8 +612,7 @@ class Parser:
         if isinstance(item, InitList):
             if not is_aggregate(ty): self.error("type error")
             return self.lower_init(dst, ty, item)
-        e, tb = item
-        self.check_types_for_assign(ty, tb, e)
+        e, tb = self.check_assign(ty, *item)
         if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
         return Assign("=", dst, e)
 
@@ -621,8 +627,7 @@ class Parser:
         if isinstance(item, InitList):
             if not is_aggregate(ty): self.error("type error")
             return self.const_init_data(ty, item)
-        e, tb = item
-        self.check_types_for_assign(ty, tb, e)
+        e, tb = self.check_assign(ty, *item)
         dyn, sym, off = split_add(e)
         if dyn: self.error("const expression expected")
         if sym: return [f"{sym}+{off}" if off else sym]
@@ -644,12 +649,17 @@ class Parser:
                 continue
             if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = INT
             elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = INT
-            elif op in ("+", "-") and is_ptr(ta) and is_int(tb):
-                # pointer arithmetic
-                elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
-                if elem_size > 1:
-                    if isinstance(b, Imm): b = Imm(b.value * elem_size)
-                    else: b = BinOp("*", b, Imm(elem_size))
+            elif op in ("+", "-") and is_int(tb):
+                if is_array(ta):
+                    a, ta = addr_of(a), Type(ta.base, ta.ptr + 1, None)
+                if is_ptr(ta):
+                    # pointer arithmetic
+                    elem_size = self.type_size(Type(ta.base, ta.ptr - 1, None))
+                    if elem_size > 1:
+                        if isinstance(b, Imm): b = Imm(b.value * elem_size)
+                        else: b = BinOp("*", b, Imm(elem_size))
+                elif not is_int(ta):
+                    self.error("type error", tok)
             else:
                 if not is_int(ta) or not is_int(tb): self.error("type error", tok)
             a = BinOp(op, a, b)
@@ -668,7 +678,7 @@ class Parser:
             self.eat()
             e, t = self.expr()
             self.eat(")")
-            return e, t
+            return self.postfix(e, t)
         if self.peek("-"):
             self.eat()
             a, t = self.unary()
@@ -682,6 +692,65 @@ class Parser:
             if isinstance(a, Imm): return Imm(int(not a.value)), INT
             return Not(a), INT
         return self.primary()
+
+    def postfix(self, node, ty):
+        while True:
+            if self.peek("["):
+                self.eat()
+                if is_array(ty):
+                    base, from_ptr = addr_of(node), False
+                    ty = Type(ty.base, ty.ptr, None)
+                elif is_ptr(ty):
+                    base, from_ptr = node, True
+                    ty = Type(ty.base, ty.ptr - 1, None)
+                else:
+                    self.error("cannot index")
+                idx, tidx = self.expr()
+                if not is_int(tidx): self.error("index must be int")
+                self.eat("]")
+                elem_size = self.type_size(ty)
+                if idx != Imm(0):
+                    if elem_size > 1:
+                        if isinstance(idx, Imm): idx = Imm(idx.value * elem_size)
+                        else: idx = BinOp("*", idx, Imm(elem_size))
+                    node = Deref(BinOp("+", base, idx))
+                elif from_ptr:
+                    node = Deref(base)
+
+            elif self.peek("."):
+                self.eat()
+                if self.peek("*"):
+                    self.eat()
+                    if not is_ptr(ty): self.error("non-pointer deref")
+                    node = Deref(node)
+                    ty = Type(ty.base, ty.ptr - 1, None)
+                    continue
+                field = self.eat("id").v
+                if is_array(ty):
+                    if field == "len": return Imm(ty.array), INT
+                    elif field == "ptr":
+                        node = AddrOf(node)
+                        ty   = Type(ty.base, ty.ptr + 1, None)
+                        continue
+                    elif field == "limit":
+                        offset = self.type_size(Type(ty.base, ty.ptr, None)) * ty.array
+                        node = BinOp("+", AddrOf(node), Imm(offset))
+                        ty   = Type(ty.base, ty.ptr + 1, None)
+                        continue
+                    else:
+                        self.error(f"array has no field '{field}'")
+                elif is_ptr(ty): # auto pointer deref
+                    node = Deref(node)
+                    ty   = Type(ty.base, ty.ptr - 1, None)
+
+                if not is_struct(ty): self.error("request for member of non-struct")
+                f = self.get_struct(ty.base).fields.get(field)
+                if not f: self.error(f"struct '{ty.base}' has no field '{field}'")
+                ty = f.type
+                if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
+
+            else:
+                return node, ty
 
     def primary(self):
         # number
@@ -724,8 +793,7 @@ class Parser:
                             if not is_aggregate(ty): self.error("type error")
                             setup.append(self.lower_init(dst, ty, self.init_list()))
                         else:
-                            e, t = self.expr()
-                            self.check_types_for_assign(ty, t, e)
+                            e, t = self.check_assign(ty, *self.expr())
                             if is_aggregate(ty): setup.append(Copy(dst, e, self.type_size(ty)))
                             else: setup.append(Assign("=", dst, e))
                         n_args += 1
@@ -747,52 +815,7 @@ class Parser:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
                 node, ty = VarRef(name), self.var_type[name]
 
-        while True:
-            if self.peek("["):
-                self.eat()
-                if not is_array(ty): self.error("cannot index non-array")
-                idx, tidx = self.expr()
-                if not is_int(tidx): self.error("index must be int")
-                self.eat("]")
-                ty = Type(ty.base, ty.ptr, None)
-                elem_size = self.type_size(ty)
-                if idx != Imm(0):
-                    if elem_size > 1:
-                        if isinstance(idx, Imm): idx = Imm(idx.value * elem_size)
-                        else: idx = BinOp("*", idx, Imm(elem_size))
-                    node = Deref(BinOp("+", addr_of(node), idx))
-
-            elif self.peek("."):
-                self.eat()
-                if self.peek("*"):
-                    self.eat()
-                    if not is_ptr(ty): self.error("non-pointer deref")
-                    node = Deref(node)
-                    ty = Type(ty.base, ty.ptr - 1, None)
-                    continue
-                field = self.eat("id").v
-                if is_array(ty):
-                    if field == "len": return Imm(ty.array), INT
-                    elif field == "ptr":
-                        node = AddrOf(node)
-                        ty   = Type(ty.base, ty.ptr + 1, None)
-                        continue
-                    elif field == "limit":
-                        offset = self.type_size(Type(ty.base, ty.ptr, None)) * ty.array
-                        node = BinOp("+", AddrOf(node), Imm(offset))
-                        ty   = Type(ty.base, ty.ptr + 1, None)
-                        continue
-                elif is_ptr(ty): # auto pointer deref
-                    node = Deref(node)
-                    ty   = Type(ty.base, ty.ptr - 1, None)
-
-                if not is_struct(ty): self.error("request for member of non-struct")
-                f = self.get_struct(ty.base).fields.get(field)
-                if not f: self.error(f"struct '{ty.base}' has no field '{field}'")
-                ty = f.type
-                if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
-
-            else: return node, ty
+        return self.postfix(node, ty)
 
 ##############################
 # peephole optimizer

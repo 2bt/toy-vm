@@ -257,13 +257,6 @@ class Parser:
         if not isinstance(n, Imm): self.error("const expression expected")
         return n.value
 
-    def const_int_or_addr(self):
-        n, t = self.expr()
-        dyn, sym, off = split_add(n)
-        if dyn: self.error("const expression expected")
-        if sym: return f"{sym}+{off}" if off else sym
-        return off
-
     def type(self, intro_tok=":", auto_array_size=False):
         if not self.peek(intro_tok): return INT
         self.eat()
@@ -304,61 +297,18 @@ class Parser:
 
         elif self.peek("="): # has data
             self.eat()
-            def parse_data():
-                if self.peek("{"):
-                    self.eat()
-                    data = []
-                    while not self.peek("}"):
-                        data.append(parse_data())
-                        if not self.peek(","): break
-                        self.eat()
-                    self.eat("}")
-                    return data
-                if self.peek("string"):
-                    return list(map(ord, self.eat("string").v)) + [0]
-                return self.const_int_or_addr()
-            data = parse_data()
-
-            # patch type array length
-            if ty.array == -1:
-                if not isinstance(data, list):
-                    self.error("data doesn't match type")
-                ty = Type(ty.base, ty.ptr, len(data))
-
-            def null_obj(t):
-                if is_array(t):
-                    return null_obj(Type(t.base, t.ptr, None)) * t.array
-                if is_struct(t):
-                    data = []
-                    for f in self.get_struct(t.base).fields.values():
-                        data += null_obj(f.type)
-                    return data
-                return [0]
-
-            def unroll(t, d):
-                res = []
-                if is_array(t) and isinstance(d, list):
-                    l = ty.array
-                    inner = Type(t.base, t.ptr, None)
-                    if len(d) > l: self.error("too many initializers")
-                    for x in d: res += unroll(inner, x)
-                    res += null_obj(inner) * (l - len(d))
-                    return res
-                if is_struct(t) and isinstance(d, list):
-                    res = []
-                    fields = self.get_struct(t.base).fields
-                    if len(d) > len(fields): self.error("too too many initializers")
-                    for i, f in enumerate(fields.values()):
-                        if i < len(d): res += unroll(f.type, d[i])
-                        else: res += null_obj(f.type)
-                    return res
-                if is_ptr(t) and (isinstance(d, str) or d == 0):
-                    return [d]
-                if is_int(t) and isinstance(d, int):
-                    return [d]
-                self.error("data doesn't match type")
-
-            data = unroll(ty, data)
+            if self.peek("string"):
+                data = list(map(ord, self.eat("string").v)) + [0]
+                if ty.array == -1: ty = Type(ty.base, ty.ptr, len(data))
+                elif not is_array(ty) or ty.array != len(data):
+                    self.error("type error")
+            elif self.peek("{"):
+                init = self.init_list()
+                if ty.array == -1: ty = Type(ty.base, ty.ptr, len(init.items))
+                data = self.const_init_data(ty, init)
+            else:
+                if ty.array == -1: self.error("invalid array size")
+                data = self.const_init_slot(ty, self.expr())
             if any(x != 0 for x in data): self.var_data[name] = data
 
         if ty.array == -1: self.error("invalid array size")
@@ -619,36 +569,60 @@ class Parser:
         self.eat("}")
         return InitList(items)
 
-    def lower_init(self, dst, ty, init):
-        stmts = []
+    def aggregate_inits(self, ty, init):
+        """Pair each slot of aggregate ty with an init item (None if padded)."""
         if is_struct(ty):
-            fields = list(self.get_struct(ty.base).fields.values())
-            if len(init.items) != len(fields):
-                self.error("wrong number of initializers")
-            for item, f in zip(init.items, fields):
-                slot = dst if f.offset == 0 else Deref(BinOp("+", addr_of(dst), Imm(f.offset)))
-                stmts.append(self.lower_init_slot(slot, f.type, item))
+            fields  = list(self.get_struct(ty.base).fields.values())
+            types   = [f.type for f in fields]
+            offsets = [f.offset for f in fields]
         elif is_array(ty):
-            elem = Type(ty.base, ty.ptr, None)
-            if len(init.items) != ty.array:
-                self.error("wrong number of initializers")
-            for i, item in enumerate(init.items):
-                slot = dst if i == 0 else Deref(BinOp("+", addr_of(dst), Imm(self.type_size(elem) * i)))
-                stmts.append(self.lower_init_slot(slot, elem, item))
+            elem    = Type(ty.base, ty.ptr, None)
+            types   = [elem] * ty.array
+            offsets = [self.type_size(elem) * i for i in range(ty.array)]
         else:
             self.error("type error")
+        expect = len(types)
+        got = len(init.items)
+        if got > expect: self.error("wrong number of initializers")
+        items = init.items + [None] * (expect - got)
+        return list(zip(offsets, types, items))
+
+    def lower_init(self, dst, ty, init):
+        stmts = []
+        for off, slot_ty, item in self.aggregate_inits(ty, init):
+            slot = dst if off == 0 else Deref(BinOp("+", addr_of(dst), Imm(off)))
+            stmts.append(self.lower_init_slot(slot, slot_ty, item))
         return Block(stmts)
 
     def lower_init_slot(self, dst, ty, item):
-        if is_aggregate(ty):
-            if isinstance(item, InitList): return self.lower_init(dst, ty, item)
-            e, tb = item
-            self.check_types_for_assign(ty, tb, e)
-            return Copy(dst, e, self.type_size(ty))
-        if isinstance(item, InitList): self.error("type error")
+        if item is None:
+            if is_aggregate(ty): return self.lower_init(dst, ty, InitList([]))
+            return Assign("=", dst, Imm(0))
+        if isinstance(item, InitList):
+            if not is_aggregate(ty): self.error("type error")
+            return self.lower_init(dst, ty, item)
         e, tb = item
         self.check_types_for_assign(ty, tb, e)
+        if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
         return Assign("=", dst, e)
+
+    def const_init_data(self, ty, init):
+        data = []
+        for _, slot_ty, item in self.aggregate_inits(ty, init):
+            data += self.const_init_slot(slot_ty, item)
+        return data
+
+    def const_init_slot(self, ty, item):
+        if item is None: return [0] * self.type_size(ty)
+        if isinstance(item, InitList):
+            if not is_aggregate(ty): self.error("type error")
+            return self.const_init_data(ty, item)
+        e, tb = item
+        self.check_types_for_assign(ty, tb, e)
+        dyn, sym, off = split_add(e)
+        if dyn: self.error("const expression expected")
+        if sym: return [f"{sym}+{off}" if off else sym]
+        return [off]
 
     def expr(self, minp=1):
         a, ta = self.unary()

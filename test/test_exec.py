@@ -101,6 +101,19 @@ class ExecTests(unittest.TestCase):
                 print_n(m.len)
         """), "hi\nhello\nhey\nab\n5\n0\n3\n")
 
+    def test_auto_array_size_from_array(self):
+        self.assertEqual(self.run_toy("""
+            var src: int[3] = {1, 2, 3}
+            func tick():
+                var dst: int[] = src
+                print_n(dst.len)
+                print_n(dst[0])
+                print_n(dst[2])
+                var again: int[] = dst
+                print_n(again.len)
+                print_n(again[1])
+        """), "3\n1\n3\n3\n2\n")
+
     def test_char_literal(self):
         self.assertEqual(self.run_toy("""
             func tick():

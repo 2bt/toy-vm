@@ -139,6 +139,7 @@ def is_int(t): return t == INT
 def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
 def is_ptr(t): return t.array == None and t.ptr > 0
 def is_array(t): return t.array != None
+def is_auto_array(t): return is_array(t) and t.array == -1
 def is_cond(t): return is_int(t) or is_ptr(t)
 def is_aggregate(t): return is_array(t) or is_struct(t)
 
@@ -297,47 +298,45 @@ class Parser:
         self.var_data[name] = e.data
         return VarRef(name)
 
-    def str_data_for_array(self, e, ty):
-        """Pad/truncate-check a StrLit for an int[N] destination. Returns data list."""
-        if not is_array(ty) or ty.base != "int" or ty.ptr != 0:
-            self.error("type error")
-        if ty.array == -1:
-            return e.data, Type(ty.base, ty.ptr, len(e.data))
-        if len(e.data) > ty.array:
-            self.error("type error")
+    def store_var_data(self, name, data):
+        if any(x != 0 for x in data):
+            self.var_data[name] = data
+
+    def fit_str(self, e, ty):
+        """Pad/size-check a StrLit for an int[N] destination. Returns (data, ty)."""
+        if not is_array(ty) or ty.base != "int" or ty.ptr != 0: self.error("type error")
+        if is_auto_array(ty): return e.data, Type(ty.base, ty.ptr, len(e.data))
+        if len(e.data) > ty.array: self.error("string too long")
         return e.data + [0] * (ty.array - len(e.data)), ty
 
-    def check_assign(self, want, e, t):
-        """Decay array→ptr if want is a pointer, then type-check. Returns (e, t)."""
-        if want is not None and is_ptr(want) and is_array(t):
+    def coerce(self, want, e, t):
+        """Rewrite expr for assignment (decay/intern/pad); type-check. Returns (e, t)."""
+        if is_auto_array(want) and is_array(t):
+            if want.base != t.base or want.ptr != t.ptr: self.error("type error")
+            want = Type(want.base, want.ptr, t.array)
+        if is_ptr(want) and is_array(t):
             if isinstance(e, StrLit): e = self.intern_str(e)
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
-        elif isinstance(e, StrLit) and (want is None or is_array(want)):
-            if want is None:
-                return self.intern_str(e), t
-            data, want = self.str_data_for_array(e, want)
+        elif isinstance(e, StrLit) and is_array(want):
+            data, want = self.fit_str(e, want)
             return self.intern_str(StrLit(data)), want
-        if want is not None and want != t:
-            if not (is_ptr(want) and is_int(t) and e == Imm(0)):
-                self.error("type error")
+        if want != t:
+            if not (is_ptr(want) and is_int(t) and e == Imm(0)): self.error("type error")
         return e, t
 
-    def resolve_var_type(self, annotated, inferred=None):
+    def finish_type(self, annotated, inferred=None):
         """Combine optional ': Type' with inferred rhs type. Rejects unsized arrays."""
         if annotated is None:
             ty = inferred or INT
-        elif annotated.array == -1:
-            if not (inferred and is_array(inferred)):
-                self.error("invalid array size")
+        elif is_auto_array(annotated) and inferred and is_array(inferred):
             ty = Type(annotated.base, annotated.ptr, inferred.array)
         else:
             ty = annotated
-        if is_array(ty) and ty.array == -1:
-            self.error("invalid array size")
+        if is_auto_array(ty): self.error("invalid array size")
         return ty
 
     def var_decl(self, name, local=False):
-        """Shared global/local var parsing. Returns a stmt for locals, None for globals."""
+        """Shared global/local var parsing. Always returns a stmt (NoOp for globals)."""
         if name in self.var_type: self.error(f"variable '{name}' already exists")
         ty = self.type(auto_array_size=True) if self.peek(":") else None
         dst = VarRef(name)
@@ -346,42 +345,40 @@ class Parser:
             if local: self.error("@ only allowed on globals")
             self.eat()
             self.var_addr[name] = self.const_expr()
-            self.var_type[name] = self.resolve_var_type(ty)
-            return
+            self.var_type[name] = self.finish_type(ty)
+            return NoOp()
 
         if not self.peek("="):
-            self.var_type[name] = self.resolve_var_type(ty)
+            self.var_type[name] = self.finish_type(ty)
             return NoOp()
 
         self.eat("=")
         if self.peek("{"):
             if ty is None or not is_aggregate(ty): self.error("type error")
             init = self.init_list()
-            if ty.array == -1: ty = Type(ty.base, ty.ptr, len(init.items))
+            if is_auto_array(ty): ty = Type(ty.base, ty.ptr, len(init.items))
             self.var_type[name] = ty
             if local: return self.lower_init(dst, ty, init)
-            data = self.const_init_data(ty, init)
-            if any(x != 0 for x in data): self.var_data[name] = data
-            return
+            self.store_var_data(name, self.const_init_data(ty, init))
+            return NoOp()
 
         e, t = self.expr()
-        if not local and isinstance(e, StrLit):
-            # Global string: store bytes in this var (no extra _str_* copy).
+        if isinstance(e, StrLit) and (ty is None or is_array(ty)):
             if ty is None: data, ty = e.data, Type("int", 0, len(e.data))
-            elif is_array(ty): data, ty = self.str_data_for_array(e, ty)
-            else: self.error("type error")
+            else: data, ty = self.fit_str(e, ty)
             self.var_type[name] = ty
-            if any(x != 0 for x in data): self.var_data[name] = data
-            return
+            if local:
+                return Copy(dst, self.intern_str(StrLit(data)), self.type_size(ty))
+            self.store_var_data(name, data)
+            return NoOp()
 
-        e, t = self.check_assign(ty, e, t)
-        self.var_type[name] = ty = self.resolve_var_type(ty, t)
+        if ty is not None: e, t = self.coerce(ty, e, t)
+        self.var_type[name] = ty = self.finish_type(ty, t)
         if local:
             if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
             return Assign("=", dst, e)
-        data = self.const_init_slot(ty, (e, t))
-        if any(x != 0 for x in data): self.var_data[name] = data
-        return None
+        self.store_var_data(name, self.const_init_slot(ty, (e, t)))
+        return NoOp()
 
     def get_struct(self, name):
         if name not in self.structs: self.error(f"unknown struct '{name}'")
@@ -558,7 +555,7 @@ class Parser:
             expr, ty = self.expr()
             self.eat("eol")
             if is_aggregate(ty): self.error("cannot return aggregate")
-            expr, ty = self.check_assign(self.current_func.type, expr, ty)
+            expr, ty = self.coerce(self.current_func.type, expr, ty)
             return Return(expr)
 
         if self.peek("asm"):
@@ -592,7 +589,7 @@ class Parser:
             b, tb = self.expr()
             self.eat("eol")
             if op == "=":
-                b, tb = self.check_assign(ta, b, tb)
+                b, tb = self.coerce(ta, b, tb)
                 if is_aggregate(ta): return Copy(a, b, self.type_size(ta))
             elif op in ("+=", "-=") and is_ptr(ta) and is_int(tb):
                 # pointer arithmetic scaling
@@ -651,7 +648,7 @@ class Parser:
         if isinstance(item, InitList):
             if not is_aggregate(ty): self.error("type error")
             return self.lower_init(dst, ty, item)
-        e, tb = self.check_assign(ty, *item)
+        e, tb = self.coerce(ty, *item)
         if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
         return Assign("=", dst, e)
 
@@ -666,7 +663,7 @@ class Parser:
         if isinstance(item, InitList):
             if not is_aggregate(ty): self.error("type error")
             return self.const_init_data(ty, item)
-        e, tb = self.check_assign(ty, *item)
+        e, tb = self.coerce(ty, *item)
         dyn, sym, off = split_add(e)
         if dyn: self.error("const expression expected")
         if sym: return [f"{sym}+{off}" if off else sym]
@@ -839,7 +836,7 @@ class Parser:
                             if not is_aggregate(ty): self.error("type error")
                             setup.append(self.lower_init(dst, ty, self.init_list()))
                         else:
-                            e, t = self.check_assign(ty, *self.expr())
+                            e, t = self.coerce(ty, *self.expr())
                             if is_aggregate(ty): setup.append(Copy(dst, e, self.type_size(ty)))
                             else: setup.append(Assign("=", dst, e))
                         n_args += 1

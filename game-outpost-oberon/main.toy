@@ -1,6 +1,6 @@
 include "prelude.toy"
 
-
+const null  = 0
 const false = 0
 const true  = 1
 
@@ -50,7 +50,7 @@ func strcpy(dst: int*, src: int*) -> int*:
         dst += 1
     return dst
 
-func strindex(s: int*, c) -> int:
+func stridx(s: int*, c) -> int:
     var i = 0
     while s.*:
         if s.* == c: return i

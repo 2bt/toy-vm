@@ -1,144 +1,4 @@
-var LEVEL1_DATA = (
-    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-    "X                    00000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-    "0^^                  000000000000000000                                000000000000000000000000000000000"
-    "0     ^^^                                                                0000       00000000000000000000"
-    "0^^                                           0000000000000000000000                00000000000000000000"
-    "0                        00000000             0000          00000000                00000000000000000000"
-    "0^^         000      000000000000000000     0000                                                       0"
-    "0                    000000000000000000^^   000           0000^^^^^0000    ^^000                       0"
-    "0^^  0            000000000000000000000                   0000     0000^^    000  00                   0"
-    "0   h        00   00000000000000000000000000    00000000000000             ^^000  00                   0"
-    "000000   00             00000000000000000000^^^^0   0000000000000000000^^    000       00000000000000000"
-    "000000lll00             0000000000000000000             000000000000000    ^^000         000000000000000"
-    "0000000000000^^^000           00000000000000000000        0000000000         000    00   000000000000000"
-    "0000000000000lll000000                                      000000000    0000000    00   000000000000000"
-    "0000000000000LLL00000       ^^^                    00000000000000000000  000             000000000000000"
-    "0000000000000000000                     0000000000000000000000000000                     000000000000000"
-    "00000000000000000000  ^000000000000000                                       000  ^^00000000000000000000"
-    "00000000000000000000   000000000000000                                     00000        0000000000000000"
-    "00000000000000000000  ^0000000000000000000000000000000                   ^000000   000  0000000000000000"
-    "00000                  00000000000000000000000000000000^^^0000000000000   000000       ^0000000000000000"
-    "00000               00000000000000000000000000000000000   0000000000000                 0000000000000000"
-    "0000               000000000000000000000000000000000000^            000^^^^  000000000000000000000000000"
-    "000     000       0000000000000000000000000000000000000                      000000000000000000000000000"
-    "00       0000    000000000000000000000000                 000            ^^  000000000000000000000000000"
-    "0   00          0000000000000000000000000                                    000000000000000000000000000"
-    "0   000         0000000000000000000000000              0000000000000000000000000000000000000000000000000"
-    "0               0000000000000000000000000llllllllllllll0000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-)
-
-const TS  = 16 # tile size
-const SPX = 16  # entity subpixel
-
-struct Camera:
-    x
-    y
-
-var camera: Camera
-
-
-struct Level:
-    data: int*
-    w
-    h
-    tick
-
-var level: Level
-
-func level_init(data: int*):
-    level.data = data
-    level.w    = strindex(data, 'X')
-    level.h    = strlen(data) / level.w
-    level.tick = 0
-
-func level_get_tile(c, r):
-    if c < 0 or c >= level.w: return '0'
-    if r < 0 or r >= level.h: return '0'
-    c = level.data[c + r * level.w]
-    if c == 'X': return '0'
-    return c
-
-func is_solid(x, y):
-    var t = level_get_tile(x / TS, y / TS)
-    return t == '0'
-
-
-func level_update():
-    level.tick += 1
-
-func level_draw():
-
-    # background
-    var ox = camera.x * 4 / 5 % TS
-    var oy = camera.y * 4 / 5 % TS
-    for r = 0, SCREEN_H / TS + 1:
-        for c = 0, SCREEN_W / TS + 1:
-            sprite(c * TS - ox, r * TS - oy, TS, TS, 16, 32, 0)
-
-
-    var c0 = camera.x / TS
-    var r0 = camera.y / TS
-    for r = r0, r0 + SCREEN_H / TS + 2:
-        for c = c0, c0 + SCREEN_W / TS + 1:
-            var t = level_get_tile(c, r)
-            var x = c * TS - camera.x
-            var y = r * TS - camera.y
-
-            if t == '0':
-                # edge
-                sprite(x, y, TS, TS, 0, 32, 0)
-                if level_get_tile(c - 1, r) != '0': sprite(x, y, TS, TS, 0 * TS, 48, 0)
-                if level_get_tile(c + 1, r) != '0': sprite(x, y, TS, TS, 1 * TS, 48, 0)
-                if level_get_tile(c, r - 1) != '0': sprite(x, y, TS, TS, 2 * TS, 48, 0)
-                if level_get_tile(c, r + 1) != '0': sprite(x, y, TS, TS, 3 * TS, 48, 0)
-
-            elif t == '^':  # jump through platform
-                sprite(x, y, TS, TS, 4 * TS, 48, 0)
-
-
-            elif t == 'L':  # lava
-                sprite(x, y, TS, TS, 5 * TS, 48, 0)
-            elif t == 'l':  # lava surface
-                var q = level.tick / 8 % TS
-                sprite(x,     y, q,      TS, 6 * TS + TS - q, 48, 0)
-                sprite(x + q, y, TS - q, TS, 6 * TS,          48, 0)
-
-
-const HERO_ANIM_STAND = 0
-const HERO_ANIM_JUMP  = 1
-const HERO_ANIM_WALK  = 2
-
-
-struct Hero:
-    x
-    y
-    vx
-    vy
-    facing_left
-    on_ground
-
-    animation
-    frame
-
-var hero: Hero
-
-func hero_init():
-    hero = {}
-    var i = strindex(level.data, 'h')
-    # hero.x = i % level.w * TS + TS / 2
-    # hero.y = i / level.w * TS + TS - 1
-    hero.x = i % level.w * TS
-    hero.y = i / level.w * TS
-
-    hero.x *= SPX
-    hero.y *= SPX
-
+include "level.toy"
 
 
 # collision debugging
@@ -153,26 +13,18 @@ func dot(x, y):
 func draw_dots():
     for i = 0, dot_count:
         var d = dots[i]
-        sprite(d.x - camera.x, d.y - camera.y, 1, 1, 1, 24, 0)
+        camera_sprite(d.x, d.y, 1, 1, 1, 24, 0)
 
 
-const RUN_MAX      = 20
-const ACCEL_GROUND = 5
-const ACCEL_AIR    = 2
-const JUMP_FORCE   = 48
-
-
+# collision
 const DIR_LEFT  = 0
 const DIR_RIGHT = 1
 const DIR_UP    = 2
 const DIR_DOWN  = 3
 
-
-
 func check_collision(x, y, dir) -> int:
     dot(x, y)
-    var t = level_get_tile(x / TS, y / TS)
-    if t != '0': return 0
+    if level_get_tile(x, y) != '0': return 0
     if dir == DIR_LEFT:  return TS - (x % TS)
     if dir == DIR_RIGHT: return -1 - (x % TS)
     if dir == DIR_UP:    return TS - (y % TS)
@@ -180,12 +32,116 @@ func check_collision(x, y, dir) -> int:
 
 func check_collision_down(x, y, py) -> int:
     dot(x, y)
-    var t = level_get_tile(x / TS, y / TS)
+    var t = level_get_tile(x, y)
     if (t == '0' or
         t == '^' and (y / TS) > (py / TS)):
         return -1 - (y % TS)
     return 0
 
+
+# particle
+
+const PARTICLE_FLASH = 1
+struct Particle:
+    ttl
+    x
+    y
+    type
+
+var particles: Particle[32]
+
+func particle_new() -> Particle*:
+    for p in particles:
+        if p.ttl == 0: return p
+    return null
+
+
+func particle_update_all():
+    for p in particles:
+        if p.ttl == 0: continue
+        p.ttl -= 1
+
+
+func particle_draw_all():
+    for p in particles:
+        if p.ttl == 0: continue
+        if p.type == PARTICLE_FLASH:
+            camera_sprite(p.x - 2, p.y - 2, 5, 5, 16, 96, 0)
+
+
+
+# bullet
+
+struct Bullet:
+    alive
+    x
+    y
+    dx
+
+var bullets: Bullet[8]
+
+func bullet_new(x, y, dx):
+    for b in bullets:
+        if b.alive: continue
+        b.alive = true
+        b.x = x
+        b.y = y
+        b.dx = dx
+        return
+
+func bullet_update_all():
+    for b in bullets:
+        if not b.alive: continue
+        b.x += b.dx * 5 # speed
+        var dir = b.dx > 0 ? DIR_RIGHT : DIR_LEFT
+        var o = check_collision(b.x, b.y, dir)
+        if o:
+            b.alive = false
+            # spawn particle
+            var p = particle_new()
+            if p:
+                p.ttl  = 3
+                p.x    = b.x + o
+                p.y    = b.y
+                p.type = PARTICLE_FLASH
+
+func bullet_draw_all():
+    for b in bullets:
+        if not b.alive: continue
+        camera_sprite(b.x - (b.dx > 0 ? 5 : 0), b.y, 6, 1, 0, 96, 0)
+
+
+
+# hero
+
+struct Hero:
+    x
+    y
+    vx
+    vy
+    facing_left
+    on_ground
+
+    frame
+    run_tick
+    shoot_tick
+
+var hero: Hero
+
+func hero_init():
+    hero = {}
+    var i = stridx(level.data, 'h')
+    hero.x = i % level.w * TS
+    hero.y = i / level.w * TS
+    hero.x *= SPX
+    hero.y *= SPX
+
+
+
+const RUN_MAX      = 20
+const ACCEL_GROUND = 5
+const ACCEL_AIR    = 2
+const JUMP_FORCE   = 48
 
 
 func hero_update():
@@ -246,7 +202,32 @@ func hero_update():
     if o:
         y += o
         hero.y = y * SPX
-        hero.vy = 10
+        hero.vy = 8
+
+
+    # shoot
+    if hero.shoot_tick == 0:
+        if btnp(BTN_B):
+            hero.shoot_tick = 10
+            if hero.facing_left:
+                bullet_new(x + 4, y + 9, -1)
+            else:
+                bullet_new(x + 11, y + 9, 1)
+    else:
+        hero.shoot_tick -= 1
+
+
+    # animation
+    hero.frame = 0
+    if not hero.on_ground:
+        hero.frame = 4
+    elif dx:
+        hero.frame = 1 + hero.run_tick / 4 % 4
+        hero.run_tick += 1
+    else:
+        hero.run_tick = 4
+        hero.frame = 0
+
 
     # update camera
     camera.x = hero.x / SPX - SCREEN_W / 2
@@ -261,14 +242,13 @@ func hero_draw():
     var x = hero.x / SPX
     var y = hero.y / SPX
 
-    sprite(x - camera.x,
-           y - camera.y,
-           16, 16,
-           hero.frame * 16, 64,
-           hero.facing_left)
+    var shooting = hero.shoot_tick > 1
+    camera_sprite(x, y, 16, 16,
+                  hero.frame * 16,
+                  64 + shooting * 16,
+                  hero.facing_left)
 
-    # debug
-    draw_dots()
+    # draw_dots()
 
 func init():
     level_init(LEVEL1_DATA)
@@ -278,11 +258,13 @@ func init():
 func update():
     level_update()
     hero_update()
+    bullet_update_all()
+    particle_update_all()
 
 
 func draw():
-    level_draw()
+    level_draw_background()
     hero_draw()
-
-    # draw_text(0, 0, "Hello, world!")
-
+    bullet_draw_all()
+    particle_draw_all()
+    level_draw_walls()

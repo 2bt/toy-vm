@@ -22,7 +22,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
-                       [+\-*/%{}()<>\[\]=,.:&|@]   )|
+                       [+\-*/%{}()<>\[\]=,.:&|@?]  )|
     [ \t]*(?P<string>  "(?:[^"\\\n]|\\.)*"         )|
     [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
     [ \t]*(?P<other>   [^ \t]+                     )
@@ -112,6 +112,7 @@ Copy     = namedtuple("Copy",     "a b n")
 InitList = namedtuple("InitList", "items")  # items: InitList | (expr, type)
 Block    = namedtuple("Block",    "stmts")
 Not      = namedtuple("Not",      "expr")
+Cond     = namedtuple("Cond",     "cond then els")  # c ? a : b
 Call     = namedtuple("Call",     "name setup")  # Block filling formals, then jsr
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
@@ -700,6 +701,15 @@ class Parser:
             else:
                 if not is_int(ta) or not is_int(tb): self.error("type error", tok)
             a = BinOp(op, a, b)
+        if minp <= PRECEDENCE["or"] and self.peek("?"):
+            if not is_cond(ta): self.error("bad type")
+            self.eat("?")
+            b, tb = self.expr()
+            self.eat(":")
+            c, tc = self.expr()
+            if tb != tc or is_aggregate(tb): self.error("type error")
+            if isinstance(a, Imm): return (b if a.value else c), tb
+            return Cond(a, b, c), tb
         return a, ta
 
     def unary(self):
@@ -1069,6 +1079,20 @@ class Codegen:
             self.branch(node.expr, E, T)
             self.emit_label(T)
             self.emit(f"    mov {t}, #1")
+            self.emit_label(E)
+            return t
+
+        if isinstance(node, Cond):
+            t = self.newtmp()
+            T = self.label("then")
+            F = self.label("else")
+            E = self.label("done")
+            self.branch(node.cond, T, F)
+            self.emit_label(T)
+            self.emit(f"    mov {t}, {self.value(node.then)}")
+            self.emit(f"    jmp {E}")
+            self.emit_label(F)
+            self.emit(f"    mov {t}, {self.value(node.els)}")
             self.emit_label(E)
             return t
 

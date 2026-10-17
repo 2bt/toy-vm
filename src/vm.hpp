@@ -9,7 +9,7 @@
 class VM {
 public:
     enum {
-        MEM_SIZE = 1 << 20,
+        MEM_SIZE = 1 << 24,
         STEP_LIMIT = 1000000,
     };
 

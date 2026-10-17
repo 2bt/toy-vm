@@ -1,0 +1,117 @@
+include "prelude.toy"
+
+
+const false = 0
+const true  = 1
+
+
+# input
+var not_prev_input
+var is_initialized
+
+func btn(b):
+    return b & input > 0
+
+func btnp(b):
+    return input & b & not_prev_input
+
+
+# math
+func min(a, b):
+    if a < b: return a
+    return b
+func max(a, b):
+    if a > b: return a
+    return b
+func clamp(x, a, b):
+    if x < a: return a
+    if x > b: return b
+    return x
+func abs(x):
+    if x >= 0: return x
+    return -x
+func sgn(x):
+    return (x > 0) - (x < 0)
+
+
+
+# string
+func strlen(s: int*) -> int:
+    var l = 0
+    while s.*:
+        s += 1
+        l += 1
+    return l
+
+func strcpy(dst: int*, src: int*) -> int*:
+    while src.*:
+        dst.* = src.*
+        src += 1
+        dst += 1
+    return dst
+
+func strindex(s: int*, c) -> int:
+    var i = 0
+    while s.*:
+        if s.* == c: return i
+        s += 1
+        i += 1
+    return -1
+
+func strnum(p: int*, n) -> int*:
+    if n == 0:
+        p.* = '0'
+        p += 1
+        p.* = 0
+        return p
+
+    if n < 0:
+        n = -n
+        p.* = '-'
+        p += 1
+
+    var q = p
+    while n:
+        p.* = n % 10 + '0'
+        n /= 10
+        p += 1
+    p.* = 0
+    var end = p
+
+    p -= 1
+    while q < p:
+        n = p.*
+        p.* = q.*
+        q.* = n
+        p -= 1
+        q += 1
+
+    return end
+
+
+# drawing
+func draw_char(x, y, c):
+    sprite(x, y, 8, 8, c % 32 * 8, (c / 32 - 1) * 8, 0)
+
+func draw_text(x, y, msg: int*):
+    while msg.*:
+        draw_char(x, y, msg.*)
+        x += 8
+        msg += 1
+
+func draw_centered_text(x, y, msg: int*):
+    draw_text(x - strlen(msg) * 4, y, msg)
+
+
+include "game.toy"
+
+
+func tick():
+    if not is_initialized:
+        init()
+        is_initialized = true
+
+    update()
+    draw()
+
+    not_prev_input = -1-input

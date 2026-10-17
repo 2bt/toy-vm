@@ -1,0 +1,288 @@
+var LEVEL1_DATA = (
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "X                    00000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "0^^                  000000000000000000                                000000000000000000000000000000000"
+    "0     ^^^                                                                0000       00000000000000000000"
+    "0^^                                           0000000000000000000000                00000000000000000000"
+    "0                        00000000             0000          00000000                00000000000000000000"
+    "0^^         000      000000000000000000     0000                                                       0"
+    "0                    000000000000000000^^   000           0000^^^^^0000    ^^000                       0"
+    "0^^  0            000000000000000000000                   0000     0000^^    000  00                   0"
+    "0   h        00   00000000000000000000000000    00000000000000             ^^000  00                   0"
+    "000000   00             00000000000000000000^^^^0   0000000000000000000^^    000       00000000000000000"
+    "000000lll00             0000000000000000000             000000000000000    ^^000         000000000000000"
+    "0000000000000^^^000           00000000000000000000        0000000000         000    00   000000000000000"
+    "0000000000000lll000000                                      000000000    0000000    00   000000000000000"
+    "0000000000000LLL00000       ^^^                    00000000000000000000  000             000000000000000"
+    "0000000000000000000                     0000000000000000000000000000                     000000000000000"
+    "00000000000000000000  ^000000000000000                                       000  ^^00000000000000000000"
+    "00000000000000000000   000000000000000                                     00000        0000000000000000"
+    "00000000000000000000  ^0000000000000000000000000000000                   ^000000   000  0000000000000000"
+    "00000                  00000000000000000000000000000000^^^0000000000000   000000       ^0000000000000000"
+    "00000               00000000000000000000000000000000000   0000000000000                 0000000000000000"
+    "0000               000000000000000000000000000000000000^            000^^^^  000000000000000000000000000"
+    "000     000       0000000000000000000000000000000000000                      000000000000000000000000000"
+    "00       0000    000000000000000000000000                 000            ^^  000000000000000000000000000"
+    "0   00          0000000000000000000000000                                    000000000000000000000000000"
+    "0   000         0000000000000000000000000              0000000000000000000000000000000000000000000000000"
+    "0               0000000000000000000000000llllllllllllll0000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000LLLLLLLLLLLLLL0000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+)
+
+const TS  = 16 # tile size
+const SPX = 16  # entity subpixel
+
+struct Camera:
+    x
+    y
+
+var camera: Camera
+
+
+struct Level:
+    data: int*
+    w
+    h
+    tick
+
+var level: Level
+
+func level_init(data: int*):
+    level.data = data
+    level.w    = strindex(data, 'X')
+    level.h    = strlen(data) / level.w
+    level.tick = 0
+
+func level_get_tile(c, r):
+    if c < 0 or c >= level.w: return '0'
+    if r < 0 or r >= level.h: return '0'
+    c = level.data[c + r * level.w]
+    if c == 'X': return '0'
+    return c
+
+func is_solid(x, y):
+    var t = level_get_tile(x / TS, y / TS)
+    return t == '0'
+
+
+func level_update():
+    level.tick += 1
+
+func level_draw():
+
+    # background
+    var ox = camera.x * 4 / 5 % TS
+    var oy = camera.y * 4 / 5 % TS
+    for r = 0, SCREEN_H / TS + 1:
+        for c = 0, SCREEN_W / TS + 1:
+            sprite(c * TS - ox, r * TS - oy, TS, TS, 16, 32, 0)
+
+
+    var c0 = camera.x / TS
+    var r0 = camera.y / TS
+    for r = r0, r0 + SCREEN_H / TS + 2:
+        for c = c0, c0 + SCREEN_W / TS + 1:
+            var t = level_get_tile(c, r)
+            var x = c * TS - camera.x
+            var y = r * TS - camera.y
+
+            if t == '0':
+                # edge
+                sprite(x, y, TS, TS, 0, 32, 0)
+                if level_get_tile(c - 1, r) != '0': sprite(x, y, TS, TS, 0 * TS, 48, 0)
+                if level_get_tile(c + 1, r) != '0': sprite(x, y, TS, TS, 1 * TS, 48, 0)
+                if level_get_tile(c, r - 1) != '0': sprite(x, y, TS, TS, 2 * TS, 48, 0)
+                if level_get_tile(c, r + 1) != '0': sprite(x, y, TS, TS, 3 * TS, 48, 0)
+
+            elif t == '^':  # jump through platform
+                sprite(x, y, TS, TS, 4 * TS, 48, 0)
+
+
+            elif t == 'L':  # lava
+                sprite(x, y, TS, TS, 5 * TS, 48, 0)
+            elif t == 'l':  # lava surface
+                var q = level.tick / 8 % TS
+                sprite(x,     y, q,      TS, 6 * TS + TS - q, 48, 0)
+                sprite(x + q, y, TS - q, TS, 6 * TS,          48, 0)
+
+
+const HERO_ANIM_STAND = 0
+const HERO_ANIM_JUMP  = 1
+const HERO_ANIM_WALK  = 2
+
+
+struct Hero:
+    x
+    y
+    vx
+    vy
+    facing_left
+    on_ground
+
+    animation
+    frame
+
+var hero: Hero
+
+func hero_init():
+    hero = {}
+    var i = strindex(level.data, 'h')
+    # hero.x = i % level.w * TS + TS / 2
+    # hero.y = i / level.w * TS + TS - 1
+    hero.x = i % level.w * TS
+    hero.y = i / level.w * TS
+
+    hero.x *= SPX
+    hero.y *= SPX
+
+
+
+# collision debugging
+struct Dot:
+    x
+    y
+var dots: Dot[99]
+var dot_count
+func dot(x, y):
+    dots[dot_count] = {x, y}
+    dot_count += 1
+func draw_dots():
+    for i = 0, dot_count:
+        var d = dots[i]
+        sprite(d.x - camera.x, d.y - camera.y, 1, 1, 1, 24, 0)
+
+
+const RUN_MAX      = 20
+const ACCEL_GROUND = 5
+const ACCEL_AIR    = 2
+const JUMP_FORCE   = 48
+
+
+const DIR_LEFT  = 0
+const DIR_RIGHT = 1
+const DIR_UP    = 2
+const DIR_DOWN  = 3
+
+
+
+func check_collision(x, y, dir) -> int:
+    dot(x, y)
+    var t = level_get_tile(x / TS, y / TS)
+    if t != '0': return 0
+    if dir == DIR_LEFT:  return TS - (x % TS)
+    if dir == DIR_RIGHT: return -1 - (x % TS)
+    if dir == DIR_UP:    return TS - (y % TS)
+    if dir == DIR_DOWN:  return -1 - (y % TS)
+
+func check_collision_down(x, y, py) -> int:
+    dot(x, y)
+    var t = level_get_tile(x / TS, y / TS)
+    if (t == '0' or
+        t == '^' and (y / TS) > (py / TS)):
+        return -1 - (y % TS)
+    return 0
+
+
+
+func hero_update():
+    dot_count = 0
+
+    # horizontal movement
+    var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
+    if dx: hero.facing_left = dx < 0
+    var accel = hero.on_ground ? ACCEL_GROUND : ACCEL_AIR
+    hero.vx = clamp(RUN_MAX * dx, hero.vx - accel, hero.vx + accel)
+    hero.x += hero.vx
+
+    var x = hero.x / SPX
+    var y = hero.y / SPX
+
+    # horizontal collision
+    var o
+    o = max(check_collision(x + 6, y +  7, DIR_LEFT),
+            check_collision(x + 4, y + 13, DIR_LEFT))
+    if o:
+        x += o
+        hero.x = x * SPX
+        hero.vx = 0
+    o = min(check_collision(x + 9, y +  7, DIR_RIGHT),
+            check_collision(x + 11, y + 13, DIR_RIGHT))
+    if o:
+        x += o
+        hero.x = x * SPX
+        if hero.vx > 0: hero.x += SPX - 1
+        hero.vx = 0
+
+
+    # jump
+    if hero.on_ground and btnp(BTN_A): hero.vy = -JUMP_FORCE
+    elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
+
+    # gravity
+    # hero.vy = (btn(BTN_DOWN) - btn(BTN_UP)) * SPX
+    hero.vy += 2
+    hero.vy = min(hero.vy, SPX * 4)
+
+    # floor collision
+    var py = hero.y / SPX
+    hero.y += hero.vy
+    y = hero.y / SPX
+    o = min(check_collision_down(x +  5, y + 15, py + 15),
+            check_collision_down(x + 10, y + 15, py + 15))
+    if o:
+        hero.on_ground = true
+        y += o
+        hero.y = y * SPX + SPX - 1
+        hero.vy = 0
+    else:
+        hero.on_ground = false
+
+    # ceiling collision
+    o = check_collision(x + 8 - hero.facing_left, y + 5, DIR_UP)
+    if o:
+        y += o
+        hero.y = y * SPX
+        hero.vy = 10
+
+    # update camera
+    camera.x = hero.x / SPX - SCREEN_W / 2
+    camera.y = hero.y / SPX - SCREEN_H / 2
+    camera.x = clamp(camera.x, 0, level.w * TS - SCREEN_W)
+    camera.y = clamp(camera.y, 0, level.h * TS - SCREEN_H)
+
+
+
+func hero_draw():
+
+    var x = hero.x / SPX
+    var y = hero.y / SPX
+
+    sprite(x - camera.x,
+           y - camera.y,
+           16, 16,
+           hero.frame * 16, 64,
+           hero.facing_left)
+
+    # debug
+    draw_dots()
+
+func init():
+    level_init(LEVEL1_DATA)
+    hero_init()
+
+
+func update():
+    level_update()
+    hero_update()
+
+
+func draw():
+    level_draw()
+    hero_draw()
+
+    # draw_text(0, 0, "Hello, world!")
+

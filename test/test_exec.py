@@ -657,7 +657,7 @@ class ExecTests(unittest.TestCase):
             struct V:
                 x
                 y
-            func f() -> V:
+            func f() V:
                 var b: V
                 return b
             func tick():

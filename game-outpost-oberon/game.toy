@@ -22,7 +22,7 @@ const DIR_RIGHT = 1
 const DIR_UP    = 2
 const DIR_DOWN  = 3
 
-func check_collision(x, y, dir) -> int:
+func check_collision(x, y, dir) int:
     dot(x, y)
     if level_get_tile(x, y) != '0': return 0
     if dir == DIR_LEFT:  return TS - (x % TS)
@@ -30,7 +30,7 @@ func check_collision(x, y, dir) -> int:
     if dir == DIR_UP:    return TS - (y % TS)
     if dir == DIR_DOWN:  return -1 - (y % TS)
 
-func check_collision_down(x, y, py) -> int:
+func check_collision_down(x, y, py) int:
     dot(x, y)
     var t = level_get_tile(x, y)
     if (t == '0' or

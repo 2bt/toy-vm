@@ -21,7 +21,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<comment> \#.*                        )|
     [ \t]*(?P<num>     \$[0-9A-Fa-f]+|[0-9]+       )|
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
-    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|->|
+    [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|
                        [+\-*/%{}()<>\[\]=,.:&|@?]  )|
     [ \t]*(?P<string>  "(?:[^"\\\n]|\\.)*"         )|
     [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
@@ -270,8 +270,11 @@ class Parser:
         return n.value
 
     def type(self, intro_tok=":", auto_array_size=False):
-        if not self.peek(intro_tok): return INT
-        self.eat()
+        if intro_tok is None:
+            if not self.peek("id"): return INT
+        else:
+            if not self.peek(intro_tok): return INT
+            self.eat()
         base = self.eat("id").v
         ptr = 0
         while self.peek("*"): self.eat(); ptr += 1
@@ -454,7 +457,7 @@ class Parser:
                         self.eat()
                         func_arg()
                 self.eat(")")
-                func.type = self.type("->")
+                func.type = self.type(None)
                 if is_aggregate(func.type): self.error("cannot return aggregate")
                 self.current_func = func
                 self.call_stack.append(func)

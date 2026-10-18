@@ -65,21 +65,21 @@ func sgn(x):
 # string
 var str: int[20]
 
-func strlen(s: int*) -> int:
+func strlen(s: int*) int:
     var l = 0
     while s.*:
         s += 1
         l += 1
     return l
 
-func strcpy(dst: int*, src: int*) -> int*:
+func strcpy(dst: int*, src: int*) int*:
     while src.*:
         dst.* = src.*
         src += 1
         dst += 1
     return dst
 
-func stridx(s: int*, c) -> int:
+func stridx(s: int*, c) int:
     var i = 0
     while s.*:
         if s.* == c: return i
@@ -87,7 +87,7 @@ func stridx(s: int*, c) -> int:
         i += 1
     return -1
 
-func strnum(p: int*, n) -> int*:
+func strnum(p: int*, n) int*:
     if n == 0:
         p.* = '0'
         p += 1

@@ -8,7 +8,7 @@ func box_has_point(b: Box*, x, y):
     return (b.x <= x and b.x + b.w > x
         and b.y <= y and b.y + b.h > y)
 
-func box_intersects(b: Box*, o: Box*) -> int:
+func box_intersects(b: Box*, o: Box*) int:
     return (b.x < o.x + o.w and b.x + b.w > o.x 
         and b.y < o.y + o.h and b.y + b.h > o.y)
 

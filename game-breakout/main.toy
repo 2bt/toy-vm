@@ -73,7 +73,7 @@ var prev_input
 
 func is_just_pressed(button): return input & button & (-1-prev_input)
 
-func new_ball() -> Ball*:
+func new_ball() Ball*:
     for b in balls:
         if b.state != BALL_STATE_DEAD: continue
         b.state = BALL_STATE_STICKING

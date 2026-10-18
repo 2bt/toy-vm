@@ -128,7 +128,7 @@ func init_stage():
 
     i = 5
     while i:
-        k = &blocks[rand(0, blocks_alive - 1)]
+        k = blocks[rand(0, blocks_alive - 1)]
         if k.type == BLOCK_TYPE_NORMAL:
             k.type = BLOCK_TYPE_EXTRABALL
             i -= 1

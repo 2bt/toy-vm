@@ -475,6 +475,59 @@ class ExecTests(unittest.TestCase):
                 print_n(b.y)
         """), "4\n5\n")
 
+    def test_auto_addr_of_int_arg(self):
+        self.assertEqual(self.run_toy("""
+            func set(p: int*, v):
+                p.* = v
+            var x = 0
+            func tick():
+                set(x, 9)
+                print_n(x)
+        """), "9\n")
+
+    def test_auto_addr_of_struct_arg(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            func set_xy(p: V*, a, b):
+                p.x = a
+                p.y = b
+            var v: V
+            func tick():
+                set_xy(v, 2, 3)
+                print_n(v.x)
+                print_n(v.y)
+        """), "2\n3\n")
+
+    def test_auto_addr_of_typed_assign(self):
+        self.assertEqual(self.run_toy("""
+            var x = 7
+            func tick():
+                var p: int* = x
+                print_n(p.*)
+        """), "7\n")
+
+    def test_null_pointer_assign_still_ok(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                var p: int* = 0
+                print_n(not p)
+        """), "1\n")
+
+    def test_untyped_var_copies_struct(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V = { 4, 5 }
+            func tick():
+                var b = a
+                b.x = 1
+                print_n(a.x)
+                print_n(b.x)
+        """), "4\n1\n")
+
     def test_struct_assign_indexed(self):
         self.assertEqual(self.run_toy("""
             struct V:

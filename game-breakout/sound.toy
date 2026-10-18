@@ -150,8 +150,8 @@ var sound_effects: SoundEffect[] = {
 
 
 func play_sound(s):
-    var effect = &sound_effects[s]
-    var stream = &sound_command_streams[effect.index]
+    var effect: SoundEffect* = sound_effects[s]
+    var stream: SoundCommandStream* = sound_command_streams[effect.index]
     stream.pos  = effect.start
     stream.wait = 0
 

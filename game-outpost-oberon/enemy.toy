@@ -1,0 +1,76 @@
+const ENEMY_PATROL = 1
+struct Enemy:
+    alive
+    active
+    box: Box
+    type
+    x
+    y
+    facing_left
+    hp
+
+var enemies: Enemy[64]
+
+
+func enemy_update_box_pos(e: Enemy*):
+    e.box.x = e.x / SPX + 8 - e.box.w / 2
+    e.box.y = e.y / SPX + 16 - e.box.h
+
+
+func enemy_spawn(type, x, y):
+    for e in enemies:
+        if e.alive: continue
+        e.alive  = true
+        e.active = false
+        e.type   = type
+        e.x      = x * SPX
+        e.y      = y * SPX
+
+        if type == ENEMY_PATROL:
+            e.box.w = 8
+            e.box.h = 17
+            e.hp    = 3
+
+        enemy_update_box_pos(e)
+        return
+
+func enemy_hit(e: Enemy*):
+    e.hp -= 1
+    if e.hp <= 0:
+        e.alive = false
+        e.active = false
+        # TODO: particles
+
+
+func enemy_init_all():
+    for e in enemies: e.* = {}
+    for r = 0, level.h:
+        for c = 0, level.w:
+            var x = c * TS
+            var y = r * TS
+            var t = level_get_tile_at_cr(c, r)
+            if t == 'p': enemy_spawn(ENEMY_PATROL, x, y)
+
+
+func enemy_update_all():
+
+    var view = camera
+    box_grow(view, 32)
+
+    for e in enemies:
+        if not e.alive: continue
+        e.active = box_intersects(view, e.box)
+        if e.active:
+
+            
+
+
+func enemy_draw_all():
+    for e in enemies:
+        if not e.active: continue
+        camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
+        if e.type == ENEMY_PATROL:
+            camera_sprite(e.x, e.y - 16, 16, 32, 0, 112, e.facing_left)
+
+
+

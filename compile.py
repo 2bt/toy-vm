@@ -318,6 +318,11 @@ class Parser:
         if is_ptr(want) and is_array(t):
             if isinstance(e, StrLit): e = self.intern_str(e)
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
+        elif (is_ptr(want) and want.base == t.base and want.ptr == t.ptr + 1
+              and isinstance(e, (VarRef, Deref))):
+            if isinstance(e, VarRef) and e.name in self.var_bound:
+                self.error("variable is bound")
+            e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif isinstance(e, StrLit) and is_array(want):
             data, want = self.fit_str(e, want)
             return self.intern_str(StrLit(data)), want

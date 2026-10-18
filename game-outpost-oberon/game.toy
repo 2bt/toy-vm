@@ -39,35 +39,8 @@ func check_collision_down(x, y, py) -> int:
     return 0
 
 
-# particle
-
-const PARTICLE_FLASH = 1
-struct Particle:
-    ttl
-    x
-    y
-    type
-
-var particles: Particle[32]
-
-func particle_new() -> Particle*:
-    for p in particles:
-        if p.ttl == 0: return p
-    return null
-
-
-func particle_update_all():
-    for p in particles:
-        if p.ttl == 0: continue
-        p.ttl -= 1
-
-
-func particle_draw_all():
-    for p in particles:
-        if p.ttl == 0: continue
-        if p.type == PARTICLE_FLASH:
-            camera_sprite(p.x - 2, p.y - 2, 5, 5, 16, 96, 0)
-
+include "particle.toy"
+include "enemy.toy"
 
 
 # bullet
@@ -90,20 +63,33 @@ func bullet_new(x, y, dx):
         return
 
 func bullet_update_all():
+
+    var view = camera
+    box_grow(view, 8)
+
     for b in bullets:
         if not b.alive: continue
         b.x += b.dx * 5 # speed
+
+        if not box_has_point(view, b.x, b.y):
+            b.alive = 0
+
         var dir = b.dx > 0 ? DIR_RIGHT : DIR_LEFT
         var o = check_collision(b.x, b.y, dir)
         if o:
             b.alive = false
-            # spawn particle
-            var p = particle_new()
-            if p:
-                p.ttl  = 3
-                p.x    = b.x + o
-                p.y    = b.y
-                p.type = PARTICLE_FLASH
+            particle_spawn(PARTICLE_FLASH, b.x + o, b.y)
+            continue
+
+        for e in enemies:
+            if not e.alive: continue
+            if box_has_point(e.box, b.x, b.y):
+                b.alive = false
+                particle_spawn(PARTICLE_FLASH, b.x, b.y)
+                enemy_hit(e)
+                continue
+
+
 
 func bullet_draw_all():
     for b in bullets:
@@ -207,8 +193,8 @@ func hero_update():
 
     # shoot
     if hero.shoot_tick == 0:
-        if btnp(BTN_B):
-            hero.shoot_tick = 10
+        if btn(BTN_B):
+            hero.shoot_tick = 12
             if hero.facing_left:
                 bullet_new(x + 4, y + 9, -1)
             else:
@@ -248,23 +234,27 @@ func hero_draw():
                   64 + shooting * 16,
                   hero.facing_left)
 
-    # draw_dots()
 
-func init():
+func game_init():
     level_init(LEVEL1_DATA)
     hero_init()
+    enemy_init_all()
 
 
-func update():
+func game_update():
     level_update()
     hero_update()
+    enemy_update_all()
     bullet_update_all()
     particle_update_all()
 
+    # draw_dots()
 
-func draw():
+func game_draw():
     level_draw_background()
+    enemy_draw_all()
     hero_draw()
     bullet_draw_all()
     particle_draw_all()
     level_draw_walls()
+

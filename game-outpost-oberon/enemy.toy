@@ -158,6 +158,6 @@ func enemy_draw_all():
             camera_sprite(e.sx / SP,
                           e.sy / SP - 16,
                           16, 32,
-                          e.frame * 16,
-                          112 + (e.hit_countdown > 0) * 32,
+                          256 + e.frame * 16,
+                          0 + (e.hit_countdown > 0) * 32,
                           e.facing_left)

@@ -1,5 +1,5 @@
-const PARTICLE_TYPE_FLASH  = 1
-const PARTICLE_TYPE_DEBRIS = 2
+const PARTICLE_TYPE_DEBRIS = 1
+const PARTICLE_TYPE_FLASH  = 2
 
 
 struct Particle:
@@ -19,14 +19,15 @@ func particle_spawn(type, x, y):
             p.type = type
             p.sx   = x * SP
             p.sy   = y * SP
-            if type == PARTICLE_TYPE_FLASH:
-                p.ttl = 3
-
 
             if type == PARTICLE_TYPE_DEBRIS:
                 p.ttl = rand(5, 60)
                 p.vx  = rand(-15, 15)
                 p.vy  = rand(-25, 0)
+
+            elif type == PARTICLE_TYPE_FLASH:
+                p.ttl = 3
+
             return
 
 
@@ -56,10 +57,18 @@ func particle_update_all():
 func particle_draw_all():
     for p in particles:
         if p.ttl == 0: continue
-        if p.type == PARTICLE_TYPE_FLASH:
-            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5, 16, 96, 0)
+
 
 
         elif p.type == PARTICLE_TYPE_DEBRIS:
             var frame = max(0, 9 - p.ttl / 8)
-            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5, frame * 8, 192, 0)
+            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
+                          frame * 8,
+                          256,
+                          0)
+
+        if p.type == PARTICLE_TYPE_FLASH:
+            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
+                          0,
+                          256 + 16,
+                          0)

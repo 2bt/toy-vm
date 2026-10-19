@@ -118,7 +118,8 @@ func bullet_update_all():
 func bullet_draw_all():
     for b in bullets:
         if not b.alive: continue
-        camera_sprite(b.x - (b.dx > 0 ? 5 : 0), b.y, 6, 1, 0, 96, 0)
+        camera_sprite(b.x - (b.dx > 0 ? 5 : 0), b.y, 6, 1,
+                      0, 176, 0)
 
 
 
@@ -238,7 +239,7 @@ func hero_draw():
     var shooting = hero.shoot_countdown > 1
     camera_sprite(x, y, 16, 16,
                   hero.frame * 16,
-                  64 + shooting * 16,
+                  128 + shooting * 16,
                   hero.facing_left)
 
 

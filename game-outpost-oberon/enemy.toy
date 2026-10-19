@@ -113,6 +113,11 @@ func enemy_update_all():
         if e.state == ENEMY_STATE_DEAD: continue
 
         if e.state == ENEMY_STATE_DYING:
+            if e.hit_countdown > 5:
+                particle_spawn(PARTICLE_TYPE_DEBRIS,
+                               rand(e.box.x, e.box.x + e.box.w - 1),
+                               rand(e.box.y, e.box.y + e.box.h - 1))
+
             if e.hit_countdown > 0: e.hit_countdown -= 1
             else:
                 e.state  = ENEMY_STATE_DEAD
@@ -123,11 +128,10 @@ func enemy_update_all():
                     e.type == ENEMY_TYPE_PATROL ? 100 :
                     0)
 
-            if e.hit_countdown > 5:
-                particle_spawn(PARTICLE_TYPE_DEBRIS,
-                               rand(e.box.x, e.box.x + e.box.w - 1),
-                               rand(e.box.y, e.box.y + e.box.h - 1))
             continue
+
+        if e.state != ENEMY_STATE_NORMAL: continue
+
 
         var prev_active = e.active
         e.active = box_intersects(view, e.box)

@@ -25,7 +25,7 @@ func particle_spawn(type, x, y):
                 p.ttl  = rand(5, 60)
                 p.vx   = rand(-15, 15)
                 p.vy   = rand(-25, 0)
-                p.flip = rand(0, 4)
+                p.flip = rand(0, 3)
 
             elif type == PARTICLE_TYPE_FLASH:
                 p.ttl = 3
@@ -53,7 +53,6 @@ func particle_update_all():
                 p.sy += o * SP
                 p.vy *= -7
                 p.vy /= 10
-
 
 
 func particle_draw_all():

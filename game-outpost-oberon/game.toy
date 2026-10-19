@@ -194,21 +194,25 @@ func hero_update():
             if hero.lives == 0:
                 # game over
                 game.state = GAME_STATE_GAME_OVER
-                return
-
-            # respawn
-            hero_place_at_start()
+            else:
+                # respawn
+                hero_place_at_start()
         return
 
 
     if hero.state == HERO_STATE_DYING:
+        if hero.hit_countdown > 5:
+            particle_spawn(PARTICLE_TYPE_DEBRIS,
+                            rand(hero.box.x, hero.box.x + hero.box.w - 1),
+                            rand(hero.box.y, hero.box.y + hero.box.h - 1))
+
+        hero.sy += hero.vy
         if hero.hit_countdown > 0: hero.hit_countdown -= 1
         else:
             hero.lives -= 1
             hero.state = HERO_STATE_DEAD
             hero.hit_countdown = 60
         return
-
 
 
     # horizontal movement
@@ -302,6 +306,12 @@ func hero_update():
             hero_kill()
             return
 
+    # check hazards
+    if level_get_tile(hero.box.x, hero.box.y) == 'l':
+        hero_kill()
+        hero.vy = 4
+        return
+
 
 
 func hero_draw():
@@ -332,6 +342,14 @@ func game_init():
 
 
 func game_update():
+    if game.state == GAME_STATE_GAME_OVER:
+
+        # restart game
+        if btnp(BTN_A):
+            game_init()
+
+
+
     level_update()
 
     if game.state == GAME_STATE_PLAY:
@@ -367,4 +385,4 @@ func game_draw():
 
 
     if game.state == GAME_STATE_GAME_OVER:
-        draw_centered_text(SCREEN_W/2, SCREEN_H/2, "GAME OVER")
+        draw_centered_text(SCREEN_W/2, SCREEN_H/2 - 4, "GAME OVER")

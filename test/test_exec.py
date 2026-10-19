@@ -202,6 +202,28 @@ class ExecTests(unittest.TestCase):
             self.assertIn("tick._T0", asm)
             self.assertNotIn("tick._T1", asm)
 
+    def test_jsr_does_not_preserve_dest_pointer(self):
+        # Assembler PDA opt must not reuse `a` across jsr. Regression: a
+        # conditional call before `e.hit_countdown -= 1` made the subtract
+        # hit the wrong cell whenever the call ran (countdown stuck at 9).
+        self.assertEqual(self.run_toy("""
+            struct E:
+                hit_countdown
+            var enemies: E[2]
+            func clobber(a, b, c):
+                return a
+            func tick():
+                enemies[0].hit_countdown = 9
+                clobber(0, 0, 0)
+                for e in enemies:
+                    if e.hit_countdown == 0: continue
+                    for i = 0, 5:
+                        if e.hit_countdown > 5:
+                            clobber(1, 2, 3)
+                        if e.hit_countdown > 0: e.hit_countdown -= 1
+                        print_n(e.hit_countdown)
+        """), "8\n7\n6\n5\n4\n")
+
     def test_nested_same_function_forbidden(self):
         compiled = self.compile_text("""
             func add(a, b):

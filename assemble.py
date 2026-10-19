@@ -135,8 +135,12 @@ def optimize(insts, labels):
             dest = labels[inst.target]
         if op == "ret":
             continue
-        if op in ("jmp", "jsr"):
+        if op == "jmp":
             preds[dest].append(i)
+        elif op == "jsr":
+            # Call enters the callee, then execution resumes at the next instruction.
+            preds[dest].append(i)
+            preds[i + 1].append(i)
         elif op.startswith("j"):
             preds[i + 1].append(i)
             preds[dest].append(i)
@@ -162,6 +166,7 @@ def optimize(insts, labels):
     incoming_a = [None] * n
     def outgoing_a(p, slots):
         inst = insts[p]
+        if inst.op == "jsr": return ()
         if not inst.op.startswith("j") and inst.a.mode != "nil": return inst.a
         return slots[p]
     merge(incoming_a, outgoing_a)
@@ -169,6 +174,7 @@ def optimize(insts, labels):
     incoming_c = [None] * n
     def outgoing_c(p, slots):
         inst = insts[p]
+        if inst.op == "jsr": return ()
         if inst.b.mode in ("abs", "ind", "idx"): return inst.b
         return slots[p]
     merge(incoming_c, outgoing_c)

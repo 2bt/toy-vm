@@ -30,12 +30,6 @@ struct Enemy:
 var enemies: Enemy[64]
 
 
-func enemy_update_box_pos(e: Enemy*):
-    # sprite at (x, y-16) size 16x32 → feet pixel y+15; box bottom exclusive → +16
-    e.box.x = e.sx / SP + 8 - e.box.w / 2
-    e.box.y = e.sy / SP + 16 - e.box.h
-
-
 func enemy_spawn(type, x, y):
     for e in enemies:
         if e.state: continue
@@ -51,7 +45,7 @@ func enemy_spawn(type, x, y):
             e.hp    = 3
             e.pace_countdown = rand(30, 80)
 
-        enemy_update_box_pos(e)
+        entity_update_box_pos(e.sx, e.sy, e.box)
         return
 
 func enemy_init_all():
@@ -108,7 +102,7 @@ func enemy_update_patrol(e: Enemy*):
             if e.pace_countdown == 0:
                 enemy_start_wait(e, false)
 
-    enemy_update_box_pos(e)
+    entity_update_box_pos(e.sx, e.sy, e.box)
 
 
 func enemy_update_all():
@@ -130,8 +124,8 @@ func enemy_update_all():
 
             if e.hit_countdown < 15:
                 particle_spawn(PARTICLE_TYPE_DEBRIS,
-                                rand(e.box.x, e.box.x + e.box.w - 1),
-                                rand(e.box.y, e.box.y + e.box.h - 1))
+                               rand(e.box.x, e.box.x + e.box.w - 1),
+                               rand(e.box.y, e.box.y + e.box.h - 1))
 
             continue
 

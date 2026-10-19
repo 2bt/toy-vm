@@ -1,3 +1,12 @@
+const GAME_STATE_PLAY      = 1
+const GAME_STATE_GAME_OVER = 2
+
+struct Game:
+    state
+
+var game: Game
+
+
 const TS        = 16  # tile size
 const SP        = 16  # subpixel
 const GRAVITY   = 2
@@ -45,7 +54,12 @@ func check_collision_down(x, y, py) int:
     return 0
 
 
+const HERO_STATE_DEAD   = 0
+const HERO_STATE_NORMAL = 1
+const HERO_STATE_DYING  = 2
+
 struct Hero:
+    state
     sx
     sy
     vx
@@ -55,13 +69,20 @@ struct Hero:
     facing_left
     on_ground
 
-
+    lives
     score
     frame
     run_tick
     shoot_countdown
+    hit_countdown
 
 var hero: Hero
+
+func camera_update():
+    camera.x = hero.sx / SP - SCREEN_W / 2
+    camera.y = hero.sy / SP - SCREEN_H / 2
+    camera.x = clamp(camera.x, 0, level.w * TS - SCREEN_W)
+    camera.y = clamp(camera.y, 0, level.h * TS - SCREEN_H)
 
 
 include "particle.toy"
@@ -111,6 +132,7 @@ func bullet_update_all():
             if box_has_point(e.box, b.x, b.y):
                 b.alive = false
                 enemy_hit(e)
+                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
                 continue
 
 
@@ -125,14 +147,35 @@ func bullet_draw_all():
 
 # hero
 
+func hero_place_at_start():
+    var i = stridx(level.data, 'h')
+    hero.state = HERO_STATE_NORMAL
+    hero.sx = i % level.w * TS * SP
+    hero.sy = i / level.w * TS * SP + SP - 1
+    hero.vx = 0
+    hero.vy = 0
+    hero.facing_left = false
+    hero.on_ground = false
+    hero.shoot_countdown = 0
+    hero.hit_countdown = 0
+    hero.frame = 0
+    hero.run_tick = 0
+    entity_update_box_pos(hero.sx, hero.sy, hero.box)
+
 func hero_init():
     hero = {}
-    var i = stridx(level.data, 'h')
-    hero.sx = i % level.w * TS
-    hero.sy = i / level.w * TS
-    hero.sx *= SP
-    hero.sy *= SP
+    hero.box.w = 6
+    hero.box.h = 11
+    hero.lives = 3
+    hero_place_at_start()
 
+
+func hero_kill():
+    if hero.state != HERO_STATE_NORMAL: return
+    hero.state = HERO_STATE_DYING
+    hero.hit_countdown = 20
+    hero.vx = 0
+    hero.vy = 0
 
 
 const RUN_MAX      = 20
@@ -140,7 +183,31 @@ const ACCEL_GROUND = 5
 const ACCEL_AIR    = 2
 const JUMP_FORCE   = 48
 
+
+
 func hero_update():
+    if hero.state == HERO_STATE_DEAD:
+        if hero.hit_countdown > 0: hero.hit_countdown -= 1
+        else:
+            if hero.lives == 0:
+                # game over
+                game.state = GAME_STATE_GAME_OVER
+                return
+
+            # respawn
+            hero_place_at_start()
+        return
+
+
+    if hero.state == HERO_STATE_DYING:
+        if hero.hit_countdown > 0: hero.hit_countdown -= 1
+        else:
+            hero.lives -= 1
+            hero.state = HERO_STATE_DEAD
+            hero.hit_countdown = 60
+        return
+
+
 
     # horizontal movement
     var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
@@ -222,54 +289,80 @@ func hero_update():
         hero.run_tick = 4
         hero.frame = 0
 
+    entity_update_box_pos(hero.sx, hero.sy, hero.box)
 
-    # update camera
-    camera.x = hero.sx / SP - SCREEN_W / 2
-    camera.y = hero.sy / SP - SCREEN_H / 2
-    camera.x = clamp(camera.x, 0, level.w * TS - SCREEN_W)
-    camera.y = clamp(camera.y, 0, level.h * TS - SCREEN_H)
+    # check enemies
+    for e in enemies:
+        if not e.active: continue
+        if e.state != ENEMY_STATE_NORMAL: continue
+        if box_intersects(hero.box, e.box):
+            enemy_hit(e)
+            hero_kill()
+            return
 
 
 
 func hero_draw():
+    if hero.state == HERO_STATE_DEAD: return
+    if hero.state == HERO_STATE_DYING and hero.hit_countdown & 2: return
 
     var x = hero.sx / SP
     var y = hero.sy / SP
 
-    var shooting = hero.shoot_countdown > 1
+    var row = 0
+    if hero.state == HERO_STATE_DYING: row = 2
+    elif hero.shoot_countdown > 1: row = 1
+
     camera_sprite(x, y, 16, 16,
                   hero.frame * 16,
-                  128 + shooting * 16,
+                  128 + row * 16,
                   hero.facing_left)
 
 
+
+###############################################################################
+
 func game_init():
+    game.state = GAME_STATE_PLAY
     level_init(LEVEL1_DATA)
     hero_init()
     enemy_init_all()
 
 
 func game_update():
-
     level_update()
-    hero_update()
+
+    if game.state == GAME_STATE_PLAY:
+        hero_update()
+    camera_update()
+
     enemy_update_all()
     bullet_update_all()
     particle_update_all()
 
 
-
-var tick
 func game_draw():
     level_draw_background()
     enemy_draw_all()
-    hero_draw()
+
+    if game.state == GAME_STATE_PLAY:
+        hero_draw()
+
     bullet_draw_all()
     particle_draw_all()
     level_draw_walls()
 
     draw_dots()
 
+
     # HUD
+    # lives
+    strnum(str, hero.lives)
+    draw_text(0, SCREEN_H - 8, str)
+    # score
     strnum(str, hero.score)
     draw_text(SCREEN_W - strlen(str) * 8, SCREEN_H - 8, str)
+
+
+    if game.state == GAME_STATE_GAME_OVER:
+        draw_centered_text(SCREEN_W/2, SCREEN_H/2, "GAME OVER")

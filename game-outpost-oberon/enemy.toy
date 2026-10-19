@@ -1,46 +1,58 @@
-const ENEMY_PATROL = 1
+const ENEMY_TYPE_PATROL = 1
+
+const ENEMY_STATE_DEAD   = 0
+const ENEMY_STATE_NORMAL = 1
+const ENEMY_STATE_DYING  = 2
+
+
 struct Enemy:
-    alive
+    state
     active
     box: Box
     type
-    x
-    y
-    facing_left
+    sx
+    sy
     hp
+
+    facing_left
+    frame
+    hit_countdown
+
+
+    # patrol specific stuff
+    run_tick
+    wait_countdown
+    wait_turn
+    pace_countdown
+
+
 
 var enemies: Enemy[64]
 
 
 func enemy_update_box_pos(e: Enemy*):
-    e.box.x = e.x / SPX + 8 - e.box.w / 2
-    e.box.y = e.y / SPX + 16 - e.box.h
+    # sprite at (x, y-16) size 16x32 → feet pixel y+15; box bottom exclusive → +16
+    e.box.x = e.sx / SP + 8 - e.box.w / 2
+    e.box.y = e.sy / SP + 16 - e.box.h
 
 
 func enemy_spawn(type, x, y):
     for e in enemies:
-        if e.alive: continue
-        e.alive  = true
-        e.active = false
-        e.type   = type
-        e.x      = x * SPX
-        e.y      = y * SPX
+        if e.state: continue
+        e.* = {}
+        e.state = ENEMY_STATE_NORMAL
+        e.type  = type
+        e.sx    = x * SP
+        e.sy    = y * SP
 
-        if type == ENEMY_PATROL:
+        if type == ENEMY_TYPE_PATROL:
             e.box.w = 8
             e.box.h = 17
             e.hp    = 3
+            e.pace_countdown = rand(30, 80)
 
         enemy_update_box_pos(e)
         return
-
-func enemy_hit(e: Enemy*):
-    e.hp -= 1
-    if e.hp <= 0:
-        e.alive = false
-        e.active = false
-        # TODO: particles
-
 
 func enemy_init_all():
     for e in enemies: e.* = {}
@@ -49,28 +61,99 @@ func enemy_init_all():
             var x = c * TS
             var y = r * TS
             var t = level_get_tile_at_cr(c, r)
-            if t == 'p': enemy_spawn(ENEMY_PATROL, x, y)
+            if t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
+
+
+func enemy_hit(e: Enemy*):
+    if e.state != ENEMY_STATE_NORMAL: return
+    e.hp -= 1
+    e.hit_countdown = 3
+    if e.hp <= 0:
+        e.state = ENEMY_STATE_DYING
+        e.hit_countdown = 20
+
+
+func enemy_start_wait(e: Enemy*, turn):
+    e.wait_countdown = rand(50, 120)
+    e.wait_turn = turn
+    e.frame = 0
+
+func enemy_update_patrol(e: Enemy*):
+    var x = e.sx / SP
+    var y = e.sy / SP
+
+    if e.wait_countdown > 0:
+        e.wait_countdown -= 1
+        if e.wait_countdown == 0:
+            if e.wait_turn: e.facing_left = not e.facing_left
+            e.pace_countdown = rand(30, 80)
+        e.frame = 0
+    else:
+
+        e.sx += e.facing_left ? -6 : 6
+        x = e.sx / SP
+
+        var face_x = e.facing_left ? x + 4 : x + 11
+        var wall_dir = e.facing_left ? DIR_LEFT : DIR_RIGHT
+
+        var o = check_collision(face_x, y + 8, wall_dir)
+        if o or not check_collision_down(face_x, y + 16, y + 15):
+            x += o
+            e.sx = x * SP
+            enemy_start_wait(e, true)
+        else:
+            e.run_tick += 1
+            e.frame = 1 + e.run_tick / 4 % 4
+            e.pace_countdown -= 1
+            if e.pace_countdown == 0:
+                enemy_start_wait(e, false)
+
+    enemy_update_box_pos(e)
 
 
 func enemy_update_all():
-
     var view = camera
     box_grow(view, 32)
 
     for e in enemies:
-        if not e.alive: continue
+        if e.state == ENEMY_STATE_DEAD: continue
+
+        if e.state == ENEMY_STATE_DYING:
+            if e.hit_countdown > 0: e.hit_countdown -= 1
+            else:
+                e.state  = ENEMY_STATE_DEAD
+                e.active = false
+
+            if e.hit_countdown < 15:
+                particle_spawn(PARTICLE_TYPE_DEBRIS,
+                                rand(e.box.x, e.box.x + e.box.w - 1),
+                                rand(e.box.y, e.box.y + e.box.h - 1))
+
+            continue
+
+        var prev_active = e.active
         e.active = box_intersects(view, e.box)
         if e.active:
+            if not prev_active: e.facing_left = e.sx > hero.sx
 
-            
+        if e.hit_countdown > 0: e.hit_countdown -= 1
+
+        if e.type == ENEMY_TYPE_PATROL: enemy_update_patrol(e)
 
 
 func enemy_draw_all():
     for e in enemies:
         if not e.active: continue
-        camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
-        if e.type == ENEMY_PATROL:
-            camera_sprite(e.x, e.y - 16, 16, 32, 0, 112, e.facing_left)
 
+        # box
+        # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
 
+        if e.state == ENEMY_STATE_DYING and e.hit_countdown & 2: continue
 
+        if e.type == ENEMY_TYPE_PATROL:
+            camera_sprite(e.sx / SP,
+                          e.sy / SP - 16,
+                          16, 32,
+                          e.frame * 16,
+                          112 + (e.hit_countdown > 0) * 32,
+                          e.facing_left)

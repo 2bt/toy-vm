@@ -1,32 +1,66 @@
-const PARTICLE_FLASH = 1
+const PARTICLE_TYPE_FLASH  = 1
+const PARTICLE_TYPE_DEBRIS = 2
+
 
 struct Particle:
     ttl
-    x
-    y
     type
 
-var particles: Particle[32]
+    sx
+    sy
+    vx
+    vy
+
+var particles: Particle[64]
 
 func particle_spawn(type, x, y):
     for p in particles:
         if p.ttl == 0:
+            p.* = {}
             p.type = type
-            p.x    = x
-            p.y    = y
-            if type == PARTICLE_FLASH:
+            p.sx   = x * SP
+            p.sy   = y * SP
+            if type == PARTICLE_TYPE_FLASH:
                 p.ttl = 3
+
+
+            if type == PARTICLE_TYPE_DEBRIS:
+                p.ttl = rand(5, 60)
+                p.vx  = rand(-15, 15)
+                p.vy  = rand(-25, 0)
             return
+
 
 func particle_update_all():
     for p in particles:
         if p.ttl == 0: continue
-        p.ttl -= 1
+        p.ttl  -= 1
+
+        if p.type == PARTICLE_TYPE_DEBRIS:
+            p.sx += p.vx
+            var o = check_collision(p.sx / SP, p.sy / SP, p.vx > 0 ? DIR_RIGHT : DIR_LEFT)
+            if o:
+                p.sx += o * SP
+                p.vx *= -1
+
+            p.vy += GRAVITY / 2
+            p.sy += p.vy
+
+            o = check_collision(p.sx / SP, p.sy / SP, p.vy > 0 ? DIR_DOWN : DIR_UP)
+            if o:
+                p.sy += o * SP
+                p.vy *= -7
+                p.vy /= 10
+
+
 
 func particle_draw_all():
     for p in particles:
         if p.ttl == 0: continue
-        if p.type == PARTICLE_FLASH:
-            camera_sprite(p.x - 2, p.y - 2, 5, 5, 16, 96, 0)
+        if p.type == PARTICLE_TYPE_FLASH:
+            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5, 16, 96, 0)
 
 
+        elif p.type == PARTICLE_TYPE_DEBRIS:
+            var frame = max(0, 9 - p.ttl / 8)
+            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5, frame * 8, 192, 0)

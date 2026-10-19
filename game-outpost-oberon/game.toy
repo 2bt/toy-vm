@@ -1,3 +1,7 @@
+const TS        = 16  # tile size
+const SP        = 16  # subpixel
+const GRAVITY   = 2
+
 include "level.toy"
 
 
@@ -10,10 +14,12 @@ var dot_count
 func dot(x, y):
     dots[dot_count] = {x, y}
     dot_count += 1
+
 func draw_dots():
     for i = 0, dot_count:
         var d = dots[i]
-        camera_sprite(d.x, d.y, 1, 1, 1, 24, 0)
+        # camera_sprite(d.x, d.y, 1, 1, 13, 24, 0)
+    dot_count = 0
 
 
 # collision
@@ -37,6 +43,25 @@ func check_collision_down(x, y, py) int:
         t == '^' and (y / TS) > (py / TS)):
         return -1 - (y % TS)
     return 0
+
+
+
+
+struct Hero:
+    sx
+    sy
+    vx
+    vy
+    facing_left
+    on_ground
+
+    box: Box
+
+    frame
+    run_tick
+    shoot_countdown
+
+var hero: Hero
 
 
 include "particle.toy"
@@ -78,14 +103,13 @@ func bullet_update_all():
         var o = check_collision(b.x, b.y, dir)
         if o:
             b.alive = false
-            particle_spawn(PARTICLE_FLASH, b.x + o, b.y)
+            particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
             continue
 
         for e in enemies:
-            if not e.alive: continue
+            if not e.state: continue
             if box_has_point(e.box, b.x, b.y):
                 b.alive = false
-                particle_spawn(PARTICLE_FLASH, b.x, b.y)
                 enemy_hit(e)
                 continue
 
@@ -100,27 +124,13 @@ func bullet_draw_all():
 
 # hero
 
-struct Hero:
-    x
-    y
-    vx
-    vy
-    facing_left
-    on_ground
-
-    frame
-    run_tick
-    shoot_tick
-
-var hero: Hero
-
 func hero_init():
     hero = {}
     var i = stridx(level.data, 'h')
-    hero.x = i % level.w * TS
-    hero.y = i / level.w * TS
-    hero.x *= SPX
-    hero.y *= SPX
+    hero.sx = i % level.w * TS
+    hero.sy = i / level.w * TS
+    hero.sx *= SP
+    hero.sy *= SP
 
 
 
@@ -129,19 +139,17 @@ const ACCEL_GROUND = 5
 const ACCEL_AIR    = 2
 const JUMP_FORCE   = 48
 
-
 func hero_update():
-    dot_count = 0
 
     # horizontal movement
     var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
     if dx: hero.facing_left = dx < 0
     var accel = hero.on_ground ? ACCEL_GROUND : ACCEL_AIR
     hero.vx = clamp(RUN_MAX * dx, hero.vx - accel, hero.vx + accel)
-    hero.x += hero.vx
+    hero.sx += hero.vx
 
-    var x = hero.x / SPX
-    var y = hero.y / SPX
+    var x = hero.sx / SP
+    var y = hero.sy / SP
 
     # horizontal collision
     var o
@@ -149,14 +157,14 @@ func hero_update():
             check_collision(x + 4, y + 13, DIR_LEFT))
     if o:
         x += o
-        hero.x = x * SPX
+        hero.sx = x * SP
         hero.vx = 0
     o = min(check_collision(x + 9, y +  7, DIR_RIGHT),
             check_collision(x + 11, y + 13, DIR_RIGHT))
     if o:
         x += o
-        hero.x = x * SPX
-        if hero.vx > 0: hero.x += SPX - 1
+        hero.sx = x * SP
+        if hero.vx > 0: hero.sx += SP - 1
         hero.vx = 0
 
 
@@ -165,20 +173,20 @@ func hero_update():
     elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
 
     # gravity
-    # hero.vy = (btn(BTN_DOWN) - btn(BTN_UP)) * SPX
-    hero.vy += 2
-    hero.vy = min(hero.vy, SPX * 4)
+    # hero.vy = (btn(BTN_DOWN) - btn(BTN_UP)) * SP
+    hero.vy += GRAVITY
+    hero.vy = min(hero.vy, SP * 4)
 
     # floor collision
-    var py = hero.y / SPX
-    hero.y += hero.vy
-    y = hero.y / SPX
+    var py = hero.sy / SP
+    hero.sy += hero.vy
+    y = hero.sy / SP
     o = min(check_collision_down(x +  5, y + 15, py + 15),
             check_collision_down(x + 10, y + 15, py + 15))
     if o:
         hero.on_ground = true
         y += o
-        hero.y = y * SPX + SPX - 1
+        hero.sy = y * SP + SP - 1
         hero.vy = 0
     else:
         hero.on_ground = false
@@ -187,20 +195,19 @@ func hero_update():
     o = check_collision(x + 8 - hero.facing_left, y + 5, DIR_UP)
     if o:
         y += o
-        hero.y = y * SPX
+        hero.sy = y * SP
         hero.vy = 8
 
 
     # shoot
-    if hero.shoot_tick == 0:
-        if btn(BTN_B):
-            hero.shoot_tick = 12
-            if hero.facing_left:
-                bullet_new(x + 4, y + 9, -1)
-            else:
-                bullet_new(x + 11, y + 9, 1)
-    else:
-        hero.shoot_tick -= 1
+    if hero.shoot_countdown > 0:
+        hero.shoot_countdown -= 1
+    elif btn(BTN_B):
+        hero.shoot_countdown = 12
+        if hero.facing_left:
+            bullet_new(x + 4, y + 9, -1)
+        else:
+            bullet_new(x + 11, y + 9, 1)
 
 
     # animation
@@ -216,8 +223,8 @@ func hero_update():
 
 
     # update camera
-    camera.x = hero.x / SPX - SCREEN_W / 2
-    camera.y = hero.y / SPX - SCREEN_H / 2
+    camera.x = hero.sx / SP - SCREEN_W / 2
+    camera.y = hero.sy / SP - SCREEN_H / 2
     camera.x = clamp(camera.x, 0, level.w * TS - SCREEN_W)
     camera.y = clamp(camera.y, 0, level.h * TS - SCREEN_H)
 
@@ -225,10 +232,10 @@ func hero_update():
 
 func hero_draw():
 
-    var x = hero.x / SPX
-    var y = hero.y / SPX
+    var x = hero.sx / SP
+    var y = hero.sy / SP
 
-    var shooting = hero.shoot_tick > 1
+    var shooting = hero.shoot_countdown > 1
     camera_sprite(x, y, 16, 16,
                   hero.frame * 16,
                   64 + shooting * 16,
@@ -242,14 +249,16 @@ func game_init():
 
 
 func game_update():
+
     level_update()
     hero_update()
     enemy_update_all()
     bullet_update_all()
     particle_update_all()
 
-    # draw_dots()
 
+
+var tick
 func game_draw():
     level_draw_background()
     enemy_draw_all()
@@ -258,3 +267,14 @@ func game_draw():
     particle_draw_all()
     level_draw_walls()
 
+    draw_dots()
+
+
+    # tick += 1
+    # var frame = tick / 3 % 16
+    # sprite(32, 10, 16, 16, frame % 8 * 16, 144, frame < 8 ? 0 : 3)
+    # sprite(64, 10, 16, 16, frame % 8 * 16, 160, frame < 8 ? 0 : 3)
+
+    # sprite(32, 10 + 32, 8, 8, frame % 8 * 8, 176, frame < 8 ? 0 : 3)
+
+    # sprite(64, 10 + 32, 8, 8, frame % 8 * 8, 176 + 16, frame < 8 ? 0 : 3)

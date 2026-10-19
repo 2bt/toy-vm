@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 KEYWORDS = {
     "include", "var", "const", "func", "struct", "if", "elif", "else",
     "while", "for", "in", "break", "continue", "return", "asm", "or",
-    "and", "not",
+    "and", "not", "as",
 }
 
 token_regex = re.compile(r"""
@@ -813,6 +813,13 @@ class Parser:
                 if not f: self.error(f"struct '{ty.base}' has no field '{field}'")
                 ty = f.type
                 if f.offset > 0: node = Deref(BinOp("+", addr_of(node), Imm(f.offset)))
+
+            elif self.peek("as"):
+                self.eat()
+                if not is_ptr(ty): self.error("as requires pointer")
+                want = self.type(None)
+                if not is_ptr(want): self.error("as target must be pointer")
+                ty = want
 
             else:
                 return node, ty

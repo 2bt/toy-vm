@@ -242,6 +242,38 @@ class ExecTests(unittest.TestCase):
                 print_n((a + 1)[0])
         """), "5\n7\n5\n")
 
+    def test_pointer_cast(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var a: V = {3, 7}
+            func tick():
+                var p: V* = a
+                var q = p as int*
+                print_n(q.*)
+                print_n(q[1])
+                print_n((p as int*)[1])
+        """), "3\n7\n7\n")
+
+    def test_pointer_cast_non_ptr_rejected(self):
+        compiled = self.compile_text("""
+            func tick():
+                var x = 1
+                var p = x as int*
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("pointer", compiled.stderr)
+
+    def test_pointer_cast_to_non_ptr_rejected(self):
+        compiled = self.compile_text("""
+            var a: int[2]
+            func tick():
+                var p = a.ptr as int
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("pointer", compiled.stderr)
+
     def test_while_sum(self):
         self.assertEqual(self.run_toy("""
             func tick():

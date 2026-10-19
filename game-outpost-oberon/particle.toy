@@ -5,7 +5,6 @@ const PARTICLE_TYPE_DEBRIS = 2
 struct Particle:
     ttl
     type
-
     sx
     sy
     vx

@@ -45,18 +45,18 @@ func check_collision_down(x, y, py) int:
     return 0
 
 
-
-
 struct Hero:
     sx
     sy
     vx
     vy
+    box: Box
+
     facing_left
     on_ground
 
-    box: Box
 
+    score
     frame
     run_tick
     shoot_countdown
@@ -269,12 +269,6 @@ func game_draw():
 
     draw_dots()
 
-
-    # tick += 1
-    # var frame = tick / 3 % 16
-    # sprite(32, 10, 16, 16, frame % 8 * 16, 144, frame < 8 ? 0 : 3)
-    # sprite(64, 10, 16, 16, frame % 8 * 16, 160, frame < 8 ? 0 : 3)
-
-    # sprite(32, 10 + 32, 8, 8, frame % 8 * 8, 176, frame < 8 ? 0 : 3)
-
-    # sprite(64, 10 + 32, 8, 8, frame % 8 * 8, 176 + 16, frame < 8 ? 0 : 3)
+    # HUD
+    strnum(str, hero.score)
+    draw_text(SCREEN_W - strlen(str) * 8, SCREEN_H - 8, str)

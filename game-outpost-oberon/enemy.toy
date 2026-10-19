@@ -124,6 +124,10 @@ func enemy_update_all():
                 e.state  = ENEMY_STATE_DEAD
                 e.active = false
 
+                hero.score += (
+                    e.type == ENEMY_TYPE_PATROL ? 100 :
+                    0)
+
             if e.hit_countdown < 15:
                 particle_spawn(PARTICLE_TYPE_DEBRIS,
                                 rand(e.box.x, e.box.x + e.box.w - 1),

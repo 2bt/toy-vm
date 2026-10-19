@@ -306,12 +306,15 @@ func hero_update():
             hero_kill()
             return
 
-    # check hazards
-    if level_get_tile(hero.box.x, hero.box.y) == 'l':
+    var t = level_get_tile(hero.box.x, hero.box.y)
+    # lava
+    if t == 'l':
         hero_kill()
         hero.vy = 4
         return
 
+    # level complete
+    if t == 'E':
 
 
 func hero_draw():
@@ -333,6 +336,13 @@ func hero_draw():
 
 
 ###############################################################################
+
+
+
+# func draw_blend(v):
+#     for r = 0, 12:
+#         var h = clamp(v - r * 3, 0, 16)
+#         for c = 0, 20: sprite(c * 16, r * 16, 16, h, 0, 32, 0)
 
 func game_init():
     game.state = GAME_STATE_PLAY
@@ -374,7 +384,6 @@ func game_draw():
 
     draw_dots()
 
-
     # HUD
     # lives
     strnum(str, hero.lives)
@@ -382,7 +391,6 @@ func game_draw():
     # score
     strnum(str, hero.score)
     draw_text(SCREEN_W - strlen(str) * 8, SCREEN_H - 8, str)
-
 
     if game.state == GAME_STATE_GAME_OVER:
         draw_centered_text(SCREEN_W/2, SCREEN_H/2 - 4, "GAME OVER")

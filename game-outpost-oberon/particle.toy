@@ -9,6 +9,7 @@ struct Particle:
     sy
     vx
     vy
+    flip
 
 var particles: Particle[64]
 
@@ -21,9 +22,10 @@ func particle_spawn(type, x, y):
             p.sy   = y * SP
 
             if type == PARTICLE_TYPE_DEBRIS:
-                p.ttl = rand(5, 60)
-                p.vx  = rand(-15, 15)
-                p.vy  = rand(-25, 0)
+                p.ttl  = rand(5, 60)
+                p.vx   = rand(-15, 15)
+                p.vy   = rand(-25, 0)
+                p.flip = rand(0, 4)
 
             elif type == PARTICLE_TYPE_FLASH:
                 p.ttl = 3
@@ -60,14 +62,14 @@ func particle_draw_all():
 
 
 
-        elif p.type == PARTICLE_TYPE_DEBRIS:
+        if p.type == PARTICLE_TYPE_DEBRIS:
             var frame = max(0, 9 - p.ttl / 8)
             camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
                           frame * 8,
                           256,
-                          0)
+                          p.flip)
 
-        if p.type == PARTICLE_TYPE_FLASH:
+        elif p.type == PARTICLE_TYPE_FLASH:
             camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
                           0,
                           256 + 16,

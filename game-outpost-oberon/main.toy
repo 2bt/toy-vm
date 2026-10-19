@@ -1,32 +1,25 @@
 # api
-const SCREEN_W = 320
-const SCREEN_H = 180
-
+const SCREEN_W   = 320
+const SCREEN_H   = 180
 const WAVE_TRI   = 1
 const WAVE_SAW   = 2
 const WAVE_PULSE = 3
 const WAVE_NOISE = 4
-
-const BTN_UP    = 1
-const BTN_DOWN  = 2
-const BTN_LEFT  = 4
-const BTN_RIGHT = 8
-const BTN_A     = 16
-const BTN_B     = 32
-const BTN_MENU  = 64
-
+const BTN_UP     = 1
+const BTN_DOWN   = 2
+const BTN_LEFT   = 4
+const BTN_RIGHT  = 8
+const BTN_A      = 16
+const BTN_B      = 32
+const BTN_MENU   = 64
+const FLIP_H     = 1
+const FLIP_V     = 2
 var input @ 1
-
-func print(msg: int* @ 2):
-    asm "    int #1"
-func sprite(x @ 2, y @ 3, w @ 4, h @ 5, s @ 6, t @ 7, f @ 8):
-    asm "    int #2"
-func sound(i @ 2, pitch @ 3, pw @ 4, vol @ 5, wave @ 6):
-    asm "    int #3"
-func rand(lo @ 2, hi @ 3):
-    asm "    int #4"
-func sqrt(a @ 2):
-    asm "    int #5"
+func print(msg: int* @ 2):                                    asm "    int #1"
+func sprite(x @ 2, y @ 3, w @ 4, h @ 5, s @ 6, t @ 7, f @ 8): asm "    int #2"
+func sound(i @ 2, pitch @ 3, pw @ 4, vol @ 5, wave @ 6):      asm "    int #3"
+func rand(lo @ 2, hi @ 3):                                    asm "    int #4"
+func sqrt(a @ 2):                                             asm "    int #5"
 
 const null  = 0
 const false = 0
@@ -35,13 +28,8 @@ const true  = 1
 
 # input
 var not_prev_input
-
-func btn(b):
-    return b & input > 0
-
-func btnp(b):
-    return input & b & not_prev_input
-
+func btn(b): return b & input > 0
+func btnp(b): return input & b & not_prev_input
 
 # math
 func min(a, b):

@@ -41,7 +41,7 @@ struct MemMap {
             int32_t h;
             int32_t s;
             int32_t t;
-            int32_t flags;
+            int32_t flip;
         } sprite;
         struct {
             int32_t i;
@@ -108,7 +108,7 @@ void interrupt(int32_t n) {
         if (!renderer) return;
         SDL_Rect src = { mem.sprite.s, mem.sprite.t, mem.sprite.w, mem.sprite.h };
         SDL_Rect dst = { mem.sprite.x, mem.sprite.y, mem.sprite.w, mem.sprite.h };
-        SDL_RenderCopyEx(renderer, sprites, &src, &dst, 0, nullptr, SDL_RendererFlip(mem.sprite.flags));
+        SDL_RenderCopyEx(renderer, sprites, &src, &dst, 0, nullptr, SDL_RendererFlip(mem.sprite.flip));
     }
     else if (n == INT_SOUND) {
         int32_t i = mem.sound.i;

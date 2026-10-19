@@ -1,6 +1,7 @@
 const GAME_STATE_PLAY      = 1
 const GAME_STATE_GAME_OVER = 2
 
+
 struct Game:
     state
 
@@ -132,6 +133,7 @@ func bullet_update_all():
             if box_has_point(e.box, b.x, b.y):
                 b.alive = false
                 enemy_hit(e)
+                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
                 particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
                 continue
 

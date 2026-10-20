@@ -327,6 +327,21 @@ class ExecTests(unittest.TestCase):
                 print_n(n)
         """), "4\n")
 
+    def test_for_in_array_field_via_pointer(self):
+        # AddrOf(Deref(ptr+off)) must not strip [reg]+off with [1:-1].
+        self.assertEqual(self.run_toy("""
+            struct Cell:
+                v
+            struct Row:
+                pad
+                cells: Cell[2]
+            var row: Row = {0, {{3}, {7}}}
+            func tick():
+                var r = &row
+                for c in r.cells:
+                    print_n(c.v)
+        """), "3\n7\n")
+
     def test_while_update_is_conditional(self):
         self.assertEqual(self.run_toy("""
             func tick():
@@ -776,6 +791,62 @@ class ExecTests(unittest.TestCase):
                 print_n(a[1])
                 print_n(a[2])
         """), "1\n2\n3\n")
+
+    def test_untyped_array_literal_var(self):
+        self.assertEqual(self.run_toy("""
+            var a = {1, 2, 3}
+            const N = 4
+            var b = {N, N + 1}
+            func tick():
+                print_n(a.len)
+                print_n(a[0])
+                print_n(a[2])
+                print_n(b.len)
+                print_n(b[1])
+        """), "3\n1\n3\n2\n5\n")
+
+    def test_array_literal_pointer_decay(self):
+        self.assertEqual(self.run_toy("""
+            var p: int* = {9, 8, 7}
+            func tick():
+                print_n(p[0])
+                print_n(p[2])
+                p = {1, 2}
+                print_n(p[0])
+                print_n(p[1])
+        """), "9\n7\n1\n2\n")
+
+    def test_array_literal_in_struct_init(self):
+        self.assertEqual(self.run_toy("""
+            struct E:
+                voice
+                a: int*
+                b: int*
+            var es: E[] = {
+                { 2, {9, 8}, {1, 0} },
+            }
+            func tick():
+                print_n(es[0].voice)
+                print_n(es[0].a[0])
+                print_n(es[0].a[1])
+                print_n(es[0].b[0])
+        """), "2\n9\n8\n1\n")
+
+    def test_array_literal_pointer_arg(self):
+        self.assertEqual(self.run_toy("""
+            func show(p: int*):
+                print_n(p[0])
+                print_n(p[1])
+            func tick():
+                show({4, 5})
+        """), "4\n5\n")
+
+    def test_array_literal_expr_len_index(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                print_n({1, 2, 3}.len)
+                print_n({9, 8, 7}[1])
+        """), "3\n8\n")
 
     def test_init_list_expressions(self):
         self.assertEqual(self.run_toy("""

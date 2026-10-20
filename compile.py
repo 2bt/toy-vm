@@ -122,7 +122,7 @@ If       = namedtuple("If",       "cond then els")
 Return   = namedtuple("Return",   "expr")
 Asm      = namedtuple("Asm",      "asm")
 NoOp     = namedtuple("NoOp",     "")
-StrLit   = namedtuple("StrLit",   "data")  # ints including trailing 0; type int[len]
+ArrLit   = namedtuple("ArrLit",   "data")  # const int words; type int[len] (strings include trailing 0)
 
 @dataclass
 class Func:
@@ -143,6 +143,7 @@ def is_array(t): return t.array != None
 def is_auto_array(t): return is_array(t) and t.array == -1
 def is_cond(t): return is_int(t) or is_ptr(t)
 def is_aggregate(t): return is_array(t) or is_struct(t)
+def arr_type(e): return Type("int", 0, len(e.data))
 
 def addr_of(e):
     if isinstance(e, Deref): return e.expr
@@ -295,23 +296,34 @@ class Parser:
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
 
-    def intern_str(self, e):
-        """Turn a StrLit into a named global array (for address/copy use)."""
-        name = f"_str_{len(self.var_data)}"
+    def intern(self, e):
+        """Turn an ArrLit into a named global array (for address/copy use)."""
+        name = f"_arr_{len(self.var_data)}"
         self.var_type[name] = Type("int", 0, len(e.data))
         self.var_data[name] = e.data
         return VarRef(name)
+
+    def array_lit(self, init):
+        """Flat const int ArrLit from InitList, or error. No trailing 0."""
+        if not init.items: self.error("empty array literal")
+        data = []
+        for item in init.items:
+            if isinstance(item, InitList): self.error("nested array literal")
+            e, t = item
+            if not isinstance(e, Imm) or not is_int(t): self.error("const int expected")
+            data.append(e.value)
+        return ArrLit(data)
 
     def store_var_data(self, name, data):
         if any(x != 0 for x in data):
             self.var_data[name] = data
 
-    def fit_str(self, e, ty):
-        """Pad/size-check a StrLit for an int[N] destination. Returns (data, ty)."""
+    def fit_arr(self, e, ty):
+        """Pad/size-check an ArrLit for an int[N] destination. Returns (ArrLit, ty)."""
         if not is_array(ty) or ty.base != "int" or ty.ptr != 0: self.error("type error")
-        if is_auto_array(ty): return e.data, Type(ty.base, ty.ptr, len(e.data))
-        if len(e.data) > ty.array: self.error("string too long")
-        return e.data + [0] * (ty.array - len(e.data)), ty
+        if is_auto_array(ty): return e, Type(ty.base, ty.ptr, len(e.data))
+        if len(e.data) > ty.array: self.error("array literal too long")
+        return ArrLit(e.data + [0] * (ty.array - len(e.data))), ty
 
     def coerce(self, want, e, t):
         """Rewrite expr for assignment (decay/intern/pad); type-check. Returns (e, t)."""
@@ -319,16 +331,16 @@ class Parser:
             if want.base != t.base or want.ptr != t.ptr: self.error("type error")
             want = Type(want.base, want.ptr, t.array)
         if is_ptr(want) and is_array(t):
-            if isinstance(e, StrLit): e = self.intern_str(e)
+            if isinstance(e, ArrLit): e = self.intern(e)
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif (is_ptr(want) and want.base == t.base and want.ptr == t.ptr + 1
               and isinstance(e, (VarRef, Deref))):
             if isinstance(e, VarRef) and e.name in self.var_bound:
                 self.error("variable is bound")
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
-        elif isinstance(e, StrLit) and is_array(want):
-            data, want = self.fit_str(e, want)
-            return self.intern_str(StrLit(data)), want
+        elif isinstance(e, ArrLit) and is_array(want):
+            e, want = self.fit_arr(e, want)
+            return self.intern(e), want
         if want != t:
             if not (is_ptr(want) and is_int(t) and e == Imm(0)): self.error("type error")
         return e, t
@@ -362,8 +374,7 @@ class Parser:
             return NoOp()
 
         self.eat("=")
-        if self.peek("{"):
-            if ty is None or not is_aggregate(ty): self.error("type error")
+        if self.peek("{") and ty is not None and is_aggregate(ty):
             init = self.init_list()
             if is_auto_array(ty): ty = Type(ty.base, ty.ptr, len(init.items))
             self.var_type[name] = ty
@@ -372,13 +383,13 @@ class Parser:
             return NoOp()
 
         e, t = self.expr()
-        if isinstance(e, StrLit) and (ty is None or is_array(ty)):
-            if ty is None: data, ty = e.data, Type("int", 0, len(e.data))
-            else: data, ty = self.fit_str(e, ty)
+        if isinstance(e, ArrLit) and (ty is None or is_array(ty)):
+            if ty is None: ty = arr_type(e)
+            else: e, ty = self.fit_arr(e, ty)
             self.var_type[name] = ty
             if local:
-                return Copy(dst, self.intern_str(StrLit(data)), self.type_size(ty))
-            self.store_var_data(name, data)
+                return Copy(dst, self.intern(e), self.type_size(ty))
+            self.store_var_data(name, e.data)
             return NoOp()
 
         if ty is not None: e, t = self.coerce(ty, e, t)
@@ -590,8 +601,7 @@ class Parser:
             if isinstance(a, VarRef) and a.name in self.var_bound:
                 self.error("variable is bound")
             op = self.eat().k
-            if op == "=" and self.peek("{"):
-                if not (is_aggregate(ta)): self.error("type error")
+            if op == "=" and self.peek("{") and is_aggregate(ta):
                 init = self.init_list()
                 self.eat("eol")
                 return self.lower_init(a, ta, init)
@@ -643,6 +653,12 @@ class Parser:
         items = init.items + [None] * (expect - got)
         return list(zip(offsets, types, items))
 
+    def init_list_as_arr_lit(self, ty, item):
+        """If item is a flat int array literal for an int* slot, return ArrLit; else None."""
+        if isinstance(item, InitList) and is_ptr(ty) and ty.base == "int" and ty.ptr == 1:
+            return self.array_lit(item)
+        return None
+
     def lower_init(self, dst, ty, init):
         stmts = []
         for off, slot_ty, item in self.aggregate_inits(ty, init):
@@ -655,6 +671,9 @@ class Parser:
             if is_aggregate(ty): return self.lower_init(dst, ty, InitList([]))
             return Assign("=", dst, Imm(0))
         if isinstance(item, InitList):
+            if arr := self.init_list_as_arr_lit(ty, item):
+                e, _ = self.coerce(ty, arr, arr_type(arr))
+                return Assign("=", dst, e)
             if not is_aggregate(ty): self.error("type error")
             return self.lower_init(dst, ty, item)
         e, tb = self.coerce(ty, *item)
@@ -670,6 +689,12 @@ class Parser:
     def const_init_slot(self, ty, item):
         if item is None: return [0] * self.type_size(ty)
         if isinstance(item, InitList):
+            if arr := self.init_list_as_arr_lit(ty, item):
+                e, _ = self.coerce(ty, arr, arr_type(arr))
+                dyn, sym, off = split_add(e)
+                if dyn: self.error("const expression expected")
+                if sym: return [f"{sym}+{off}" if off else sym]
+                return [off]
             if not is_aggregate(ty): self.error("type error")
             return self.const_init_data(ty, item)
         e, tb = self.coerce(ty, *item)
@@ -696,7 +721,7 @@ class Parser:
             elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = INT
             elif op in ("+", "-") and is_int(tb):
                 if is_array(ta):
-                    if isinstance(a, StrLit): a = self.intern_str(a)
+                    if isinstance(a, ArrLit): a = self.intern(a)
                     a, ta = addr_of(a), Type(ta.base, ta.ptr + 1, None)
                 if is_ptr(ta):
                     # pointer arithmetic
@@ -764,12 +789,12 @@ class Parser:
                 if not is_int(tidx): self.error("index must be int")
                 self.eat("]")
                 # Const index into string literal -> immediate
-                if isinstance(node, StrLit) and isinstance(idx, Imm):
+                if isinstance(node, ArrLit) and isinstance(idx, Imm):
                     i = idx.value
                     if i < 0 or i >= len(node.data): self.error("index out of bounds")
                     node, ty = Imm(node.data[i]), ty
                     continue
-                if isinstance(node, StrLit): node = self.intern_str(node)
+                if isinstance(node, ArrLit): node = self.intern(node)
                 base = node if from_ptr else addr_of(node)
                 elem_size = self.type_size(ty)
                 if idx != Imm(0):
@@ -792,12 +817,12 @@ class Parser:
                 if is_array(ty):
                     if field == "len": return Imm(ty.array), INT
                     elif field == "ptr":
-                        if isinstance(node, StrLit): node = self.intern_str(node)
+                        if isinstance(node, ArrLit): node = self.intern(node)
                         node = AddrOf(node)
                         ty   = Type(ty.base, ty.ptr + 1, None)
                         continue
                     elif field == "limit":
-                        if isinstance(node, StrLit): node = self.intern_str(node)
+                        if isinstance(node, ArrLit): node = self.intern(node)
                         offset = self.type_size(Type(ty.base, ty.ptr, None)) * ty.array
                         node = BinOp("+", AddrOf(node), Imm(offset))
                         ty   = Type(ty.base, ty.ptr + 1, None)
@@ -832,10 +857,15 @@ class Parser:
             else: n = int(v)
             return Imm(n), INT
 
-        # string literal -> int[N] (N includes trailing 0)
-        if self.peek("string"):
-            data = list(map(ord, self.eat().v)) + [0]
-            node, ty = StrLit(data), Type("int", 0, len(data))
+        # {1, 2, 3} -> int[N] (no trailing 0)
+        if self.peek("{"):
+            node = self.array_lit(self.init_list())
+            ty = arr_type(node)
+
+        # "…" -> int[N] (includes trailing 0)
+        elif self.peek("string"):
+            node = ArrLit(list(map(ord, self.eat().v)) + [0])
+            ty = arr_type(node)
 
         else:
             name = self.eat("id").v
@@ -857,8 +887,7 @@ class Parser:
                         formal = func.args[n_args]
                         ty = self.var_type[formal]
                         dst = VarRef(formal)
-                        if self.peek("{"):
-                            if not is_aggregate(ty): self.error("type error")
+                        if self.peek("{") and is_aggregate(ty):
                             setup.append(self.lower_init(dst, ty, self.init_list()))
                         else:
                             e, t = self.coerce(ty, *self.expr())
@@ -1078,9 +1107,8 @@ class Codegen:
         if isinstance(node, Imm): return f"#{node.value}"
         if isinstance(node, VarRef): return node.name
         if isinstance(node, AddrOf):
-            v = self.value(node.lv)
-            if v.startswith("["): return v[1:-1]
-            return f"#{v}"
+            if isinstance(node.lv, Deref): return self.value(node.lv.expr)
+            return f"#{self.value(node.lv)}"
 
         if isinstance(node, Deref):
             reg, sym, off = self.lvalue_base(node)

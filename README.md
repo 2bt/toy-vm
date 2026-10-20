@@ -3,7 +3,7 @@
 A tiny fantasy-console–style virtual machine.
 Write games in a C-like language (`.toy`), compile to bytecode, and run them on either the native SDL backend or the browser (JavaScript) backend.
 
-**[Play Breakout in the browser](https://2bt.github.io/toy-vm/)**
+**[Play in the browser!](https://2bt.github.io/toy-vm/)**
 
 Games live in a folder with:
 

@@ -932,11 +932,9 @@ def operand_uses_tmp(operand, tmp):
 def can_forward_tmp(q, tmp, dst):
     """True if replaying ops queued on tmp onto dst is safe."""
     for i, (op, x) in enumerate(q):
-        if operand_uses_tmp(x, tmp):
-            return False
+        if operand_uses_tmp(x, tmp): return False
         # Reading dst is only safe as the initial mov tmp, dst (old value).
-        if x == dst and not (i == 0 and op == "mov"):
-            return False
+        if x == dst and not (i == 0 and op == "mov"): return False
     return True
 
 def peephole_cleanup_labels(lines):

@@ -32,6 +32,58 @@ This will:
 3. Assemble `main.asm` → `code`
 4. Run the game in the VM
 
+Native host: `build/toy [--once] <game-dir>`. Browser host: `web/index.html` (same bytecode + ABI).
+
+
+## Machine model
+
+* **Word:** signed 32-bit integer. Pointers are word addresses into `mem`.
+* **Memory:** flat `mem[0 … 2²⁴)` (words). Code lives in a separate instruction stream (`pc` indexes that, not `mem`).
+* **Calls:** `jsr` / `ret` use a host-side return stack. No recursion in Toy (locals are not re-entrant).
+* **Entry:** each frame the host updates `input` and runs from `pc = 0`; the compiler’s entry is `func tick():`.
+
+### Host ABI (low memory)
+
+Pinned by games (see e.g. `game-breakout/prelude.toy`) via `var` / formals `@ addr`:
+
+| Addr | Role |
+|------|------|
+| `0` | `ret` — host writes interrupt results (e.g. `rand`, `sqrt`) |
+| `1` | `input` — button bitfield (`1<<0` up … `1<<5` B) |
+| `2…` | interrupt argument block (overlaid per call) |
+
+Interrupts (`asm "int #N"`):
+
+| N | Name | Args @ 2+ | Notes |
+|---|------|-----------|--------|
+| 1 | print | `msg` (`int*`) | zero-terminated chars; newline after |
+| 2 | sprite | `x y w h s t flip` | blit from `sprite.png` |
+| 3 | sound | `i pitch pw vol wave` | voice `i` |
+| 4 | rand | `lo hi` | result → `mem[0]` |
+| 5 | sqrt | `a` | result → `mem[0]` |
+
+Screen is 320×180.
+
+
+## Assembler & bytecode
+
+`compile.py` emits text assembly; `assemble.py` writes the `code` blob.
+
+**Assembly** (`;` comments):
+
+* `.code` — instructions (default)
+* `.data BASE` — words loaded into `mem` starting at `BASE` (compiler places globals here)
+* `name = expr` — assemble-time constant
+* `label:` — code or data label
+* Ops: `mov` `add` `sub` `mul` `div` `mod` `and` `ore` `cmp`, jumps (`jmp` `jsr` `ret`, `jlt`…`jne`), `int #N`
+* Operands: `addr`, `#imm`, `[addr]`, `[base]+off` (dest, src). Opcode encoding picks a concrete addressing mode from `OPCODE_TABLE` in `src/vm.cpp`.
+
+**`code` file layout** (all fields are signed 28-bit values, LEB-style 7-bit bytes):
+
+1. `data_base`, `data_len`, then `data_len` words → `mem[data_base…]`
+2. `code_len`, then `code_len` instruction words (opcodes + immediates)
+
+Each instruction is an opcode index into `OPCODE_TABLE` (mnemonic + operand modes), followed by the absolute/indirect/index/immediate words that mode needs.
 
 
 ## Toy language

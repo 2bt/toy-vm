@@ -49,7 +49,7 @@ var SOUND_SHOOT: SoundEffect = {
 }
 
 var SOUND_BULLET_WALL: SoundEffect = {
-    0, {
+    2, {
         SNDCMD_SET_VOL, 30,
         SNDCMD_SET_WAVE, WAVE_NOISE,
         SNDCMD_SET_PITCH, 100 * 8,
@@ -114,7 +114,7 @@ var SOUND_ENEMY_HIT: SoundEffect = {
 }
 
 var SOUND_ENEMY_DIE: SoundEffect = {
-    2, {
+    3, {
         SNDCMD_SET_VOL, 80,
         SNDCMD_SET_VOL_TARGET, 0, 10,
         SNDCMD_LOOP_START,
@@ -132,7 +132,7 @@ var SOUND_ENEMY_DIE: SoundEffect = {
 }
 
 var SOUND_HERO_DIE: SoundEffect = {
-    2, {
+    3, {
         SNDCMD_SET_VOL, 80,
         SNDCMD_SET_VOL_TARGET, 0, 5,
         SNDCMD_LOOP_START,

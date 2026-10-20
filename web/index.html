@@ -2,16 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>toy-vm</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
+  }
+  /* 100vh on mobile includes URL-bar chrome; dvh tracks the visible viewport */
+  @supports (height: 100dvh) {
+    html, body { height: 100dvh; }
+  }
   body {
-    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    display: grid; place-items: center;
     background: #111; color: #ddd; font: 16px/1.4 system-ui, sans-serif;
   }
-  #ui { text-align: center; }
+  #ui { text-align: center; max-width: 100%; max-height: 100%; }
   #ui h1 { font-weight: 600; font-size: 1.25rem; margin: 0 0 1rem; letter-spacing: 0.04em; }
   #games { display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; min-width: 12rem; }
   #games button {
@@ -20,23 +27,59 @@
   }
   #games button:hover { background: #252525; border-color: #666; }
   #play { display: none; }
-  canvas {
-    /* grow with the window; 320:180 aspect, leave room for the hint */
-    width: min(100vw, calc((100vh - 3rem) * 320 / 180));
+  body.playing #play { display: block; }
+  #screen {
+    /* grow with the window; 320:180 aspect */
+    width: min(100vw, calc(100vh * 320 / 180));
     height: auto; image-rendering: pixelated;
     background: #000; vertical-align: middle;
   }
+  @supports (height: 100dvh) {
+    #screen { width: min(100vw, calc(100dvh * 320 / 180)); }
+  }
   #hint { margin-top: 0.75rem; font-size: 0.8rem; color: #888; }
+  body.playing #hint { display: none; }
   #err { color: #f66; margin-top: 0.75rem; max-width: 36rem; }
+  #padc { display: none; touch-action: none; width: 100%; height: 13rem; }
+
+  @media (max-width: 700px) {
+    body.playing {
+      display: block;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    body.playing #ui {
+      height: 100%; display: flex; flex-direction: column; align-items: center;
+      max-height: none;
+    }
+    body.playing #play {
+      flex: 1; width: 100%; display: flex; flex-direction: column;
+      align-items: center; min-height: 0;
+    }
+    body.playing #padc {
+      display: block; margin-top: 20%; flex: 0 0 auto; max-width: 28rem;
+    }
+    body.playing #screen {
+      width: min(100vw, calc((100vh - 12rem) * 320 / 180));
+    }
+  }
+  @media (max-width: 700px) {
+    @supports (height: 100dvh) {
+      body.playing #screen {
+        width: min(100vw, calc((100dvh - 12rem) * 320 / 180));
+      }
+    }
+  }
 </style>
 </head>
 <body>
 <div id="ui">
   <h1>toy-vm</h1>
   <div id="games"></div>
+  <div id="hint">arrows · X · Z/C · Esc = exit</div>
   <div id="play">
     <canvas id="screen" width="320" height="180"></canvas>
-    <div id="hint">arrows · X · Z/C · Esc = menu</div>
+    <canvas id="padc" aria-hidden="true"></canvas>
   </div>
   <div id="err"></div>
 </div>
@@ -416,7 +459,6 @@ registerProcessor("toy-apu", ToyAPU);
 `;
 
 const gamesEl = document.getElementById("games");
-const playEl = document.getElementById("play");
 const errEl = document.getElementById("err");
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
@@ -432,6 +474,7 @@ let mem = null;
 let code = null;
 let sprites = null;
 let keys = new Set();
+const touch = new Set();
 let voiceInputs = null;
 let nextFrameTime = 0;
 
@@ -489,15 +532,95 @@ function interrupt(n) {
 
 function pollInput() {
   let b = 0;
-  if (keys.has("ArrowLeft") || keys.has("a")) b |= 1 << BTN_LEFT;
-  if (keys.has("ArrowRight") || keys.has("d")) b |= 1 << BTN_RIGHT;
-  if (keys.has("ArrowUp") || keys.has("w")) b |= 1 << BTN_UP;
-  if (keys.has("ArrowDown") || keys.has("s")) b |= 1 << BTN_DOWN;
-  if (keys.has("x")) b |= 1 << BTN_A;
-  if (keys.has("z") || keys.has("c")) b |= 1 << BTN_B;
+  if (keys.has("ArrowLeft") || keys.has("a") || touch.has("left")) b |= 1 << BTN_LEFT;
+  if (keys.has("ArrowRight") || keys.has("d") || touch.has("right")) b |= 1 << BTN_RIGHT;
+  if (keys.has("ArrowUp") || keys.has("w") || touch.has("up")) b |= 1 << BTN_UP;
+  if (keys.has("ArrowDown") || keys.has("s") || touch.has("down")) b |= 1 << BTN_DOWN;
+  if (keys.has("x") || touch.has("a")) b |= 1 << BTN_A;
+  if (keys.has("z") || keys.has("c") || touch.has("b")) b |= 1 << BTN_B;
   if (keys.has("Enter")) b |= 1 << BTN_MENU;
   mem[1] = b;
 }
+
+const padc = document.getElementById("padc");
+const padx = padc.getContext("2d");
+let padButtons = [];
+const padPts = new Map(); // pointerId → {x,y,pad}
+
+function clearAllTouch() { touch.clear(); padPts.clear(); padDraw(); }
+
+function padLayout() {
+  if (getComputedStyle(padc).display === "none") { padButtons = []; return; }
+  const w = padc.clientWidth, h = padc.clientHeight;
+  const y = h * 0.5;
+  const s = h / 6;
+  const rl = s * 0.66;
+  const rr = s * 0.9;
+  const xl = s * 2.2;
+  const xr = w - s * 1.8;
+  padButtons = [
+    { x: xl, y: y - s, r: rl, name: "up" },
+    { x: xl, y: y + s, r: rl, name: "down" },
+    { x: xl - s, y, r: rl, name: "left" },
+    { x: xl + s, y, r: rl, name: "right" },
+    { x: xr - s * 1.6, y: y + s * 0.5, r: rr, name: "b" },
+    { x: xr, y: y - s * 0.5, r: rr, name: "a" },
+    { x: w * 0.5, y: s * 0.55, w: s * 2, h: s * 0.9, name: "exit" },
+  ];
+  const dpr = devicePixelRatio || 1;
+  const bw = (w * dpr) | 0, bh = (h * dpr) | 0;
+  if (padc.width !== bw || padc.height !== bh) { padc.width = bw; padc.height = bh; }
+  padx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  padDraw();
+}
+
+function padDraw() {
+  if (!padButtons.length) return;
+  const w = padc.clientWidth, h = padc.clientHeight;
+  padx.clearRect(0, 0, w, h);
+  padx.textAlign = "center";
+  padx.textBaseline = "middle";
+  padx.font = "14px system-ui, sans-serif";
+  for (const b of padButtons) {
+    padx.fillStyle = touch.has(b.name) ? "#444" : "#222";
+    if (b.w) {
+      const x = b.x - b.w / 2, y = b.y - b.h / 2, r = Math.min(8, b.h / 2);
+      padx.beginPath();
+      padx.roundRect(x, y, b.w, b.h, r);
+      padx.fill();
+      padx.fillStyle = "#666";
+      padx.fillText("EXIT", b.x, b.y);
+    } else {
+      padx.beginPath();
+      padx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      padx.fill();
+    }
+  }
+}
+
+function padPointer(e) {
+  e.preventDefault();
+  if (e.type === "pointerup" || e.type === "pointercancel") padPts.delete(e.pointerId);
+  else if (e.type === "pointerdown" || padPts.has(e.pointerId)) {
+    if (e.type === "pointerdown") padc.setPointerCapture(e.pointerId);
+    padPts.set(e.pointerId, { x: e.offsetX, y: e.offsetY, pad: e.pointerType === "mouse" ? 0 : 14 });
+  } else return;
+  touch.clear();
+  for (const b of padButtons) {
+    for (const p of padPts.values()) {
+      const hit = b.w
+        ? Math.abs(p.x - b.x) < b.w / 2 + p.pad && Math.abs(p.y - b.y) < b.h / 2 + p.pad
+        : (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < (b.r + p.pad) ** 2;
+      if (hit) { touch.add(b.name); break; }
+    }
+  }
+  padDraw();
+  ensureAudio();
+  if (touch.has("exit")) stopGame();
+}
+for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"])
+  padc.addEventListener(t, padPointer);
+window.addEventListener("resize", padLayout);
 
 function frame(timestamp) {
   if (!running) return;
@@ -534,7 +657,8 @@ function stopGame() {
   cancelAnimationFrame(raf);
   if (apuNode) apuNode.port.postMessage({ type: "voices", voices: null });
   voiceInputs = null;
-  playEl.style.display = "none";
+  clearAllTouch();
+  document.body.classList.remove("playing");
   gamesEl.style.display = "flex";
   document.querySelector("#ui h1").style.display = "";
   setGameQuery(null);
@@ -556,7 +680,8 @@ async function startGame(gameId) {
     voiceInputs = Array.from({ length: VOICES }, () => ({ pitch: 0, pw: 0, vol: 0, wave: 0 }));
     gamesEl.style.display = "none";
     document.querySelector("#ui h1").style.display = "none";
-    playEl.style.display = "block";
+    document.body.classList.add("playing");
+    requestAnimationFrame(padLayout);
     setGameQuery(gameId);
     nextFrameTime = 0;
     running = true;

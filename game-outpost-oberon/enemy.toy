@@ -65,6 +65,9 @@ func enemy_hit(e: Enemy*):
     if e.hp <= 0:
         e.state = ENEMY_STATE_DYING
         e.hit_countdown = 20
+        play_sound(SOUND_ENEMY_DIE)
+    else:
+        play_sound(SOUND_ENEMY_HIT)
 
 
 func enemy_start_wait(e: Enemy*, turn):

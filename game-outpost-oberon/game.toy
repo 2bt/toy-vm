@@ -110,6 +110,34 @@ struct Hero:
 
 var hero: Hero
 
+func hero_init():
+    hero = {}
+    hero.box.w = 6
+    hero.box.h = 11
+    hero.lives = 3
+
+func hero_set_state(s):
+    if s == HERO_STATE_DYING and hero.state != HERO_STATE_NORMAL: return
+    hero.state = s
+    if s == HERO_STATE_SPAWNING:
+        hero.hit_countdown = HERO_SPAWN_FRAMES
+        play_sound(SOUND_SPAWN1)
+        play_sound(SOUND_SPAWN2)
+    elif s == HERO_STATE_DYING:
+        hero.hit_countdown = 20
+        hero.vx = 0
+        hero.vy = 0
+        play_sound(SOUND_HERO_DIE)
+
+    elif s == HERO_STATE_EXITING:
+        play_sound(SOUND_EXIT1)
+        play_sound(SOUND_EXIT2)
+        hero.hit_countdown = HERO_EXIT_FRAMES
+        hero.vx = 0
+        hero.vy = 0
+    elif s == HERO_STATE_NORMAL:
+        hero.hit_countdown = 0
+
 
 func camera_follow_hero():
     camera.x = hero.sx / SP - SCREEN_W / 2
@@ -125,8 +153,7 @@ func camera_return_toward_spawn():
     var l = sqrt(dx * dx + dy * dy)
     var speed = 5
     if l == 0:
-        hero.state         = HERO_STATE_SPAWNING
-        hero.hit_countdown = HERO_SPAWN_FRAMES
+        hero_set_state(HERO_STATE_SPAWNING)
         return
     elif l > speed:
         dx = dx * speed / l
@@ -175,6 +202,7 @@ func bullet_update_all():
         if o:
             b.alive = false
             particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
+            play_sound(SOUND_BULLET_WALL)
             continue
 
         for e in enemies:
@@ -203,29 +231,18 @@ func hero_place_at_start():
     entity_update_box_pos(hero.sx, hero.sy, hero.box)
     if check_collision_down(hero.box.x + 5, hero.box.y + 16, hero.box.y + 15):
         hero.frame = 0
+        hero.on_ground = true
     else:
         hero.frame = 4
+        hero.on_ground = false
 
     hero.vx              = 0
     hero.vy              = 0
     hero.facing_left     = false
-    hero.on_ground       = false
     hero.shoot_countdown = 0
     hero.hit_countdown   = 0
     hero.run_tick        = 0
 
-func hero_init():
-    hero = {}
-    hero.box.w = 6
-    hero.box.h = 11
-    hero.lives = 3
-
-func hero_kill():
-    if hero.state != HERO_STATE_NORMAL: return
-    hero.state = HERO_STATE_DYING
-    hero.hit_countdown = 20
-    hero.vx = 0
-    hero.vy = 0
 
 func hero_update():
     if hero.state == HERO_STATE_RETURNING:
@@ -234,7 +251,7 @@ func hero_update():
 
     if hero.state == HERO_STATE_SPAWNING:
         if hero.hit_countdown > 0: hero.hit_countdown -= 1
-        else: hero.state = HERO_STATE_NORMAL
+        else: hero_set_state(HERO_STATE_NORMAL)
 
     elif hero.state == HERO_STATE_EXITING:
         if hero.hit_countdown > 0: hero.hit_countdown -= 1
@@ -255,9 +272,10 @@ func hero_update():
             if hero.lives <= 0:
                 hero.lives = 0
                 game.state = GAME_STATE_GAME_OVER
+                play_sound(SOUND_GAME_OVER)
             else:
                 hero_place_at_start()
-                hero.state = HERO_STATE_RETURNING
+                hero_set_state(HERO_STATE_RETURNING)
 
     if hero.state != HERO_STATE_NORMAL:
         if hero.state != HERO_STATE_RETURNING:
@@ -291,7 +309,9 @@ func hero_update():
         hero.vx = 0
 
     # jump
-    if hero.on_ground and btnp(BTN_A): hero.vy = -JUMP_FORCE
+    if hero.on_ground and btnp(BTN_A):
+        hero.vy = -JUMP_FORCE
+        play_sound(SOUND_JUMP)
     elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
 
     # gravity
@@ -305,6 +325,7 @@ func hero_update():
     o = min(check_collision_down(x +  5, y + 15, py + 15),
             check_collision_down(x + 10, y + 15, py + 15))
     if o:
+        if not hero.on_ground: play_sound(SOUND_LAND)
         hero.on_ground = true
         y += o
         hero.sy = y * SP + SP - 1
@@ -324,6 +345,7 @@ func hero_update():
         hero.shoot_countdown -= 1
     elif btn(BTN_B):
         hero.shoot_countdown = 12
+        play_sound(SOUND_SHOOT)
         if hero.facing_left:
             bullet_new(x + 4, y + 9, -1)
         else:
@@ -348,20 +370,17 @@ func hero_update():
         if e.state != ENEMY_STATE_NORMAL: continue
         if box_intersects(hero.box, e.box):
             enemy_hit(e)
-            hero_kill()
+            hero_set_state(HERO_STATE_DYING)
             return
 
     var t = level_get_tile(hero.box.x, hero.box.y)
     if t == 'l':
-        hero_kill()
+        hero_set_state(HERO_STATE_DYING)
         hero.vy = 4
         return
 
     if t == 'E':
-        hero.state = HERO_STATE_EXITING
-        hero.hit_countdown = HERO_EXIT_FRAMES
-        hero.vx = 0
-        hero.vy = 0
+        hero_set_state(HERO_STATE_EXITING)
 
     camera_follow_hero()
 
@@ -401,8 +420,7 @@ func game_load_level(n):
     else: level_init(LEVEL2_DATA)
 
     hero_place_at_start()
-    hero.state         = HERO_STATE_SPAWNING
-    hero.hit_countdown = HERO_SPAWN_FRAMES
+    hero_set_state(HERO_STATE_RETURNING)
     camera_follow_hero()
 
     enemy_init_all()
@@ -415,6 +433,7 @@ func game_load_level(n):
 func game_init():
     hero_init()
     game_load_level(0)
+
 
 func game_update():
 
@@ -431,7 +450,8 @@ func game_update():
             else: game.state = GAME_STATE_WIN
         # world still ticks below (blend-to-black later)
     elif game.state == GAME_STATE_GAME_OVER or game.state == GAME_STATE_WIN:
-        if btnp(BTN_A): game_init()
+        if btnp(BTN_A):
+            game_init()
 
     level_update()
 

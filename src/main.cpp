@@ -3,6 +3,8 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <random>
+#include <cstdio>
+#include <vector>
 
 
 enum {
@@ -129,18 +131,44 @@ void interrupt(int32_t n) {
 
 
 
+static bool write_wav_f32(char const* path, std::vector<float> const& samples, int rate) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return false;
+    uint32_t data_bytes = (uint32_t)(samples.size() * sizeof(float));
+    uint32_t riff_size  = 36 + data_bytes;
+    uint16_t audio_fmt  = 3; // IEEE float
+    uint16_t channels   = 1;
+    uint16_t bits       = 32;
+    uint32_t byte_rate  = rate * channels * (bits / 8);
+    uint16_t block_align = channels * (bits / 8);
+    uint32_t fmt_size   = 16;
+    auto w4 = [&](uint32_t v) { fwrite(&v, 4, 1, f); };
+    auto w2 = [&](uint16_t v) { fwrite(&v, 2, 1, f); };
+    fwrite("RIFF", 1, 4, f); w4(riff_size);
+    fwrite("WAVE", 1, 4, f);
+    fwrite("fmt ", 1, 4, f); w4(fmt_size);
+    w2(audio_fmt); w2(channels); w4((uint32_t)rate); w4(byte_rate); w2(block_align); w2(bits);
+    fwrite("data", 1, 4, f); w4(data_bytes);
+    fwrite(samples.data(), 1, data_bytes, f);
+    fclose(f);
+    return true;
+}
+
+
 int main(int argc, char** argv) {
     bool once = false;
     bool bad = false;
     std::string dir;
+    std::string record_path;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--once") once = true;
+        else if (arg == "--record" && i + 1 < argc) record_path = argv[++i];
         else if (dir.empty()) dir = arg;
         else bad = true;
     }
     if (bad || dir.empty()) {
-        printf("usage: %s [--once] app-dir\n", argv[0]);
+        printf("usage: %s [--once] [--record out.wav] app-dir\n", argv[0]);
         return 1;
     }
 
@@ -164,6 +192,7 @@ int main(int argc, char** argv) {
     SDL_AudioSpec spec = { APU::MIXRATE, AUDIO_F32, 1, 0, 64, 0, 0, &APU::callback, &apu };
     SDL_OpenAudio(&spec, nullptr);
     SDL_PauseAudio(0);
+    if (!record_path.empty()) apu.begin_capture();
 
     constexpr Uint32 FRAME_MS = 1000 / 60;
     Uint32           last_tick = SDL_GetTicks();
@@ -203,6 +232,18 @@ int main(int argc, char** argv) {
         vm.run(interrupt);
         apu.next_frame(voice_inputs);
         SDL_RenderPresent(renderer);
+    }
+
+    if (!record_path.empty()) {
+        SDL_PauseAudio(1);
+        SDL_CloseAudio();
+        auto samples = apu.end_capture();
+        if (write_wav_f32(record_path.c_str(), samples, APU::MIXRATE))
+            printf("wrote %s (%zu samples, %.2fs)\n",
+                   record_path.c_str(), samples.size(),
+                   samples.size() / (double)APU::MIXRATE);
+        else
+            printf("ERROR: cannot write '%s'\n", record_path.c_str());
     }
 
     SDL_DestroyTexture(sprites);

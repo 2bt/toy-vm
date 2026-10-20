@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include <vector>
 #include <immintrin.h>
 
 
@@ -32,6 +33,7 @@ public:
             if (sample == 0) apu.config_voices();
             int step = std::min(SAMPLES_PER_FRAME - sample, length);
             apu.mix(buffer, step);
+            apu.capture(buffer, step);
             buffer += step;
             length -= step;
             sample += step;
@@ -44,15 +46,35 @@ public:
         m_voice_inputs = voice_inputs;
     }
 
+    void begin_capture() {
+        std::lock_guard<std::mutex> lock(m_cap_mtx);
+        m_capture.clear();
+        m_capturing = true;
+    }
+
+    // Stops capture and returns mono float samples at MIXRATE.
+    std::vector<float> end_capture() {
+        std::lock_guard<std::mutex> lock(m_cap_mtx);
+        m_capturing = false;
+        return std::move(m_capture);
+    }
+
 private:
-    enum { SAW = 1, TRI, PULSE, NOISE };
+    enum { TRI = 1, SAW, PULSE, NOISE };
+
+    void capture(float const* buf, size_t n) {
+        std::lock_guard<std::mutex> lock(m_cap_mtx);
+        if (!m_capturing) return;
+        m_capture.insert(m_capture.end(), buf, buf + n);
+    }
 
     void config_voices() {
         std::lock_guard<std::mutex> lock(m_mtx);
         for (size_t i = 0; i < m_voices.size(); ++i) {
             Voice&            v = m_voices[i];
             VoiceInput const& m = m_voice_inputs[i];
-            v.pitch = std::exp2f((m.pitch * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
+            int p = std::clamp(m.pitch, 0, 800);
+            v.pitch = std::exp2f((p * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
             v.pw    = (m.pw % 256) * (1.0f / 256.0f);
             v.vol   = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f) * 0.5f;
             v.wave  = m.wave;
@@ -104,4 +126,8 @@ private:
     std::array<Voice, VOICES>      m_voices{};
     std::array<VoiceInput, VOICES> m_voice_inputs{};
     std::mutex                     m_mtx{};
+
+    std::mutex                     m_cap_mtx{};
+    bool                           m_capturing{};
+    std::vector<float>             m_capture{};
 };

@@ -206,6 +206,14 @@ JMP_SWAP = {
     "jeq": "jeq",
     "jne": "jne",
 }
+JMP_INVERT = {
+    "jlt": "jge",
+    "jle": "jgt",
+    "jgt": "jle",
+    "jge": "jlt",
+    "jeq": "jne",
+    "jne": "jeq",
+}
 
 def fold_imm(op, a, b):
     # Python and/or return an operand; % follows the divisor. The VM does neither.
@@ -918,9 +926,21 @@ class Parser:
 # peephole optimizer
 ##############################
 
-def peephole(lines, tmp_vars):
+def operand_uses_tmp(operand, tmp):
+    return operand == tmp or operand == f"[{tmp}]" or operand.startswith(f"[{tmp}]+")
+
+def can_forward_tmp(q, tmp, dst):
+    """True if replaying ops queued on tmp onto dst is safe."""
+    for i, (op, x) in enumerate(q):
+        if operand_uses_tmp(x, tmp):
+            return False
+        # Reading dst is only safe as the initial mov tmp, dst (old value).
+        if x == dst and not (i == 0 and op == "mov"):
+            return False
+    return True
+
+def peephole_cleanup_labels(lines):
     for _ in range(2):
-        # remove unused labels
         used_labels = set()
         for l in lines:
             if m := re.match(r"    j.. (_[^ ]+)", l): used_labels.add(m[1])
@@ -930,12 +950,16 @@ def peephole(lines, tmp_vars):
                 if m[1] not in used_labels: continue
             new_lines.append(l)
         lines = []
-        # remove dead code
         dead = False
         for l in new_lines:
             if dead and re.match(r"(_[^: ]+):$", l): dead = False
             if not dead: lines.append(l)
             if l == "    ret": dead = True
+    return lines
+
+
+def peephole(lines, tmp_vars):
+    lines = peephole_cleanup_labels(lines)
 
     block = []
     for line in lines:
@@ -954,16 +978,29 @@ def peephole(lines, tmp_vars):
                 case [("jsr", l), ("ret",), *rest]:
                     new_block.append(("jmp", l))
                     block = rest
+                # jcc A; jmp B; A:  →  inverted_jcc B; A:
+                case [(jcc, a), ("jmp", b), lab, *rest] if (
+                    jcc in JMP_INVERT
+                    and isinstance(lab, str)
+                    and lab == f"{a}:"
+                ):
+                    new_block.append((JMP_INVERT[jcc], b))
+                    new_block.append(lab)
+                    block = rest
                 case [("mov", a, b), ("cmp", c, d), *rest] if a in tmp_vars and a == c:
                     new_block.append(("cmp", b, d))
                     block = rest
                 case [(op, a, b), ("cmp", c, "#0"), *rest] if a == c:
                     new_block.append((op, a, b))
                     block = rest
-                case [("mov", a, b), (op, c, d), *rest] if a in tmp_vars and a == d:
+                # mov tmp, x; op dest, tmp → op dest, x  (dest must not be tmp)
+                case [("mov", a, b), (op, c, d), *rest] if (
+                    a in tmp_vars and a == d and c != a
+                ):
                     new_block.append((op, c, b))
                     block = rest
                 case [("mov", a, b), *rest2] if a in tmp_vars:
+                    # mov tmp, x; ops on tmp; mov dst, tmp  →  replay onto dst
                     q = []
                     while True:
                         match block:
@@ -971,9 +1008,12 @@ def peephole(lines, tmp_vars):
                                 block = rest
                                 q.append((op, d))
                                 continue
-                            case [("mov", c, d), *rest] if d == a and not any(c == x for _, x in q):
+                            case [("mov", c, d), *rest] if d == a and can_forward_tmp(q, a, c):
                                 block = rest
-                                for op, x in q: new_block.append((op, c, x))
+                                for op, x in q:
+                                    if op == "mov" and x == c:
+                                        continue  # mov dst, dst
+                                    new_block.append((op, c, x))
                                 break
                         new_block.append(("mov", a, b))
                         block = rest2
@@ -996,6 +1036,8 @@ def peephole(lines, tmp_vars):
                 new_lines.append(f"    {op}")
             case line:
                 new_lines.append(line)
+
+    new_lines = peephole_cleanup_labels(new_lines)
 
     # remove unused tmp vars
     for t in list(tmp_vars.keys()):

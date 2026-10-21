@@ -16,16 +16,16 @@
   }
   body {
     display: grid; place-items: center;
-    background: #222; color: #ddd; font: 16px/1.4 system-ui, sans-serif;
+    background: #3d3545; color: #e8d5f2; font: 16px/1.4 system-ui, sans-serif;
   }
   #ui { text-align: center; max-width: 100%; max-height: 100%; }
   #ui h1 { font-weight: 600; font-size: 1.25rem; margin: 0 0 1rem; letter-spacing: 0.04em; }
   #games { display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; min-width: 12rem; }
-  #games button {
-    appearance: none; border: 1px solid #444; background: #1a1a1a; color: inherit;
+  #games button, #exit {
+    appearance: none; border: 2px solid #8b6bb0; background: #2d2d44; color: inherit;
     padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer; font: inherit;
   }
-  #games button:hover { background: #252525; border-color: #666; }
+  #games button:hover, #exit:hover { background: #3b3355; border-color: #a78bc4; }
   #play { display: none; }
   body.playing #play { display: block; }
   #screen {
@@ -34,12 +34,20 @@
     height: auto; image-rendering: pixelated;
     background: #000; vertical-align: middle;
   }
-  @supports (height: 100dvh) {
-    #screen { width: min(100vw, calc(100dvh * 320 / 180)); }
+  #chin {
+    display: none;
+    width: min(100vw, calc(100vh * 320 / 180));
+    margin: 0 auto;
+    padding: 2rem 0 0;
+    text-align: center;
+    border-top: 2px solid #8b6bb0;
   }
-  #hint { margin-top: 0.75rem; font-size: 0.8rem; color: #888; }
+  @supports (height: 100dvh) {
+    #screen, #chin { width: min(100vw, calc(100dvh * 320 / 180)); }
+  }
+  #hint { margin-top: 0.75rem; font-size: 0.8rem; color: #b8a0c8; }
   body.playing #hint { display: none; }
-  #err { color: #f66; margin-top: 0.75rem; max-width: 36rem; }
+  #err { color: #fb7185; margin-top: 0.75rem; max-width: 36rem; }
   #padc { display: none; touch-action: none; width: 100%; height: 13rem; }
 
   @media (max-width: 700px) {
@@ -56,16 +64,19 @@
       flex: 1; width: 100%; display: flex; flex-direction: column;
       align-items: center; min-height: 0;
     }
+    body.playing #chin { display: block; }
     body.playing #padc {
-      display: block; margin-top: 10%; flex: 0 0 auto; max-width: 28rem;
+      display: block; flex: 0 0 auto; max-width: 28rem;
     }
-    body.playing #screen {
+    body.playing #screen,
+    body.playing #chin {
       width: min(100vw, calc((100vh - 12rem) * 320 / 180));
     }
   }
   @media (max-width: 700px) {
     @supports (height: 100dvh) {
-      body.playing #screen {
+      body.playing #screen,
+      body.playing #chin {
         width: min(100vw, calc((100dvh - 12rem) * 320 / 180));
       }
     }
@@ -79,6 +90,7 @@
   <div id="hint">arrows · X · Z/C · Esc = exit</div>
   <div id="play">
     <canvas id="screen" width="320" height="180"></canvas>
+    <div id="chin"><button type="button" id="exit">EXIT</button></div>
     <canvas id="padc" aria-hidden="true"></canvas>
   </div>
   <div id="err"></div>
@@ -566,7 +578,6 @@ function padLayout() {
     { x: xl + s, y, r: rl, name: "right" },
     { x: xr - s * 1.6, y: y + s * 0.5, r: rr, name: "b" },
     { x: xr, y: y - s * 0.5, r: rr, name: "a" },
-    { x: w * 0.5, y: s * 0.55, w: s * 2, h: s * 0.9, name: "exit" },
   ];
   const dpr = devicePixelRatio || 1;
   const bw = (w * dpr) | 0, bh = (h * dpr) | 0;
@@ -579,23 +590,17 @@ function padDraw() {
   if (!padButtons.length) return;
   const w = padc.clientWidth, h = padc.clientHeight;
   padx.clearRect(0, 0, w, h);
-  padx.textAlign = "center";
-  padx.textBaseline = "middle";
-  padx.font = "bold 14px system-ui, sans-serif";
+  const dpad = ["#2d2d44", "#3b3355", "#8b6bb0"];
+  const face = ["#c0265e", "#fb7185", "#fb7185"];
   for (const b of padButtons) {
-    padx.fillStyle = touch.has(b.name) ? "#876" : "#444";
-    if (b.w) {
-      const x = b.x - b.w / 2, y = b.y - b.h / 2, r = Math.min(8, b.h / 2);
-      padx.beginPath();
-      padx.roundRect(x, y, b.w, b.h, r);
-      padx.fill();
-      padx.fillStyle = "#aaa";
-      padx.fillText("EXIT", b.x, b.y);
-    } else {
-      padx.beginPath();
-      padx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      padx.fill();
-    }
+    const [idle, pressed, stroke] = b.name === "a" || b.name === "b" ? face : dpad;
+    padx.fillStyle = touch.has(b.name) ? pressed : idle;
+    padx.strokeStyle = stroke;
+    padx.lineWidth = 2;
+    padx.beginPath();
+    padx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    padx.fill();
+    padx.stroke();
   }
 }
 
@@ -609,15 +614,14 @@ function padPointer(e) {
   touch.clear();
   for (const b of padButtons) {
     for (const p of padPts.values()) {
-      const hit = b.w
-        ? Math.abs(p.x - b.x) < b.w / 2 + p.pad && Math.abs(p.y - b.y) < b.h / 2 + p.pad
-        : (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < (b.r + p.pad) ** 2;
-      if (hit) { touch.add(b.name); break; }
+      if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < (b.r + p.pad) ** 2) {
+        touch.add(b.name);
+        break;
+      }
     }
   }
   padDraw();
   ensureAudio();
-  if (touch.has("exit")) stopGame();
 }
 for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"])
   padc.addEventListener(t, padPointer);
@@ -661,15 +665,6 @@ function stopGame() {
   clearAllTouch();
   document.body.classList.remove("playing");
   gamesEl.style.display = "flex";
-  // Finger still down over where a game button now is — ignore until next tap.
-  gamesEl.style.pointerEvents = "none";
-  requestAnimationFrame(() => {
-    const unlock = () => {
-      gamesEl.style.pointerEvents = "";
-      window.removeEventListener("pointerdown", unlock, true);
-    };
-    window.addEventListener("pointerdown", unlock, true);
-  });
   document.querySelector("#ui h1").style.display = "";
   setGameQuery(null);
 }
@@ -711,6 +706,7 @@ for (const g of GAMES) {
 const bootGame = new URLSearchParams(location.search).get("game");
 if (bootGame) startGame(bootGame);
 
+document.getElementById("exit").onclick = () => stopGame();
 window.addEventListener("pointerdown", () => ensureAudio());
 window.addEventListener("keydown", (e) => {
   ensureAudio();

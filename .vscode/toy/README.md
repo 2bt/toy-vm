@@ -13,7 +13,7 @@ Command Palette → **Developer: Install Extension from Location…** → select
 Or symlink:
 
 ```bash
-ln -s "$(pwd)/.vscode/toy" ~/.cursor/extensions/toy-vm.toy-0.0.1
+ln -s "$(pwd)/.vscode/toy" ~/.cursor/extensions/toy-vm.toy-0.0.2
 ```
 
 Then reload the window. `.toy` files should highlight as language **Toy**.

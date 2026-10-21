@@ -1,5 +1,6 @@
 const PARTICLE_TYPE_DEBRIS = 1
 const PARTICLE_TYPE_FLASH  = 2
+const PARTICLE_TYPE_CHARGE = 3
 
 
 struct Particle:
@@ -29,6 +30,9 @@ func particle_spawn(type, x, y) Particle*:
 
             elif type == PARTICLE_TYPE_FLASH:
                 p.ttl = 3
+
+            elif type == PARTICLE_TYPE_CHARGE:
+                p.ttl = 10
 
             return p
     return null
@@ -73,4 +77,10 @@ func particle_draw_all():
             camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
                           0,
                           256 + 16,
+                          0)
+
+        elif p.type == PARTICLE_TYPE_CHARGE:
+            camera_sprite(p.sx / SP - 3, p.sy / SP - 3, 7, 7,
+                          max(0, 10 - p.ttl) * 8,
+                          256 + 32,
                           0)

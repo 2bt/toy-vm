@@ -47,8 +47,8 @@ var LEVEL1_DATA = (
     "000000000                    0000000000000                  000                       0"
     "00000                        00000SSS00000                  000                       0"
     "00000    ^^    p             00000   00000                  000                       0"
-    "00000     p   ^^^                                     p p p 000                       0"
-    "000000000^^                                      00000000000000                       0"
+    "00000     p   ^^^         p                           p p p 000                       0"
+    "000000000^^               0                      00000000000000                       0"
     "000000000             p          000000        p 0                                    0"
     "000000000^^         ^^^^     0000000000000     000                     p              0"
     "000000000                  p 0000000000000^^   000         0000000    ^^00  p         0"
@@ -187,7 +187,7 @@ func level_draw_background():
     # var oy = camera.y * 4 / 5 % TS
     # for r = 0, SCREEN_H / TS + 1:
     #     for c = 0, SCREEN_W / TS + 1:
-    #         sprite(c * TS - ox, r * TS - oy, TS, TS, 16, 32, 0)
+    #         sprite(c * TS - ox, r * TS - oy, TS, TS, 32, 32, 0)
 
     var c0 = camera.x / TS
     var r0 = camera.y / TS
@@ -206,7 +206,7 @@ func level_draw_background():
                     q = (q + 5) % 31
                     if q < i:
                         var color = q > 10 ? 12 : 11
-                        sprite(x, y + i - 16, TS, 1, 32, 32 + color, 0)
+                        sprite(x, y + i - 16, TS, 1, 0, 32 + color, 0)
 
 
             elif t == 'S':
@@ -215,7 +215,7 @@ func level_draw_background():
                     q = (q + 5) % 31
                     if q < i:
                         color = q > 10 ? 12 : 11
-                        sprite(x, y + 31 - i, TS, 1, 32, 32 + color, 0)
+                        sprite(x, y + 31 - i, TS, 1, 0, 32 + color, 0)
 
 
 
@@ -231,7 +231,7 @@ func level_draw_walls():
 
             if t == '0':
                 # edge
-                sprite(x, y, TS, TS, 0, 32, 0)
+                sprite(x, y, TS, TS, 16, 32, 0)
                 if level_get_tile_at_cr(c - 1, r) != '0': sprite(x, y, TS, TS, 0 * TS, 48, 0)
                 if level_get_tile_at_cr(c + 1, r) != '0': sprite(x, y, TS, TS, 1 * TS, 48, 0)
                 if level_get_tile_at_cr(c, r - 1) != '0': sprite(x, y, TS, TS, 2 * TS, 48, 0)

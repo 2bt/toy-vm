@@ -1,4 +1,4 @@
-## Next steps:
+## Outpost Oberon
 
 + [x] hero-enemy collision
 + [x] hero death and respawn
@@ -14,10 +14,12 @@
 + [ ] music
 + [ ] high score
 + [ ] spawn animation
++ [ ] screen shake
 
 enemies:
-+ patrol
-  + needs to shoot
++ [x] patrol
+  + [x] needs to shoot
++ drone?
 
 
 other game elements:

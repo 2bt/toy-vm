@@ -249,6 +249,24 @@ var SOUND_GAME_OVER: SoundEffect = {
     },
 }
 
+var SOUND_CHARGE: SoundEffect = {
+    3, {
+        SND_VOL, 0,
+        SND_VOL_SLIDE, 50, 5,
+        8,
+        SND_VOL, 0,
+        0,
+    },
+    {
+        SND_WAVE, WAVE_NOISE,
+        SND_PITCH, 40 * 8,
+        1,
+        SND_LOOP,
+        SND_PITCH_INC, 4 * 8,
+        1,
+        0,
+    },
+}
 
 
 struct SoundCommandStream:

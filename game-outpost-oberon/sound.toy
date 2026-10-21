@@ -88,14 +88,14 @@ var SOUND_LAND: SoundEffect = {
 var SOUND_ENEMY_HIT: SoundEffect = {
     2, {
         SND_VOL, 60,
-        SND_VOL_SLIDE, 0, 30,
         SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 60 * 8,
+        SND_PITCH, 66 * 8,
         1,
         SND_WAVE, WAVE_TRI,
         SND_PITCH, 60 * 8,
         1,
         SND_PITCH, 54 * 8,
+        SND_VOL_SLIDE, 0, 30,
         1,
         SND_PITCH, 50 * 8,
         SND_END,

@@ -166,38 +166,38 @@ include "enemy.toy"
 
 
 # ---------------------------------------------------------------------------
-# bullets
+# hero bullets
 # ---------------------------------------------------------------------------
 
-struct Bullet:
+struct HeroBullet:
     alive
     x
     y
-    dx
+    facing_left
 
-var bullets: Bullet[8]
+var hero_bullets: HeroBullet[8]
 
-func bullet_new(x, y, dx):
-    for b in bullets:
+func hero_bullet_spawn(x, y, facing_left):
+    for b in hero_bullets:
         if b.alive: continue
-        b.alive = true
-        b.x = x
-        b.y = y
-        b.dx = dx
+        b.alive       = true
+        b.x           = x
+        b.y           = y
+        b.facing_left = facing_left
         return
 
-func bullet_update_all():
+func hero_bullet_update_all():
     var view = camera
     box_grow(view, 8)
 
-    for b in bullets:
+    for b in hero_bullets:
         if not b.alive: continue
-        b.x += b.dx * 5 # speed
+        b.x += b.facing_left ? -3 : 3
 
         if not box_has_point(view, b.x, b.y):
             b.alive = 0
 
-        var dir = b.dx > 0 ? DIR_RIGHT : DIR_LEFT
+        var dir = b.facing_left ? DIR_LEFT : DIR_RIGHT
         var o = check_collision(b.x, b.y, dir)
         if o:
             b.alive = false
@@ -214,10 +214,10 @@ func bullet_update_all():
                 particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
                 continue
 
-func bullet_draw_all():
-    for b in bullets:
+func hero_bullet_draw_all():
+    for b in hero_bullets:
         if not b.alive: continue
-        camera_sprite(b.x - (b.dx > 0 ? 5 : 0), b.y, 6, 1,
+        camera_sprite(b.x - (b.facing_left ? 0 : 5), b.y, 6, 1,
                       0, 176, 0)
 
 
@@ -344,12 +344,10 @@ func hero_update():
     if hero.shoot_countdown > 0:
         hero.shoot_countdown -= 1
     elif btn(BTN_B):
-        hero.shoot_countdown = 12
+        hero.shoot_countdown = 20
         play_sound(SOUND_SHOOT)
-        if hero.facing_left:
-            bullet_new(x + 4, y + 9, -1)
-        else:
-            bullet_new(x + 11, y + 9, 1)
+        var bx = hero.facing_left ? x + 4 : x + 11
+        hero_bullet_spawn(bx, y + 9, hero.facing_left)
 
     # animation
     hero.frame = 0
@@ -373,14 +371,15 @@ func hero_update():
             hero_set_state(HERO_STATE_DYING)
             return
 
+    # lava
     var t = level_get_tile(hero.box.x, hero.box.y)
     if t == 'l':
         hero_set_state(HERO_STATE_DYING)
         hero.vy = 4
         return
 
-    if t == 'E':
-        hero_set_state(HERO_STATE_EXITING)
+    # level exit
+    if t == 'E': hero_set_state(HERO_STATE_EXITING)
 
     camera_follow_hero()
 
@@ -424,7 +423,8 @@ func game_load_level(n):
     camera_follow_hero()
 
     enemy_init_all()
-    for b in bullets: b.* = {}
+    for b in hero_bullets: b.* = {}
+    for eb in enemy_bullets: eb.* = {}
     for p in particles: p.* = {}
 
     game.state     = GAME_STATE_LEVEL
@@ -459,7 +459,8 @@ func game_update():
         hero_update()
 
     enemy_update_all()
-    bullet_update_all()
+    hero_bullet_update_all()
+    enemy_bullet_update_all()
     particle_update_all()
 
 
@@ -476,7 +477,8 @@ func game_draw():
     if game.state == GAME_STATE_PLAY:
         hero_draw()
 
-    bullet_draw_all()
+    hero_bullet_draw_all()
+    enemy_bullet_draw_all()
     particle_draw_all()
     level_draw_walls()
 

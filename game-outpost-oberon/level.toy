@@ -18,6 +18,10 @@ func box_grow(b: Box*, amount):
     b.w += amount * 2
     b.h += amount * 2
 
+func box_center_x(b: Box*): return b.x + b.w / 2
+
+func box_center_y(b: Box*): return b.y + b.h / 2
+
 # origin = tile top-left in subpixels; box = bottom-centered AABB in pixels
 func entity_update_box_pos(sx, sy, box: Box*):
     box.x = sx / SP + 8 - box.w / 2
@@ -142,6 +146,33 @@ func level_get_tile_at_cr(c, r):
 
 func level_get_tile(x, y):
     return level_get_tile_at_cr(x / TS, y / TS)
+
+func level_is_solid(t):
+    return t == '0' or t == 'X'
+
+
+func level_has_los(x0, y0, x1, y1):
+    var c0 = x0 / TS
+    var r0 = y0 / TS
+    var c1 = x1 / TS
+    var r1 = y1 / TS
+    if c0 == c1 and r0 == r1: return true
+
+    var dx = x1 - x0
+    var dy = y1 - y0
+    var steps = abs(dx)
+    if abs(dy) > steps: steps = abs(dy)
+
+    var i = 1
+    while i <= steps:
+        var x = x0 + dx * i / steps
+        var y = y0 + dy * i / steps
+        var tc = x / TS
+        var tr = y / TS
+        if (tc != c0 or tr != r0) and (tc != c1 or tr != r1):
+            if level_is_solid(level_get_tile_at_cr(tc, tr)): return false
+        i += 1
+    return true
 
 
 func level_update():

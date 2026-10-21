@@ -4,6 +4,66 @@ const ENEMY_STATE_DEAD   = 0
 const ENEMY_STATE_NORMAL = 1
 const ENEMY_STATE_DYING  = 2
 
+const ENEMY_BULLET_TYPE_BASIC = 1
+
+struct EnemyBullet:
+    alive
+    type
+    x
+    y
+    vx
+    vy
+
+var enemy_bullets: EnemyBullet[16]
+
+func enemy_bullet_spawn(type, x, y) EnemyBullet*:
+    for b in enemy_bullets:
+        if b.alive: continue
+        b.* = {}
+        b.alive = true
+        b.type = type
+        b.x = x
+        b.y = y
+        return b
+    return null
+
+
+func enemy_bullet_update_all():
+    var view = camera
+    box_grow(view, 8)
+
+    for b in enemy_bullets:
+        if not b.alive: continue
+
+        if b.type == ENEMY_BULLET_TYPE_BASIC:
+            b.x += b.vx
+            b.y += b.vy
+
+            if not box_has_point(view, b.x, b.y):
+                b.alive = 0
+                continue
+
+            var dir = b.vx > 0 ? DIR_RIGHT : DIR_LEFT
+            var o = check_collision(b.x, b.y, dir)
+            if o:
+                b.alive = false
+                particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
+                play_sound(SOUND_BULLET_WALL)
+                continue
+
+            if hero.state == HERO_STATE_NORMAL:
+                if box_has_point(hero.box, b.x, b.y):
+                    b.alive = false
+                    hero_set_state(HERO_STATE_DYING)
+                    continue
+
+func enemy_bullet_draw_all():
+    for b in enemy_bullets:
+        if not b.alive: continue
+        if b.type == ENEMY_BULLET_TYPE_BASIC:
+            camera_sprite(b.x - (b.vx > 0 ? 5 : 0), b.y, 6, 1,
+                          0, 176, b.vx < 0)
+
 
 struct Enemy:
     state
@@ -24,6 +84,8 @@ struct Enemy:
     wait_countdown
     wait_turn
     pace_countdown
+    shoot_countdown
+    burst_left
 
 
 
@@ -44,6 +106,8 @@ func enemy_spawn(type, x, y):
             e.box.h = 17
             e.hp    = 3
             e.pace_countdown = rand(30, 80)
+            e.shoot_countdown = rand(10, 50)
+            e.burst_left = rand(1, 2)
 
         entity_update_box_pos(e.sx, e.sy, e.box)
         return
@@ -58,10 +122,22 @@ func enemy_init_all():
             if t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
 
 
+func enemy_start_wait(e: Enemy*, turn):
+    e.wait_countdown = rand(50, 120)
+    e.wait_turn = turn
+    e.frame = 0
+
 func enemy_hit(e: Enemy*):
     if e.state != ENEMY_STATE_NORMAL: return
     e.hp -= 1
     e.hit_countdown = 3
+
+
+    if e.type == ENEMY_TYPE_PATROL:
+        if e.facing_left != (box_center_x(e.box) > box_center_x(hero.box)):
+            e.wait_countdown = 10
+            e.wait_turn = true
+
     if e.hp <= 0:
         e.state = ENEMY_STATE_DYING
         e.hit_countdown = 20
@@ -69,11 +145,6 @@ func enemy_hit(e: Enemy*):
     else:
         play_sound(SOUND_ENEMY_HIT)
 
-
-func enemy_start_wait(e: Enemy*, turn):
-    e.wait_countdown = rand(50, 120)
-    e.wait_turn = turn
-    e.frame = 0
 
 func enemy_update_patrol(e: Enemy*):
     var x = e.sx / SP
@@ -83,10 +154,11 @@ func enemy_update_patrol(e: Enemy*):
         e.wait_countdown -= 1
         if e.wait_countdown == 0:
             if e.wait_turn: e.facing_left = not e.facing_left
-            e.pace_countdown = rand(30, 80)
+            e.pace_countdown = rand(30, 180)
         e.frame = 0
     else:
 
+        # walk
         e.sx += e.facing_left ? -6 : 6
         x = e.sx / SP
 
@@ -103,9 +175,35 @@ func enemy_update_patrol(e: Enemy*):
             e.frame = 1 + e.run_tick / 4 % 4
             e.pace_countdown -= 1
             if e.pace_countdown == 0:
-                enemy_start_wait(e, false)
+                enemy_start_wait(e, rand(0, 4) == 0)
 
     entity_update_box_pos(e.sx, e.sy, e.box)
+
+    if e.shoot_countdown > 0:
+        e.shoot_countdown -= 1
+
+    elif e.active and hero.state == HERO_STATE_NORMAL:
+        var ex = box_center_x(e.box)
+        var ey = box_center_y(e.box)
+        var hx = box_center_x(hero.box)
+        var hy = box_center_y(hero.box)
+
+        if (e.facing_left == (hx < ex)
+        and abs(hy - ey) <= 100
+        and level_has_los(ex, ey, hx, hy)):
+            var muzzle_x = e.facing_left ? e.box.x - 1 : e.box.x + e.box.w
+            var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, ey - 1)
+            if b:
+                b.vx = e.facing_left ? -2 : 2
+                play_sound(SOUND_SHOOT)
+                e.burst_left -= 1
+                if e.burst_left > 0: e.shoot_countdown = 20
+                else:
+                    e.shoot_countdown = rand(60, 200)
+                    e.burst_left = rand(1, 2)
+        else:
+            e.shoot_countdown = rand(60, 150)
+            e.burst_left = rand(1, 2)
 
 
 func enemy_update_all():

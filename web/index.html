@@ -481,6 +481,7 @@ const FRAME_MS = 1000 / 60;
 
 let audioCtx = null;
 let apuNode = null;
+let audioReady = null;
 let running = false;
 let raf = 0;
 let mem = null;
@@ -495,16 +496,31 @@ function showError(msg) {
   errEl.textContent = msg || "";
 }
 
-// Browsers block audio until a click/key — only call this from input handlers.
-async function ensureAudio() {
-  if (audioCtx) return;
+// Call only from user-gesture handlers. Create + resume() must stay sync
+// so Android Chrome still has transient activation (lost after await).
+function ensureAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioReady;
+  }
   audioCtx = new AudioContext({ sampleRate: 48000 });
-  await audioCtx.resume();
-  const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
-  await audioCtx.audioWorklet.addModule(url);
-  URL.revokeObjectURL(url);
-  apuNode = new AudioWorkletNode(audioCtx, "toy-apu");
-  apuNode.connect(audioCtx.destination);
+  audioCtx.resume();
+  audioReady = (async () => {
+    try {
+      await audioCtx.resume();
+      const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
+      await audioCtx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      apuNode = new AudioWorkletNode(audioCtx, "toy-apu");
+      apuNode.connect(audioCtx.destination);
+    } catch (e) {
+      console.error(e);
+      audioCtx = null;
+      apuNode = null;
+      audioReady = null;
+    }
+  })();
+  return audioReady;
 }
 
 function interrupt(n) {
@@ -621,7 +637,7 @@ function padPointer(e) {
     }
   }
   padDraw();
-  ensureAudio();
+  if (e.type === "pointerdown") ensureAudio();
 }
 for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"])
   padc.addEventListener(t, padPointer);
@@ -699,7 +715,7 @@ async function startGame(gameId) {
 for (const g of GAMES) {
   const btn = document.createElement("button");
   btn.textContent = g.title;
-  btn.onclick = () => startGame(g.id);
+  btn.onclick = () => { ensureAudio(); startGame(g.id); };
   gamesEl.appendChild(btn);
 }
 
@@ -708,6 +724,7 @@ if (bootGame) startGame(bootGame);
 
 document.getElementById("exit").onclick = () => stopGame();
 window.addEventListener("pointerdown", () => ensureAudio());
+window.addEventListener("click", () => ensureAudio());
 window.addEventListener("keydown", (e) => {
   ensureAudio();
   keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key);

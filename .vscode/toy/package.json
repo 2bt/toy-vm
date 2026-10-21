@@ -1,0 +1,35 @@
+{
+  "name": "toy",
+  "displayName": "Toy Language",
+  "description": "Syntax highlighting for the toy-vm .toy language",
+  "version": "0.0.2",
+  "publisher": "toy-vm",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "toy",
+        "aliases": [
+          "Toy",
+          "toy"
+        ],
+        "extensions": [
+          ".toy"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "toy",
+        "scopeName": "source.toy",
+        "path": "./syntaxes/toy.tmLanguage.json"
+      }
+    ]
+  }
+}

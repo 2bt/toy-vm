@@ -16,7 +16,7 @@
   }
   body {
     display: grid; place-items: center;
-    background: #111; color: #ddd; font: 16px/1.4 system-ui, sans-serif;
+    background: #222; color: #ddd; font: 16px/1.4 system-ui, sans-serif;
   }
   #ui { text-align: center; max-width: 100%; max-height: 100%; }
   #ui h1 { font-weight: 600; font-size: 1.25rem; margin: 0 0 1rem; letter-spacing: 0.04em; }
@@ -57,7 +57,7 @@
       align-items: center; min-height: 0;
     }
     body.playing #padc {
-      display: block; margin-top: 20%; flex: 0 0 auto; max-width: 28rem;
+      display: block; margin-top: 10%; flex: 0 0 auto; max-width: 28rem;
     }
     body.playing #screen {
       width: min(100vw, calc((100vh - 12rem) * 320 / 180));
@@ -558,7 +558,7 @@ function padLayout() {
   const rl = s * 0.66;
   const rr = s * 0.9;
   const xl = s * 2.2;
-  const xr = w - s * 1.8;
+  const xr = w - s * 1.6;
   padButtons = [
     { x: xl, y: y - s, r: rl, name: "up" },
     { x: xl, y: y + s, r: rl, name: "down" },
@@ -581,15 +581,15 @@ function padDraw() {
   padx.clearRect(0, 0, w, h);
   padx.textAlign = "center";
   padx.textBaseline = "middle";
-  padx.font = "14px system-ui, sans-serif";
+  padx.font = "bold 14px system-ui, sans-serif";
   for (const b of padButtons) {
-    padx.fillStyle = touch.has(b.name) ? "#444" : "#222";
+    padx.fillStyle = touch.has(b.name) ? "#876" : "#444";
     if (b.w) {
       const x = b.x - b.w / 2, y = b.y - b.h / 2, r = Math.min(8, b.h / 2);
       padx.beginPath();
       padx.roundRect(x, y, b.w, b.h, r);
       padx.fill();
-      padx.fillStyle = "#666";
+      padx.fillStyle = "#aaa";
       padx.fillText("EXIT", b.x, b.y);
     } else {
       padx.beginPath();
@@ -661,6 +661,15 @@ function stopGame() {
   clearAllTouch();
   document.body.classList.remove("playing");
   gamesEl.style.display = "flex";
+  // Finger still down over where a game button now is — ignore until next tap.
+  gamesEl.style.pointerEvents = "none";
+  requestAnimationFrame(() => {
+    const unlock = () => {
+      gamesEl.style.pointerEvents = "";
+      window.removeEventListener("pointerdown", unlock, true);
+    };
+    window.addEventListener("pointerdown", unlock, true);
+  });
   document.querySelector("#ui h1").style.display = "";
   setGameQuery(null);
 }

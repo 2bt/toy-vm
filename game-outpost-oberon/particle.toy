@@ -13,7 +13,7 @@ struct Particle:
 
 var particles: Particle[64]
 
-func particle_spawn(type, x, y):
+func particle_spawn(type, x, y) Particle*:
     for p in particles:
         if p.ttl == 0:
             p.* = {}
@@ -30,7 +30,8 @@ func particle_spawn(type, x, y):
             elif type == PARTICLE_TYPE_FLASH:
                 p.ttl = 3
 
-            return
+            return p
+    return null
 
 
 func particle_update_all():

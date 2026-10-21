@@ -908,7 +908,7 @@ class Parser:
                 self.call_stack.pop()
                 if n_args != len(func.args): self.error("wrong number of function arguments")
                 func.uses += 1
-                return Call(name, Block(setup)), func.type
+                return self.postfix(Call(name, Block(setup)), func.type)
 
             # variable
             node = None

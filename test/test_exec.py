@@ -544,6 +544,21 @@ class ExecTests(unittest.TestCase):
                 print_n(b.y)
         """), "4\n5\n")
 
+    def test_call_postfix_field_assign(self):
+        self.assertEqual(self.run_toy("""
+            struct V:
+                x
+                y
+            var slot: V
+            func get() V*:
+                return &slot
+            func tick():
+                get().x = 3
+                get().y = 9
+                print_n(get().x)
+                print_n(slot.y)
+        """), "3\n9\n")
+
     def test_auto_addr_of_int_arg(self):
         self.assertEqual(self.run_toy("""
             func set(p: int*, v):

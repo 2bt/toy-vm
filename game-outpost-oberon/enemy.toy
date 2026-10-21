@@ -191,7 +191,7 @@ func enemy_update_patrol(e: Enemy*):
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, muzzle_y)
             if b:
                 b.vx = e.facing_left ? -2 : 2
-                play_sound(SOUND_SHOOT)
+                play_sound(SOUND_PATROL_SHOOT)
             e.burst_left -= 1
             if e.burst_left > 0: e.shoot_countdown = 20
             else:
@@ -210,7 +210,7 @@ func enemy_update_patrol(e: Enemy*):
         if (e.facing_left == (hx < ex)
         and abs(hy - ey) <= 70
         and level_has_los(ex, ey, hx, hy)):
-            e.aim_countdown = 10
+            e.aim_countdown = 15
             play_sound(SOUND_CHARGE)
             var p = particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
         else:

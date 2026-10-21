@@ -345,7 +345,7 @@ func hero_update():
         hero.shoot_countdown -= 1
     elif btn(BTN_B):
         hero.shoot_countdown = 20
-        play_sound(SOUND_SHOOT)
+        play_sound(SOUND_HERO_SHOOT)
         var bx = hero.facing_left ? x + 4 : x + 11
         hero_bullet_spawn(bx, y + 9, hero.facing_left)
 

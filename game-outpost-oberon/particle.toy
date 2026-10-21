@@ -64,8 +64,6 @@ func particle_draw_all():
     for p in particles:
         if p.ttl == 0: continue
 
-
-
         if p.type == PARTICLE_TYPE_DEBRIS:
             var frame = max(0, 9 - p.ttl / 8)
             camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
@@ -80,7 +78,7 @@ func particle_draw_all():
                           0)
 
         elif p.type == PARTICLE_TYPE_CHARGE:
-            camera_sprite(p.sx / SP - 3, p.sy / SP - 3, 7, 7,
-                          max(0, 10 - p.ttl) * 8,
+            camera_sprite(p.sx / SP - 4, p.sy / SP - 4, 9, 9,
+                          clamp(10 - p.ttl, 0, 5) * 16,
                           256 + 32,
                           0)

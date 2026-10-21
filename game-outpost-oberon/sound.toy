@@ -21,21 +21,45 @@ struct SoundEffect:
     start1: int*
 
 
-var SOUND_SHOOT: SoundEffect = {
+var SOUND_HERO_SHOOT: SoundEffect = {
     0, {
-        SND_PW, 10, 15,
-        SND_VOL, 30,
-        SND_WAVE, WAVE_PULSE,
-        SND_PITCH, 60 * 8,
-        1,
+        SND_PW, 128, 0,
         SND_VOL, 60,
-        SND_VOL_SLIDE, 0, 20,
+        SND_WAVE, WAVE_PULSE,
+        SND_PITCH, 76 * 8,
+        1,
+        SND_PITCH, 64 * 8,
+        1,
+        SND_VOL_SLIDE, 0, 15,
         SND_LOOP,
-        SND_PITCH_INC, -2 * 8,
+        SND_PITCH_INC, -1 * 8,
         1,
         SND_END,
     },
 }
+
+var SOUND_PATROL_SHOOT: SoundEffect = {
+    0, {
+        SND_PW, 20, 2,
+        SND_VOL, 60,
+        SND_WAVE, WAVE_PULSE,
+        SND_VOL_SLIDE, 0, 8,
+        SND_PITCH, 80 * 8,
+        SND_LOOP,
+        1,
+        SND_PITCH_INC, 3 * 8,
+        1,
+        SND_PITCH_INC, 3 * 8,
+        1,
+        SND_PITCH_INC, -3 * 8,
+        1,
+        SND_PITCH_INC, -3 * 8,
+        1,
+        SND_END,
+    },
+}
+
+
 
 var SOUND_BULLET_WALL: SoundEffect = {
     2, {
@@ -252,8 +276,8 @@ var SOUND_GAME_OVER: SoundEffect = {
 var SOUND_CHARGE: SoundEffect = {
     3, {
         SND_VOL, 0,
-        SND_VOL_SLIDE, 50, 5,
-        8,
+        SND_VOL_SLIDE, 60, 5,
+        10,
         SND_VOL, 0,
         0,
     },

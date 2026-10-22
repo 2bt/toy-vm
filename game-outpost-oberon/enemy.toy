@@ -187,13 +187,18 @@ func enemy_update_patrol(e: Enemy*):
     var muzzle_y = e.box.y + 7
     if e.aim_countdown > 0:
         e.aim_countdown -= 1
-        if e.aim_countdown == 0:
+        if e.aim_countdown == 19:
+            play_sound(SOUND_CHARGE)
+            particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
+        if e.aim_countdown == 5:
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, muzzle_y)
             if b:
                 b.vx = e.facing_left ? -2 : 2
                 play_sound(SOUND_PATROL_SHOOT)
+
+        if e.aim_countdown == 0:
             e.burst_left -= 1
-            if e.burst_left > 0: e.shoot_countdown = 20
+            if e.burst_left > 0: e.aim_countdown = 30
             else:
                 e.shoot_countdown = rand(60, 200)
                 e.burst_left = rand(1, 2)
@@ -211,11 +216,9 @@ func enemy_update_patrol(e: Enemy*):
         and abs(hy - ey) <= 70
         and box_encloses(camera.box, e.box)
         and (level_has_los(ex, ey, hx, hy) or level_has_los(ex, ey, hx, ey))):
-            e.aim_countdown = 15
-            play_sound(SOUND_CHARGE)
-            var p = particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
+            e.aim_countdown = 20
         else:
-            e.shoot_countdown = rand(60, 150)
+            e.shoot_countdown = rand(30, 150)
             e.burst_left = rand(1, 2)
 
 

@@ -177,18 +177,13 @@ func enemy_update_patrol(e: Enemy*):
     else:
 
         # walk
-        e.sx += e.facing_left ? -6 : 6
-        x = e.sx / SP
-        y = e.sy / SP
+        var dx = e.facing_left ? -6 : 6
+        var hit = level_move_box_x(e.sx, e.box, dx)
 
-        var face_x = e.facing_left ? x + 0 : x + 7
-        var wall_dir = e.facing_left ? DIR_LEFT : DIR_RIGHT
-
-        var o = check_collision(face_x, y + 9, wall_dir)
+        var face_x = e.facing_left ? e.box.x : e.box.x + e.box.w - 1
+        var foot_y = e.box.y + e.box.h
         var turn = -1
-        if o or not check_collision_down(face_x, y + 17, y + 16):
-            x += o
-            e.sx = x * SP
+        if hit or not check_collision_down(face_x, foot_y, foot_y - 1):
             turn = 1
         else:
             e.run_tick += 1

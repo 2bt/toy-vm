@@ -186,7 +186,7 @@ func enemy_update_patrol(e: Enemy*):
             e.run_tick += 1
             e.frame = 1 + e.run_tick / 4 % 4
             e.pace_countdown -= 1
-            if e.pace_countdown == 0: turn = rand(0, 4)
+            if e.pace_countdown == 0: turn = rand(0, 4) == 0
         if turn >= 0:
             e.wait_countdown = rand(50, 90)
             e.wait_turn = turn > 0
@@ -275,7 +275,7 @@ func enemy_update_spider(e: Enemy*):
 
             # jump
             if abs(e.vx) == SPIDER_SPEED:
-                if check_collision(wall_x, e.box.y, 0):
+                if check_collision(wall_x, e.box.y, e.facing_left ? DIR_LEFT : DIR_RIGHT):
                     jump = 44
                 elif not check_collision_down(ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1):
                     jump = 24
@@ -323,9 +323,8 @@ func enemy_update_spider(e: Enemy*):
 
     var t = level_get_tile(e.box.x, e.box.y)
     if t == 'l':
-        e.vx = 0
-        e.vy = 4
         enemy_kill(e)
+        e.vy = 4
 
 
 
@@ -396,4 +395,4 @@ func enemy_draw_all():
 
 
         # box
-        camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
+        # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)

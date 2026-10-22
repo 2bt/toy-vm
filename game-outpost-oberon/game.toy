@@ -572,7 +572,7 @@ func game_draw():
     particle_draw_all()
     level_draw_walls()
 
-    draw_dots()
+    # draw_dots()
 
     # HUD
     strnum(str, hero.lives)

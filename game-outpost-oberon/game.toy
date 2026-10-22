@@ -121,6 +121,74 @@ func check_collision_down(x, y, py) int:
         return -1 - (y % TS)
     return 0
 
+# Resolve axis motion for enemy boxes. Mutates sx/sy and box.x/box.y.
+# Probes: two points on the leading face (simple; not hero-grade).
+
+func level_move_box_x(sx: int*, box: Box*, dx) int:
+    sx.* = sx.* + dx
+    box.x = sx.* / SP
+    if dx == 0: return 0
+
+    var x = box.x
+    var y = box.y
+    var y0 = y + box.h / 4
+    var y1 = y + box.h * 3 / 4
+    var o = 0
+    var hit = 0
+
+    if dx < 0:
+        o = max(check_collision(x, y0, DIR_LEFT),
+                check_collision(x, y1, DIR_LEFT))
+        if o:
+            x += o
+            sx.* = x * SP
+            box.x = x
+            hit = DIR_LEFT
+    else:
+        o = min(check_collision(x + box.w - 1, y0, DIR_RIGHT),
+                check_collision(x + box.w - 1, y1, DIR_RIGHT))
+        if o:
+            x += o
+            sx.* = x * SP
+            if dx > 0: sx.* += SP - 1
+            box.x = sx.* / SP
+            hit = DIR_RIGHT
+    return hit
+
+
+func level_move_box_y(sy: int*, box: Box*, dy) int:
+    var py = sy.* / SP
+    sy.* = sy.* + dy
+    box.y = sy.* / SP
+    if dy == 0: return 0
+
+    var x = box.x
+    var y = box.y
+    var x0 = x + box.w / 4
+    var x1 = x + box.w * 3 / 4
+    var o = 0
+    var hit = 0
+
+    if dy > 0:
+        var foot = y + box.h - 1
+        var pfoot = py + box.h - 1
+        o = min(check_collision_down(x0, foot, pfoot),
+                check_collision_down(x1, foot, pfoot))
+        if o:
+            y += o
+            sy.* = y * SP + SP - 1
+            box.y = sy.* / SP
+            hit = DIR_DOWN
+    else:
+        o = max(check_collision(x0, y, DIR_UP),
+                check_collision(x1, y, DIR_UP))
+        if o:
+            y += o
+            sy.* = y * SP
+            box.y = y
+            hit = DIR_UP
+    return hit
+
 
 const HERO_W = 6
 const HERO_H = 11

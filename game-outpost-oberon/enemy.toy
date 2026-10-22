@@ -163,9 +163,6 @@ func enemy_hit(e: Enemy*):
 
 
 func enemy_update_patrol(e: Enemy*):
-    var x = e.sx / SP
-    var y = e.sy / SP
-
     if e.aim_countdown > 0:
         e.frame = 0
     elif e.wait_countdown > 0:

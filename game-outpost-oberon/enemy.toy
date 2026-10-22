@@ -29,7 +29,7 @@ func enemy_bullet_spawn(type, x, y) EnemyBullet*:
 
 
 func enemy_bullet_update_all():
-    var view = camera
+    var view = camera.box
     box_grow(view, 8)
 
     for b in enemy_bullets:
@@ -209,7 +209,8 @@ func enemy_update_patrol(e: Enemy*):
 
         if (e.facing_left == (hx < ex)
         and abs(hy - ey) <= 70
-        and level_has_los(ex, ey, hx, hy)):
+        and box_encloses(camera.box, e.box)
+        and (level_has_los(ex, ey, hx, hy) or level_has_los(ex, ey, hx, ey))):
             e.aim_countdown = 15
             play_sound(SOUND_CHARGE)
             var p = particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
@@ -219,7 +220,7 @@ func enemy_update_patrol(e: Enemy*):
 
 
 func enemy_update_all():
-    var view = camera
+    var view = camera.box
     box_grow(view, 32)
 
     for e in enemies:

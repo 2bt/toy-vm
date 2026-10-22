@@ -34,9 +34,8 @@ const ACCEL_GROUND = 5
 const ACCEL_AIR    = 2
 const JUMP_FORCE   = 48
 
-
 # ---------------------------------------------------------------------------
-# game / level
+# data
 # ---------------------------------------------------------------------------
 
 struct Game:
@@ -46,18 +45,55 @@ struct Game:
 
 var game: Game
 
-include "level.toy"
+struct Camera:
+    box: Box
 
-
-# ---------------------------------------------------------------------------
-# collision helpers
-# ---------------------------------------------------------------------------
+var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H } }
 
 struct Dot:
     x
     y
 var dots: Dot[99]
 var dot_count
+
+struct Hero:
+    state
+    sx
+    sy
+    vx
+    vy
+    box: Box
+
+    facing_left
+    on_ground
+
+    lives
+    score
+    frame
+    run_tick
+    shoot_countdown
+    hit_countdown
+
+var hero: Hero
+
+struct HeroBullet:
+    alive
+    x
+    y
+    facing_left
+
+var hero_bullets: HeroBullet[8]
+
+
+include "level.toy"
+
+
+# ---------------------------------------------------------------------------
+# helpers used by particle.toy / enemy.toy (must be declared before those includes)
+# ---------------------------------------------------------------------------
+
+func camera_sprite(x, y, w, h, s, t, f):
+    sprite(x - camera.box.x, y - camera.box.y, w, h, s, t, f)
 
 func dot(x, y):
     dots[dot_count] = {x, y}
@@ -84,31 +120,6 @@ func check_collision_down(x, y, py) int:
         t == '^' and (y / TS) > (py / TS)):
         return -1 - (y % TS)
     return 0
-
-
-# ---------------------------------------------------------------------------
-# hero data + camera (needed before enemy.toy)
-# ---------------------------------------------------------------------------
-
-struct Hero:
-    state
-    sx
-    sy
-    vx
-    vy
-    box: Box
-
-    facing_left
-    on_ground
-
-    lives
-    score
-    frame
-    run_tick
-    shoot_countdown
-    hit_countdown
-
-var hero: Hero
 
 func hero_init():
     hero = {}
@@ -139,43 +150,51 @@ func hero_set_state(s):
         hero.hit_countdown = 0
 
 
-func camera_follow_hero():
-    camera.x = hero.sx / SP - SCREEN_W / 2
-    camera.y = hero.sy / SP - SCREEN_H / 2
-    camera.x = clamp(camera.x, 0, level.w * TS - SCREEN_W)
-    camera.y = clamp(camera.y, 0, level.h * TS - SCREEN_H)
-
-func camera_return_toward_spawn():
-    var tx = clamp(hero.sx / SP - SCREEN_W / 2, 0, level.w * TS - SCREEN_W)
-    var ty = clamp(hero.sy / SP - SCREEN_H / 2, 0, level.h * TS - SCREEN_H)
-    var dx = tx - camera.x
-    var dy = ty - camera.y
-    var l = sqrt(dx * dx + dy * dy)
-    var speed = 5
-    if l == 0:
-        hero_set_state(HERO_STATE_SPAWNING)
-        return
-    elif l > speed:
-        dx = dx * speed / l
-        dy = dy * speed / l
-    camera.x += dx
-    camera.y += dy
-
 include "particle.toy"
 include "enemy.toy"
 
 
 # ---------------------------------------------------------------------------
+# camera
+# ---------------------------------------------------------------------------
+const CAM_MARGIN_H = 120
+const CAM_MARGIN_T = 28
+const CAM_MARGIN_B = 80
+
+func camera_center_on_hero():
+    camera.box.x = hero.sx / SP - SCREEN_W / 2
+    camera.box.y = hero.sy / SP - SCREEN_H / 2
+
+
+func camera_follow_hero():
+    var hx = hero.sx / SP
+    var hy = hero.sy / SP
+    camera.box.x = clamp(camera.box.x, hx + CAM_MARGIN_H - SCREEN_W, hx - CAM_MARGIN_H)
+
+    var ty = hy - SCREEN_H / 2
+    camera.box.y = clamp(camera.box.y, ty, hy - CAM_MARGIN_T)
+    # soft-settle toward vertically centering the hero
+    if hero.on_ground and ty > 0: camera.box.y += (ty - camera.box.y) / 8
+
+func camera_return_toward_spawn():
+    var tx = clamp(hero.sx / SP - SCREEN_W / 2, 0, level.w * TS - SCREEN_W)
+    var ty = clamp(hero.sy / SP - SCREEN_H / 2, 0, level.h * TS - SCREEN_H)
+    var dx = tx - camera.box.x
+    var dy = ty - camera.box.y
+    var l = sqrt(dx * dx + dy * dy)
+    if l == 0:
+        hero_set_state(HERO_STATE_SPAWNING)
+        return
+    var speed = clamp(l / 8, 4, 20)
+    if l > speed:
+        dx = dx * speed / l
+        dy = dy * speed / l
+    camera.box.x += dx
+    camera.box.y += dy
+
+# ---------------------------------------------------------------------------
 # hero bullets
 # ---------------------------------------------------------------------------
-
-struct HeroBullet:
-    alive
-    x
-    y
-    facing_left
-
-var hero_bullets: HeroBullet[8]
 
 func hero_bullet_spawn(x, y, facing_left):
     for b in hero_bullets:
@@ -187,7 +206,7 @@ func hero_bullet_spawn(x, y, facing_left):
         return
 
 func hero_bullet_update_all():
-    var view = camera
+    var view = camera.box
     box_grow(view, 8)
 
     for b in hero_bullets:
@@ -420,7 +439,7 @@ func game_load_level(n):
 
     hero_place_at_start()
     hero_set_state(HERO_STATE_RETURNING)
-    camera_follow_hero()
+    camera_center_on_hero()
 
     enemy_init_all()
     for b in hero_bullets: b.* = {}

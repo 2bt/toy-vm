@@ -23,16 +23,18 @@ struct SoundEffect:
 
 var SOUND_HERO_SHOOT: SoundEffect = {
     0, {
-        SND_PW, 128, 0,
-        SND_VOL, 60,
+        SND_PW, 128, 20,
+        SND_VOL, 40,
+        SND_VOL_SLIDE, 0, 10,
         SND_WAVE, WAVE_PULSE,
         SND_PITCH, 76 * 8,
         1,
-        SND_PITCH, 64 * 8,
+        SND_PITCH, 70 * 8,
         1,
-        SND_VOL_SLIDE, 0, 15,
         SND_LOOP,
-        SND_PITCH_INC, -1 * 8,
+        SND_PITCH_INC, -2 * 8 - 2,
+        2,
+        SND_PITCH_INC, 2 * 8,
         1,
         SND_END,
     },
@@ -129,24 +131,6 @@ var SOUND_ENEMY_HIT: SoundEffect = {
 var SOUND_ENEMY_DIE: SoundEffect = {
     3, {
         SND_VOL, 80,
-        SND_VOL_SLIDE, 0, 10,
-        SND_LOOP,
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 60 * 8,
-        1,
-        SND_PITCH_INC, -10 * 8,
-        1,
-        SND_PITCH_INC, -10 * 8,
-        1,
-        SND_PITCH_INC, -8 * 8,
-        2,
-        SND_END,
-    },
-}
-
-var SOUND_HERO_DIE: SoundEffect = {
-    3, {
-        SND_VOL, 80,
         SND_VOL_SLIDE, 0, 5,
         SND_LOOP,
         SND_WAVE, WAVE_NOISE,
@@ -161,6 +145,7 @@ var SOUND_HERO_DIE: SoundEffect = {
         SND_END,
     },
 }
+var SOUND_HERO_DIE = &SOUND_ENEMY_DIE
 
 
 var SOUND_SPAWN1: SoundEffect = {

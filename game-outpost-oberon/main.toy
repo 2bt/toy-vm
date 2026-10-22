@@ -116,6 +116,35 @@ func draw_centered_text(x, y, msg: int*):
     draw_text(x - strlen(msg) * 4, y, msg)
 
 
+# box
+struct Box:
+    x
+    y
+    w
+    h
+
+func box_has_point(b: Box*, x, y):
+    return (b.x <= x and b.x + b.w > x
+        and b.y <= y and b.y + b.h > y)
+
+func box_intersects(b: Box*, o: Box*) int:
+    return (b.x < o.x + o.w and b.x + b.w > o.x
+        and b.y < o.y + o.h and b.y + b.h > o.y)
+
+func box_encloses(b: Box*, o: Box*) int:
+    return (b.x <= o.x and b.x + b.w >= o.x + o.w
+        and b.y <= o.y and b.y + b.h >= o.y + o.h)
+
+func box_grow(b: Box*, amount):
+    b.x -= amount
+    b.y -= amount
+    b.w += amount * 2
+    b.h += amount * 2
+
+func box_center_x(b: Box*): return b.x + b.w / 2
+func box_center_y(b: Box*): return b.y + b.h / 2
+
+
 include "sound.toy"
 include "game.toy"
 

@@ -294,61 +294,35 @@ func enemy_update_spider(e: Enemy*):
         e.vx = clamp(dx * SPIDER_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
 
 
-    # x collision
-    e.sx += e.vx
-    var x = e.sx / SP
-    var y = e.sy / SP
-
-    var o
-    var u
-
-    o = max(check_collision(x + 2, y + 3, DIR_LEFT),
-            check_collision(x + 1, y + 7, DIR_LEFT))
-    u = min(check_collision(x + 9, y + 3, DIR_RIGHT),
-            check_collision(x + 10, y + 7, DIR_RIGHT))
-    if o or u:
-        x += o + u
-        e.sx = x * SP
+    var hit_x = level_move_box_x(e.sx, e.box, e.vx)
+    if hit_x:
         if e.on_ground:
             e.facing_left = e.vx > 0
             e.vx = 0
             e.no_turn_countdown = rand(30, 50)
-
         else:
             e.vx = -e.vx
             e.wait_turn = true
 
-
     e.vy += GRAVITY
     e.vy = min(e.vy, SP * 4)
-    var py = e.sy / SP
-    e.sy += e.vy
-    y = e.sy / SP
     var was_air = not e.on_ground
-    o = min(check_collision_down(x + 3, y + 10, py + 10),
-            check_collision_down(x + 8, y + 10, py + 10))
-    if o:
+    var hit_y = level_move_box_y(e.sy, e.box, e.vy)
+    if hit_y == DIR_DOWN:
         e.on_ground = true
-        y += o
-        e.sy = y * SP + SP - 1
         e.vy = 0
         if was_air and e.wait_turn:
             e.wait_countdown = rand(10, 40)
             e.wait_turn = false
+    elif hit_y == DIR_UP:
+        e.vy = 8
+        e.on_ground = false
     else:
         e.on_ground = false
-
-    o = check_collision(x + 6, y + 1, DIR_UP)
-    if o:
-        y += o
-        e.sy = y * SP
-        e.vy = 8
 
     if e.wait_countdown == 0:
         e.run_tick += 1
         e.frame = 1 + e.run_tick / 4 % 4
-    e.box.x = e.sx / SP
-    e.box.y = e.sy / SP
 
     var t = level_get_tile(e.box.x, e.box.y)
     if t == 'l':

@@ -291,8 +291,7 @@ func enemy_update_spider(e: Enemy*):
         e.vx = clamp(dx * SPIDER_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
 
 
-    var hit_x = level_move_box_x(e.sx, e.box, e.vx)
-    if hit_x:
+    if level_move_box_x(e.sx, e.box, e.vx):
         if e.on_ground:
             e.facing_left = e.vx > 0
             e.vx = 0
@@ -304,14 +303,14 @@ func enemy_update_spider(e: Enemy*):
     e.vy += GRAVITY
     e.vy = min(e.vy, SP * 4)
     var was_air = not e.on_ground
-    var hit_y = level_move_box_y(e.sy, e.box, e.vy)
-    if hit_y == DIR_DOWN:
+    var d = level_move_box_y(e.sy, e.box, e.vy)
+    if d == DIR_DOWN:
         e.on_ground = true
         e.vy = 0
         if was_air and e.wait_turn:
             e.wait_countdown = rand(10, 40)
             e.wait_turn = false
-    elif hit_y == DIR_UP:
+    elif d == DIR_UP:
         e.vy = 8
         e.on_ground = false
     else:

@@ -132,6 +132,8 @@ class Func:
     args: list = field(default_factory=list)
     calls: dict = field(default_factory=dict)
     uses: int = 0
+    head: Head = None
+    loc: object = None
 
 
 INT = Type("int", 0, None)
@@ -413,7 +415,7 @@ class Parser:
         return self.structs[name]
 
 
-    def program(self, path):
+    def program(self, path, root=True):
         self.included.add(path)
         self.head = Head(tokenize(path))
 
@@ -424,7 +426,7 @@ class Parser:
                 self.eat("eol")
                 if incl in self.included: continue
                 self.stack.append(self.head)
-                try: self.program(incl)
+                try: self.program(incl, root=False)
                 except FileNotFoundError: self.error("file not found")
                 self.head = self.stack.pop()
 
@@ -456,8 +458,10 @@ class Parser:
                 self.structs[name] = TyStruct(fields, offset)
 
             elif tok.k == "func":
-                func = Func(self.eat("id").v)
+                name_tok = self.eat("id")
+                func = Func(name_tok.v)
                 if func.name in self.funcs: self.error(f"function '{func.name}' already exists")
+                func.loc = name_tok
 
                 def func_arg():
                     name = self.eat("id").v
@@ -478,15 +482,56 @@ class Parser:
                 self.eat(")")
                 func.type = self.type(None)
                 if is_aggregate(func.type): self.error("cannot return aggregate")
+                func.head = Head(self.head.toks, self.head.i)
+                self.funcs[func.name] = func
+                self.skip_block()
+
+            else: assert False
+        self.eat("eof")
+        if root:
+            for func in self.funcs.values():
+                self.head = func.head
                 self.current_func = func
                 self.call_stack.append(func)
                 func.body = self.block()
                 self.call_stack.pop()
-                self.funcs[func.name] = func
                 self.current_func = None
 
-            else: assert False
-        self.eat("eof")
+            # check for recursive calls
+            WHITE, GRAY, BLACK = 0, 1, 2
+            color = {name: WHITE for name in self.funcs}
+            def visit(name):
+                color[name] = GRAY
+                for callee in self.funcs[name].calls:
+                    c = color[callee]
+                    if c == GRAY: self.error("recursive call", self.funcs[name].loc)
+                    if c == WHITE: visit(callee)
+                color[name] = BLACK
+            for name in self.funcs:
+                if color[name] == WHITE: visit(name)
+
+    def skip_indented(self):
+        self.eat("indent")
+        depth = 1
+        while depth:
+            k = self.eat().k
+            if k == "indent": depth += 1
+            elif k == "dedent": depth -= 1
+
+    def skip_block(self):
+        self.eat(":")
+        if self.peek("eol"):
+            self.eat()
+            if self.peek("indent"): self.skip_indented()
+            return
+        while not self.peek("eof"):
+            if self.peek("eol"):
+                self.eat()
+                if self.peek("indent"):
+                    self.skip_indented()
+                    if self.peek("elif") or self.peek("else"): continue
+                return
+            self.eat()
 
     def block(self):
         stmts = []

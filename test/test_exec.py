@@ -391,13 +391,85 @@ class ExecTests(unittest.TestCase):
                 cwd=ROOT, capture_output=True, text=True,
             )
 
-    def test_self_call_is_unknown(self):
+    def test_self_call_is_recursive(self):
         compiled = self.compile_text("""
             func tick():
                 tick()
         """)
         self.assertNotEqual(compiled.returncode, 0)
-        self.assertIn("unknown function", compiled.stderr)
+        self.assertIn("recursive call", compiled.stderr)
+
+    def test_call_before_define(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                later()
+            func later():
+                print("ok")
+        """), "ok\n")
+
+    def test_call_before_define_oneline_body(self):
+        self.assertEqual(self.run_toy("""
+            func tick():
+                later()
+            func later(): print("ok")
+        """), "ok\n")
+
+    def test_call_before_define_oneline_if_elif_else(self):
+        # skip_block must not eat past elif/else arms into the next top-level decl
+        self.assertEqual(self.run_toy("""
+            func tick():
+                print_n(pick(1))
+                print_n(pick(2))
+                print_n(pick(0))
+            func pick(x): if x == 1:
+                return 7
+            elif x == 2:
+                return 8
+            else:
+                return 3
+        """), "7\n8\n3\n")
+
+    def test_mutual_recursion_forbidden(self):
+        compiled = self.compile_text("""
+            func a(x):
+                return b(x)
+            func b(x):
+                return a(x)
+            func tick():
+                a(1)
+        """)
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("recursive call", compiled.stderr)
+
+    def test_call_before_define_across_include(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
+            directory = Path(directory)
+            (directory / "lib.toy").write_text(textwrap.dedent("""
+                func later():
+                    print("ok")
+            """))
+            src = directory / "main.toy"
+            src.write_text(HEADER + textwrap.dedent("""
+                func tick():
+                    later()
+                include "lib.toy"
+            """))
+            compiled = subprocess.run(
+                [sys.executable, ROOT / "compile.py", src],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            assembled = subprocess.run(
+                [sys.executable, ROOT / "assemble.py", src.with_suffix(".asm")],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(assembled.returncode, 0, assembled.stderr)
+            result = subprocess.run(
+                [TOY, "--once", str(directory)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual(result.stdout, "ok\n")
 
     def test_unknown_variable(self):
         compiled = self.compile_text("func tick():\n    x = 1\n")

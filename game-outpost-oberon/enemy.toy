@@ -249,10 +249,6 @@ func enemy_update_patrol(e: Enemy*):
 
 
 
-const SPIDER_LOOK_LEDGE      = 4
-const SPIDER_LOOK_WALL       = 20
-const SPIDER_LAND_PAUSE      = 12
-
 func spider_has_loc(e: Enemy*) int:
     if not box_encloses(camera.box, e.box): return 0
     var ex = box_center_x(e.box)

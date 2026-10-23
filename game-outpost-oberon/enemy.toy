@@ -269,51 +269,98 @@ func enemy_update_spider(e: Enemy*):
 
     var ex = box_center_x(e.box)
     var ey = box_center_y(e.box)
+    var loc = spider_has_loc(e)
 
-    var want_left = hx < ex
-
+    if e.mode == SPIDER_MODE_SLEEP:
+        if loc:
+            e.mode = SPIDER_MODE_FOLLOW
+            e.pace_countdown = 0
+            e.wait_countdown = 0
+    elif e.mode == SPIDER_MODE_FOLLOW:
+        if loc:
+            e.pace_countdown = 0
+        else:
+            e.pace_countdown += 1
+            if e.pace_countdown >= SPIDER_LOC_LOST_FRAMES:
+                e.mode = SPIDER_MODE_WALK
+                e.pace_countdown = rand(120, 360)
+                e.wait_countdown = 0
+    elif e.mode == SPIDER_MODE_WALK:
+        if loc:
+            e.mode = SPIDER_MODE_FOLLOW
+            e.pace_countdown = 0
+            e.wait_countdown = 0
+        else:
+            if e.pace_countdown > 0: e.pace_countdown -= 1
+            else:
+                e.mode = SPIDER_MODE_SLEEP
+                e.vx = 0
+                e.wait_countdown = 0
 
     var dx   = 0
     var jump = 0
 
     if e.no_turn_countdown > 0: e.no_turn_countdown -= 1
 
-    if e.on_ground:
-        if e.wait_countdown > 0:
-            e.wait_countdown -= 1
+    if e.mode == SPIDER_MODE_SLEEP:
+        if e.on_ground:
             e.vx = clamp(0, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
             e.frame = 0
-        elif e.no_turn_countdown <= 0 and want_left != e.facing_left:
-            e.facing_left = want_left
-            e.wait_countdown = rand(10, 20)
-        else:
 
-            var wall_x  = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
-            var ledge_x = e.facing_left ? e.box.x      : e.box.x + e.box.w - 1
+    elif e.mode == SPIDER_MODE_FOLLOW:
+        var want_left = hx < ex
+        if e.on_ground:
+            if e.wait_countdown > 0:
+                e.wait_countdown -= 1
+                e.vx = clamp(0, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
+                e.frame = 0
+            elif e.no_turn_countdown <= 0 and want_left != e.facing_left:
+                e.facing_left = want_left
+                e.wait_countdown = rand(10, 20)
+            else:
+                var wall_x  = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
+                var ledge_x = e.facing_left ? e.box.x      : e.box.x + e.box.w - 1
 
-            # jump
-            if abs(e.vx) == SPIDER_SPEED:
-                if check_collision(wall_x, e.box.y, e.facing_left ? DIR_LEFT : DIR_RIGHT):
-                    jump = 44
-                elif not check_collision_down(ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1):
-                    jump = 24
-                else:
-                    if (abs(hx - ex) <= 35
-                    and abs(hy - ey) <= 20): jump = 44
-                if jump:
-                    e.vy = -jump
-                    e.on_ground = false
+                if abs(e.vx) == SPIDER_SPEED:
+                    if check_collision(wall_x, e.box.y, e.facing_left ? DIR_LEFT : DIR_RIGHT):
+                        jump = 44
+                    elif not check_collision_down(ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1):
+                        jump = 24
+                    else:
+                        if (abs(hx - ex) <= 35
+                        and abs(hy - ey) <= 20): jump = 44
+                    if jump:
+                        e.vy = -jump
+                        e.on_ground = false
 
+                dx = e.facing_left ? -1 : 1
+
+            e.vx = clamp(dx * SPIDER_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
+
+    elif e.mode == SPIDER_MODE_WALK:
+        if e.on_ground:
+            var walk_wall_x  = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
+            var walk_ledge_x = e.facing_left ? e.box.x      : e.box.x + e.box.w - 1
+            var walk_wall_dir = e.facing_left ? DIR_LEFT : DIR_RIGHT
+            if e.no_turn_countdown <= 0:
+                if (check_collision(walk_wall_x, e.box.y, walk_wall_dir)
+                or not check_collision_down(walk_ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1)):
+                    e.facing_left = not e.facing_left
+                    e.no_turn_countdown = 10
             dx = e.facing_left ? -1 : 1
-
-        e.vx = clamp(dx * SPIDER_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
+            e.vx = clamp(dx * SPIDER_WALK_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
 
 
     if level_move_box_x(e.sx, e.box, e.vx):
         if e.on_ground:
-            e.facing_left = e.vx > 0
-            e.vx = 0
-            e.no_turn_countdown = rand(30, 50)
+            if e.mode == SPIDER_MODE_WALK:
+                e.facing_left = not e.facing_left
+                e.vx = 0
+                e.no_turn_countdown = 10
+            else:
+                e.facing_left = e.vx > 0
+                e.vx = 0
+                e.no_turn_countdown = rand(30, 50)
         else:
             e.vx = -e.vx
             e.wait_turn = true
@@ -325,7 +372,7 @@ func enemy_update_spider(e: Enemy*):
     if d == DIR_DOWN:
         e.on_ground = true
         e.vy = 0
-        if was_air and e.wait_turn:
+        if was_air and e.wait_turn and e.mode == SPIDER_MODE_FOLLOW:
             e.wait_countdown = rand(10, 40)
             e.wait_turn = false
     elif d == DIR_UP:
@@ -334,7 +381,9 @@ func enemy_update_spider(e: Enemy*):
     else:
         e.on_ground = false
 
-    if e.wait_countdown == 0:
+    if e.mode == SPIDER_MODE_SLEEP:
+        e.frame = 0
+    elif e.wait_countdown == 0:
         e.run_tick += 1
         e.frame = 1 + e.run_tick / 4 % 4
 

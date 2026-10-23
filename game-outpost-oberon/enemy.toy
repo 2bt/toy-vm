@@ -1,6 +1,15 @@
 const ENEMY_TYPE_PATROL = 1
 const ENEMY_TYPE_SPIDER = 2
 
+const SPIDER_MODE_SLEEP  = 0
+const SPIDER_MODE_FOLLOW = 1
+const SPIDER_MODE_WALK   = 2
+
+const SPIDER_SPEED           = 14
+const SPIDER_WALK_SPEED      = 7
+const SPIDER_ACCEL           = 1
+const SPIDER_LOC_LOST_FRAMES = 180
+
 const ENEMY_STATE_DEAD   = 0
 const ENEMY_STATE_NORMAL = 1
 const ENEMY_STATE_DYING  = 2
@@ -81,12 +90,14 @@ struct Enemy:
     hit_countdown
 
     # movement (spider; patrol leaves unused)
+    mode
     vx
     vy
     on_ground
     no_turn_countdown
 
-    # patrol / spider timers (spider: wait = sleep / turn / land pause)
+    # patrol / spider timers (spider: wait = sleep / turn / land pause;
+    # pace = loc-lost / stroll)
     run_tick
     wait_countdown
     wait_turn
@@ -118,6 +129,7 @@ func enemy_spawn(type, x, y):
             e.box.h = 11
             e.hp    = 1
             e.on_ground = true
+            e.mode = SPIDER_MODE_SLEEP
 
         e.sx = (x + 8 - e.box.w / 2) * SP
         e.sy = (y + 16 - e.box.h) * SP
@@ -237,11 +249,17 @@ func enemy_update_patrol(e: Enemy*):
 
 
 
-const SPIDER_SPEED      = 14
-const SPIDER_ACCEL      = 1
-const SPIDER_LOOK_LEDGE = 4
-const SPIDER_LOOK_WALL  = 20
-const SPIDER_LAND_PAUSE = 12
+const SPIDER_LOOK_LEDGE      = 4
+const SPIDER_LOOK_WALL       = 20
+const SPIDER_LAND_PAUSE      = 12
+
+func spider_has_loc(e: Enemy*) int:
+    if not box_encloses(camera.box, e.box): return 0
+    var ex = box_center_x(e.box)
+    var ey = box_center_y(e.box)
+    var hx = box_center_x(hero.box)
+    var hy = box_center_y(hero.box)
+    return level_has_los(ex, ey, hx, hy)
 
 func enemy_update_spider(e: Enemy*):
     if not e.active: return
@@ -365,8 +383,6 @@ func enemy_update_all():
         e.active = box_intersects(view, e.box)
         if e.active and not prev_active:
             e.facing_left = e.sx > hero.sx
-            if e.type == ENEMY_TYPE_SPIDER:
-                e.wait_countdown = rand(40, 100)
 
         if e.hit_countdown > 0: e.hit_countdown -= 1
 

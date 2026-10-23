@@ -1,0 +1,286 @@
+const HERO_W = 6
+const HERO_H = 11
+
+
+struct Hero:
+    state
+    sx
+    sy
+    vx
+    vy
+    box: Box
+
+    facing_left
+    on_ground
+
+    lives
+    score
+    frame
+    run_tick
+    shoot_countdown
+    hit_countdown
+
+var hero: Hero
+
+struct HeroBullet:
+    alive
+    x
+    y
+    facing_left
+
+var hero_bullets: HeroBullet[8]
+
+
+func hero_init():
+    hero = {}
+    hero.box.w = HERO_W
+    hero.box.h = HERO_H
+    hero.lives = 3
+
+
+func hero_set_state(s):
+    if s == HERO_STATE_DYING and hero.state != HERO_STATE_NORMAL: return
+    hero.state = s
+    if s == HERO_STATE_SPAWNING:
+        hero.hit_countdown = HERO_SPAWN_FRAMES
+        play_sound(SOUND_SPAWN1)
+        play_sound(SOUND_SPAWN2)
+    elif s == HERO_STATE_DYING:
+        hero.hit_countdown = 20
+        hero.vx = 0
+        hero.vy = 0
+        play_sound(SOUND_HERO_DIE)
+    elif s == HERO_STATE_EXITING:
+        play_sound(SOUND_EXIT1)
+        play_sound(SOUND_EXIT2)
+        hero.hit_countdown = HERO_EXIT_FRAMES
+        hero.vx = 0
+        hero.vy = 0
+    elif s == HERO_STATE_NORMAL:
+        hero.hit_countdown = 0
+
+
+func hero_place_at_start():
+    hero.sx = (level.spawn_x + 5) * SP
+    hero.sy = (level.spawn_y + 5) * SP + SP - 1
+    hero.box.x = hero.sx / SP
+    hero.box.y = hero.sy / SP
+    if level_test_down(hero.box.x, hero.box.y + hero.box.h,
+                            hero.box.y + hero.box.h - 1):
+        hero.frame = 0
+        hero.on_ground = true
+    else:
+        hero.frame = 4
+        hero.on_ground = false
+
+    hero.vx              = 0
+    hero.vy              = 0
+    hero.facing_left     = false
+    hero.shoot_countdown = 0
+    hero.hit_countdown   = 0
+    hero.run_tick        = 0
+
+
+func hero_bullet_spawn(x, y, facing_left):
+    for b in hero_bullets:
+        if b.alive: continue
+        b.alive       = true
+        b.x           = x
+        b.y           = y
+        b.facing_left = facing_left
+        return
+
+
+func hero_bullet_update_all():
+    var view = camera.box
+    box_grow(view, 8)
+
+    for b in hero_bullets:
+        if not b.alive: continue
+        b.x += b.facing_left ? -3 : 3
+
+        if not box_has_point(view, b.x, b.y):
+            b.alive = 0
+
+        var dir = b.facing_left ? DIR_LEFT : DIR_RIGHT
+        var o = level_test(b.x, b.y, dir)
+        if o:
+            b.alive = false
+            particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
+            play_sound(SOUND_BULLET_WALL)
+            continue
+
+        for e in enemies:
+            if not e.state: continue
+            if box_has_point(e.box, b.x, b.y):
+                b.alive = false
+                enemy_hit(e)
+                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
+                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
+                continue
+
+
+func hero_bullet_draw_all():
+    for b in hero_bullets:
+        if not b.alive: continue
+        camera_sprite(b.x - (b.facing_left ? 0 : 5), b.y, 6, 1,
+                      0, 32 + 1, 0)
+
+
+func hero_update():
+    if hero.state == HERO_STATE_RETURNING:
+        camera_return_toward_spawn()
+        return
+
+    if hero.state == HERO_STATE_SPAWNING:
+        if hero.hit_countdown > 0: hero.hit_countdown -= 1
+        else: hero_set_state(HERO_STATE_NORMAL)
+
+    elif hero.state == HERO_STATE_EXITING:
+        if hero.hit_countdown > 0: hero.hit_countdown -= 1
+        else:
+            game.state = GAME_STATE_LEVEL_DONE
+            game.countdown = LEVEL_DONE_FRAMES
+
+    elif hero.state == HERO_STATE_DYING:
+        if hero.hit_countdown > 5:
+            particle_spawn(PARTICLE_TYPE_DEBRIS,
+                            rand(hero.box.x, hero.box.x + hero.box.w - 1),
+                            rand(hero.box.y, hero.box.y + hero.box.h - 1))
+
+        hero.sy += hero.vy
+        hero.box.y = hero.sy / SP
+        if hero.hit_countdown > 0: hero.hit_countdown -= 1
+        else:
+            hero.lives -= 1
+            if hero.lives <= 0:
+                hero.lives = 0
+                game.state = GAME_STATE_GAME_OVER
+                play_sound(SOUND_GAME_OVER)
+            else:
+                hero_place_at_start()
+                hero_set_state(HERO_STATE_RETURNING)
+
+    if hero.state != HERO_STATE_NORMAL:
+        if hero.state != HERO_STATE_RETURNING:
+            camera_follow_hero()
+        return
+
+    # horizontal movement
+    var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
+    if dx: hero.facing_left = dx < 0
+    var accel = hero.on_ground ? ACCEL_GROUND : ACCEL_AIR
+    hero.vx = clamp(RUN_MAX * dx, hero.vx - accel, hero.vx + accel)
+    hero.sx += hero.vx
+
+    var x = hero.sx / SP
+    var y = hero.sy / SP
+
+    # horizontal collision
+    var o
+    o = max(level_test(x + 1, y +  2, DIR_LEFT),
+            level_test(x - 1, y +  8, DIR_LEFT))
+    if o:
+        x += o
+        hero.sx = x * SP
+        hero.vx = 0
+    o = min(level_test(x + 4, y +  2, DIR_RIGHT),
+            level_test(x + 6, y +  8, DIR_RIGHT))
+    if o:
+        x += o
+        hero.sx = x * SP
+        if hero.vx > 0: hero.sx += SP - 1
+        hero.vx = 0
+
+    # jump
+    if hero.on_ground and btnp(BTN_A):
+        hero.vy = -JUMP_FORCE
+        play_sound(SOUND_JUMP)
+    elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
+
+    # gravity
+    hero.vy += GRAVITY
+    hero.vy = min(hero.vy, SP * 4)
+
+    # floor collision
+    var py = hero.sy / SP
+    hero.sy += hero.vy
+    y = hero.sy / SP
+    o = min(level_test_down(x + 0, y + 10, py + 10),
+            level_test_down(x + 5, y + 10, py + 10))
+    if o:
+        if not hero.on_ground: play_sound(SOUND_LAND)
+        hero.on_ground = true
+        y += o
+        hero.sy = y * SP + SP - 1
+        hero.vy = 0
+    else:
+        hero.on_ground = false
+
+    # ceiling collision
+    o = level_test(x + 3 - hero.facing_left, y + 0, DIR_UP)
+    if o:
+        y += o
+        hero.sy = y * SP
+        hero.vy = 8
+
+    # shoot
+    if hero.shoot_countdown > 0:
+        hero.shoot_countdown -= 1
+    elif btn(BTN_B):
+        hero.shoot_countdown = 20
+        play_sound(SOUND_HERO_SHOOT)
+        var bx = hero.facing_left ? x - 1 : x + 6
+        hero_bullet_spawn(bx, y + 4, hero.facing_left)
+
+    # animation
+    hero.frame = 0
+    if not hero.on_ground:
+        hero.frame = 4
+    elif dx:
+        hero.frame = 1 + hero.run_tick / 4 % 4
+        hero.run_tick += 1
+    else:
+        hero.run_tick = 4
+        hero.frame = 0
+
+    hero.box.x = hero.sx / SP
+    hero.box.y = hero.sy / SP
+
+    # check enemies
+    for e in enemies:
+        if not e.active: continue
+        if e.state != ENEMY_STATE_NORMAL: continue
+        if box_intersects(hero.box, e.box):
+            hero_set_state(HERO_STATE_DYING)
+            return
+
+    # lava
+    var t = level_get_tile(hero.box.x, hero.box.y)
+    if t == 'l':
+        hero_set_state(HERO_STATE_DYING)
+        hero.vy = 4
+        return
+
+    # level exit
+    if t == 'E': hero_set_state(HERO_STATE_EXITING)
+
+    camera_follow_hero()
+
+
+func hero_draw():
+    if hero.state == HERO_STATE_RETURNING: return
+    if (hero.state == HERO_STATE_DYING or
+        hero.state == HERO_STATE_SPAWNING or
+        hero.state == HERO_STATE_EXITING) and hero.hit_countdown & 2: return
+
+    var row = 0
+    if (hero.state == HERO_STATE_DYING
+    or hero.state == HERO_STATE_EXITING
+    or hero.state == HERO_STATE_SPAWNING): row = 2
+    elif hero.shoot_countdown > 1: row = 1
+
+    camera_sprite(hero.box.x - 5, hero.box.y - 5, 16, 16,
+                  hero.frame * 16,
+                  128 + row * 16,
+                  hero.facing_left)

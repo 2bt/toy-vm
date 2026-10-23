@@ -7,18 +7,18 @@ var LEVEL1_DATA = (
     "000000000                    0000000000000                  000                       0"
     "000000000                    0000000000000                  000                       0"
     "000000000                    0000000000000                                            0"
-    "000000000                    0000000000000                             s              0"
-    "00000                        00000SSS00000                     s      0000  s         0"
-    "00000    s     p             00000   00000              0   00000000000000000000      0"
-    "00000 p       ^^^         p                      s      0lll000                       0"
+    "000000000                    0000000000000                             b              0"
+    "00000                        00000SSS00000                     b      0000  b         0"
+    "00000    b     p             00000   00000              0   00000000000000000000      0"
+    "00000 p       ^^^         p                      b      0lll000                       0"
     "000000000^^               0                      00000000000000                       0"
     "000000000             p          000000        p 0                                    0"
-    "000000000^^         ^^^^     0000000000000     000          s          p              0"
-    "000000000                  p 0000000000000^^               0000000    ^^00  s         0"
+    "000000000^^         ^^^^     0000000000000     000          b          p              0"
+    "000000000                  p 0000000000000^^               0000000    ^^00  b         0"
     "000000000^^               0000000000000000  p         p    0000000      00  00        0"
-    "000000000            00   000000000000000000000    0000000000000000000  00  00     s  0"
+    "000000000            00   000000000000000000000    0000000000000000000  00  00     b  0"
     "00000000000000   00                  00000000000000000000000000000      00       000000"
-    "00000000000000lll00      p           00000000000000000000000000000      00    s    0000"
+    "00000000000000lll00      p           00000000000000000000000000000      00    b    0000"
     "000000000000000000000^^^000         p000000000000000000000000000      p 0000^^00   0000"
     "000000000000000000000lll000000     00000000000000000000000000000p   000000    00   0000"
     "000000000000000000000LLL0000    ^^ 0000000000000000000000000000000  000           00000"
@@ -56,8 +56,8 @@ var LEVEL2_DATA = (
     "000000           00                                 000000"
     "0000      p                                         000000"
     "0000 p    0    p                    p               000000"
-    "00000000     ^^^^  ss        p     00               000000"
-    "00000000          000      ^^^^    00    ps    p    000000"
+    "00000000     ^^^^  bb        p     00               000000"
+    "00000000          000      ^^^^    00    pb    p    000000"
     "00000000llllllllll000                   000   0000  000000"
     "00000000LLLLLLLLLL00000000000000000000000000000000  000000"
     "00000000LLLLLLLLLL00000000000000000000000000000000EE000000"
@@ -134,6 +134,95 @@ func level_has_los(x0, y0, x1, y1):
             if level_is_solid(level_get_tile_at_cr(tc, tr)): return false
         i += 1
     return true
+
+
+# debug collision probes (flushed each frame via level_draw_dots)
+struct LevelDot:
+    x
+    y
+var level_dots: LevelDot[256]
+var level_dot_count
+
+func level_dot(x, y):
+    level_dots[level_dot_count] = {x, y}
+    level_dot_count += 1
+
+func level_draw_dots():
+    for i = 0, level_dot_count:
+        var d = level_dots[i]
+        camera_sprite(d.x, d.y, 1, 1, 13, 24, 0)
+    level_dot_count = 0
+
+
+func level_test(x, y, dir) int:
+    # level_dot(x, y)
+    if level_get_tile(x, y) != '0': return 0
+    if dir == DIR_LEFT:  return TS - (x % TS)
+    if dir == DIR_RIGHT: return -1 - (x % TS)
+    if dir == DIR_UP:    return TS - (y % TS)
+    if dir == DIR_DOWN:  return -1 - (y % TS)
+
+func level_test_down(x, y, py) int:
+    # level_dot(x, y)
+    var t = level_get_tile(x, y)
+    if (t == '0' or
+        t == '^' and (y / TS) > (py / TS)):
+        return -1 - (y % TS)
+    return 0
+
+
+# Resolve axis motion for enemy boxes. Mutates sx/sy and box.x/box.y.
+# Probes: two points on the leading face (simple; not hero-grade).
+func level_move_box_x(sx: int*, box: Box*, dx) int:
+    sx.* = sx.* + dx
+    var x = sx.* / SP
+    if x == box.x: return 0
+
+    var y1 = box.y + box.h - 1
+    var o
+    if dx < 0:
+        o = max(level_test(x, box.y, DIR_LEFT), level_test(x, y1, DIR_LEFT))
+        if o:
+            x += o
+            sx.* = x * SP
+            box.x = x
+            return DIR_LEFT
+    else:
+        o = min(level_test(x + box.w - 1, box.y, DIR_RIGHT),
+                level_test(x + box.w - 1, y1, DIR_RIGHT))
+        if o:
+            x += o
+            sx.* = x * SP + SP - 1
+            box.x = sx.* / SP
+            return DIR_RIGHT
+    box.x = x
+    return 0
+
+
+func level_move_box_y(sy: int*, box: Box*, dy) int:
+    sy.* = sy.* + dy
+    var y = sy.* / SP
+    if y == box.y: return 0
+
+    var x1 = box.x + box.w - 1
+    var o
+    if dy > 0:
+        o = min(level_test_down(box.x, y + box.h - 1, box.y + box.h - 1),
+                level_test_down(x1, y + box.h - 1, box.y + box.h - 1))
+        if o:
+            y += o
+            sy.* = y * SP + SP - 1
+            box.y = sy.* / SP
+            return DIR_DOWN
+    else:
+        o = max(level_test(box.x, y, DIR_UP), level_test(x1, y, DIR_UP))
+        if o:
+            y += o
+            sy.* = y * SP
+            box.y = y
+            return DIR_UP
+    box.y = y
+    return 0
 
 
 func level_update():

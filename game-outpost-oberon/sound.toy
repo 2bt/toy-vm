@@ -95,6 +95,24 @@ var SOUND_JUMP: SoundEffect = {
     },
 }
 
+var SOUND_BUGGER_JUMP: SoundEffect = {
+    1, {
+        SND_VOL, 50,
+        SND_WAVE, WAVE_PULSE,
+        SND_PW, 32, 0,
+        SND_PITCH, 44 * 8,
+        1,
+        SND_VOL_SLIDE, 0, 30,
+        SND_PITCH_INC, 4 * 8,
+        1,
+        SND_PITCH_INC, 4 * 8,
+        SND_LOOP,
+        1,
+        SND_PITCH_INC, 4,
+        SND_END,
+    },
+}
+
 var SOUND_LAND: SoundEffect = {
     1, {
         SND_VOL, 45,
@@ -360,7 +378,7 @@ func update_vol(v: Voice*):
     else:
         v.vol = max(v.vol - step, v.vol_target)
 
-func update_sound():
+func sound_update():
     for i = 0, 4:
         var v = &voices[i]
         update_vol(v)

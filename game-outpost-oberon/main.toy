@@ -1,155 +1,11 @@
-# api
-const SCREEN_W   = 320
-const SCREEN_H   = 180
-const BTN_UP     = 1
-const BTN_DOWN   = 2
-const BTN_LEFT   = 4
-const BTN_RIGHT  = 8
-const BTN_A      = 16
-const BTN_B      = 32
-const BTN_MENU   = 64
-const FLIP_H     = 1
-const FLIP_V     = 2
-var input @ 1
-func print(msg: int* @ 2):                                    asm "    int #1"
-func sprite(x @ 2, y @ 3, w @ 4, h @ 5, s @ 6, t @ 7, f @ 8): asm "    int #2"
-func sound(i @ 2, pitch @ 3, pw @ 4, vol @ 5, wave @ 6):      asm "    int #3"
-func rand(lo @ 2, hi @ 3):                                    asm "    int #4"
-func sqrt(a @ 2):                                             asm "    int #5"
-
-const null  = 0
-const false = 0
-const true  = 1
-
-
-# input
-var not_prev_input
-func btn(b): return b & input > 0
-func btnp(b): return input & b & not_prev_input
-
-# math
-func min(a, b):
-    if a < b: return a
-    return b
-func max(a, b):
-    if a > b: return a
-    return b
-func clamp(x, a, b):
-    if x < a: return a
-    if x > b: return b
-    return x
-func abs(x):
-    if x >= 0: return x
-    return -x
-func sgn(x):
-    return (x > 0) - (x < 0)
-
-
-
-# string
-var str: int[20]
-
-func strlen(s: int*) int:
-    var l = 0
-    while s.*:
-        s += 1
-        l += 1
-    return l
-
-func strcpy(dst: int*, src: int*) int*:
-    while src.*:
-        dst.* = src.*
-        src += 1
-        dst += 1
-    return dst
-
-func stridx(s: int*, c) int:
-    var i = 0
-    while s.*:
-        if s.* == c: return i
-        s += 1
-        i += 1
-    return -1
-
-func strnum(p: int*, n) int*:
-    if n == 0:
-        p.* = '0'
-        p += 1
-        p.* = 0
-        return p
-
-    if n < 0:
-        n = -n
-        p.* = '-'
-        p += 1
-
-    var q = p
-    while n:
-        p.* = n % 10 + '0'
-        n /= 10
-        p += 1
-    p.* = 0
-    var end = p
-
-    p -= 1
-    while q < p:
-        n = p.*
-        p.* = q.*
-        q.* = n
-        p -= 1
-        q += 1
-
-    return end
-
-
-# drawing
-func draw_char(x, y, c):
-    sprite(x, y, 8, 8, c % 32 * 8, (c / 32 - 1) * 8, 0)
-
-func draw_text(x, y, msg: int*):
-    while msg.*:
-        draw_char(x, y, msg.*)
-        x += 8
-        msg += 1
-
-func draw_centered_text(x, y, msg: int*):
-    draw_text(x - strlen(msg) * 4, y, msg)
-
-
-# box
-struct Box:
-    x
-    y
-    w
-    h
-
-func box_has_point(b: Box*, x, y):
-    return (b.x <= x and b.x + b.w > x
-        and b.y <= y and b.y + b.h > y)
-
-func box_intersects(b: Box*, o: Box*) int:
-    return (b.x < o.x + o.w and b.x + b.w > o.x
-        and b.y < o.y + o.h and b.y + b.h > o.y)
-
-func box_encloses(b: Box*, o: Box*) int:
-    return (b.x <= o.x and b.x + b.w >= o.x + o.w
-        and b.y <= o.y and b.y + b.h >= o.y + o.h)
-
-func box_grow(b: Box*, amount):
-    b.x -= amount
-    b.y -= amount
-    b.w += amount * 2
-    b.h += amount * 2
-
-func box_center_x(b: Box*): return b.x + b.w / 2
-func box_center_y(b: Box*): return b.y + b.h / 2
-
-
+include "api.toy"
+include "util.toy"
 include "sound.toy"
 include "game.toy"
 
 
 var is_initialized
+
 func tick():
     if not is_initialized:
         game_init()
@@ -157,6 +13,6 @@ func tick():
 
     game_update()
     game_draw()
-    update_sound()
+    sound_update()
 
     not_prev_input = -1-input

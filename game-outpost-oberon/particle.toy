@@ -45,7 +45,7 @@ func particle_update_all():
 
         if p.type == PARTICLE_TYPE_DEBRIS:
             p.sx += p.vx
-            var o = check_collision(p.sx / SP, p.sy / SP, p.vx > 0 ? DIR_RIGHT : DIR_LEFT)
+            var o = level_test(p.sx / SP, p.sy / SP, p.vx > 0 ? DIR_RIGHT : DIR_LEFT)
             if o:
                 p.sx += o * SP
                 p.vx *= -1
@@ -53,7 +53,7 @@ func particle_update_all():
             p.vy += GRAVITY / 2
             p.sy += p.vy
 
-            o = check_collision(p.sx / SP, p.sy / SP, p.vy > 0 ? DIR_DOWN : DIR_UP)
+            o = level_test(p.sx / SP, p.sy / SP, p.vy > 0 ? DIR_DOWN : DIR_UP)
             if o:
                 p.sy += o * SP
                 p.vy *= -7

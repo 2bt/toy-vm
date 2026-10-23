@@ -1,14 +1,5 @@
-const ENEMY_TYPE_PATROL = 1
-const ENEMY_TYPE_SPIDER = 2
-
-const SPIDER_MODE_SLEEP  = 0
-const SPIDER_MODE_FOLLOW = 1
-const SPIDER_MODE_WALK   = 2
-
-const SPIDER_SPEED           = 14
-const SPIDER_WALK_SPEED      = 7
-const SPIDER_ACCEL           = 1
-const SPIDER_LOC_LOST_FRAMES = 180
+const ENEMY_TYPE_PATROL  = 1
+const ENEMY_TYPE_BUGGER  = 2
 
 const ENEMY_STATE_DEAD   = 0
 const ENEMY_STATE_NORMAL = 1
@@ -16,6 +7,10 @@ const ENEMY_STATE_DYING  = 2
 
 const ENEMY_BULLET_TYPE_BASIC = 1
 
+
+# ---------------------------------------------------------------------------
+# bullets
+# ---------------------------------------------------------------------------
 
 struct EnemyBullet:
     alive
@@ -38,7 +33,6 @@ func enemy_bullet_spawn(type, x, y) EnemyBullet*:
         return b
     return null
 
-
 func enemy_bullet_update_all():
     var view = camera.box
     box_grow(view, 8)
@@ -55,7 +49,7 @@ func enemy_bullet_update_all():
                 continue
 
             var dir = b.vx > 0 ? DIR_RIGHT : DIR_LEFT
-            var o = check_collision(b.x, b.y, dir)
+            var o = level_test(b.x, b.y, dir)
             if o:
                 b.alive = false
                 particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
@@ -76,6 +70,10 @@ func enemy_bullet_draw_all():
                           0, 32 + 1, 0)
 
 
+# ---------------------------------------------------------------------------
+# enemies
+# ---------------------------------------------------------------------------
+
 struct Enemy:
     state
     active
@@ -89,14 +87,15 @@ struct Enemy:
     frame
     hit_countdown
 
-    # movement (spider; patrol leaves unused)
+    # movement (bugger; patrol leaves unused)
     mode
     vx
     vy
     on_ground
+    ground_frames
     no_turn_countdown
 
-    # patrol / spider timers (spider: wait = sleep / turn / land pause;
+    # patrol / bugger timers (bugger: wait = sleep / turn / land pause;
     # pace = loc-lost / stroll)
     run_tick
     wait_countdown
@@ -106,10 +105,19 @@ struct Enemy:
     burst_left
     aim_countdown
 
-
-
 var enemies: Enemy[64]
 
+
+func enemy_init_all():
+    for e in enemies: e.* = {}
+    for r = 0, level.h:
+        for c = 0, level.w:
+            var x = c * TS
+            var y = r * TS
+            var t = level_get_tile_at_cr(c, r)
+            # if   t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
+            if   t == 'p': enemy_spawn(ENEMY_TYPE_BUGGER, x, y)
+            elif t == 'b': enemy_spawn(ENEMY_TYPE_BUGGER, x, y)
 
 func enemy_spawn(type, x, y):
     for e in enemies:
@@ -124,15 +132,14 @@ func enemy_spawn(type, x, y):
             e.hp              = 2
             e.pace_countdown  = rand(30, 80)
 
-        elif type == ENEMY_TYPE_SPIDER:
-            e.box.w = 12
-            e.box.h = 11
-            e.hp    = 1
-            e.on_ground = true
-            e.mode = SPIDER_MODE_SLEEP
+        elif type == ENEMY_TYPE_BUGGER:
+            e.box.w     = 12
+            e.box.h     = 11
+            e.hp        = 2
+            enemy_bugger_set_mode(e, BUGGER_MODE_SLEEP)
 
         e.sx = (x + 8 - e.box.w / 2) * SP
-        e.sy = (y + 16 - e.box.h) * SP
+        e.sy = (y + 16 - e.box.h) * SP + SP - 1
         e.box.x = e.sx / SP
         e.box.y = e.sy / SP
         return
@@ -140,15 +147,92 @@ func enemy_spawn(type, x, y):
     print("enemy spawn error")
 
 
-func enemy_init_all():
-    for e in enemies: e.* = {}
-    for r = 0, level.h:
-        for c = 0, level.w:
-            var x = c * TS
-            var y = r * TS
-            var t = level_get_tile_at_cr(c, r)
-            if t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
-            elif t == 's': enemy_spawn(ENEMY_TYPE_SPIDER, x, y)
+
+func enemy_update_all():
+    var view = camera.box
+    box_grow(view, 32)
+
+    for e in enemies:
+        if e.state == ENEMY_STATE_DEAD: continue
+
+        if e.state == ENEMY_STATE_DYING:
+            e.sx += e.vx
+            e.sy += e.vy
+            e.box.x = e.sx / SP
+            e.box.y = e.sy / SP
+
+            if e.hit_countdown > 5:
+                particle_spawn(PARTICLE_TYPE_DEBRIS,
+                               rand(e.box.x, e.box.x + e.box.w - 1),
+                               rand(e.box.y, e.box.y + e.box.h - 1))
+
+            if e.hit_countdown > 0: e.hit_countdown -= 1
+            else:
+                e.state  = ENEMY_STATE_DEAD
+                e.active = false
+
+                # scoring
+                hero.score += (
+                    e.type == ENEMY_TYPE_PATROL ? 100 :
+                    e.type == ENEMY_TYPE_BUGGER ? 150 :
+                    0)
+
+            continue
+
+        if e.state != ENEMY_STATE_NORMAL: continue
+
+
+        var prev_active = e.active
+        e.active = box_intersects(view, e.box)
+        if e.active and not prev_active:
+            e.facing_left = e.sx > hero.sx
+
+        if e.hit_countdown > 0: e.hit_countdown -= 1
+
+        if e.type == ENEMY_TYPE_PATROL: enemy_patrol_update(e)
+        elif e.type == ENEMY_TYPE_BUGGER: enemy_bugger_update(e)
+
+
+func enemy_draw_all():
+    for e in enemies:
+        if not e.active: continue
+
+
+        if e.state == ENEMY_STATE_DYING and e.hit_countdown & 2: continue
+
+        if e.type == ENEMY_TYPE_PATROL:
+            camera_sprite(e.box.x - 4, e.box.y - 15, 16, 32,
+                          256 + e.frame * 16,
+                          0 + (e.hit_countdown > 0) * 32,
+                          e.facing_left)
+        elif e.type == ENEMY_TYPE_BUGGER:
+            camera_sprite(e.box.x - 2, e.box.y - 5, 16, 16,
+                          256 + e.frame * 16,
+                          80 + (e.hit_countdown > 0) * 16,
+                          e.facing_left)
+
+
+        # box
+        # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
+
+
+func enemy_hit(e: Enemy*):
+    if e.state != ENEMY_STATE_NORMAL: return
+    e.hp -= 1
+    e.hit_countdown = 3
+
+    if e.type == ENEMY_TYPE_PATROL:
+        if e.aim_countdown == 0:
+            e.shoot_countdown /= 2
+            if e.facing_left != (box_center_x(e.box) > box_center_x(hero.box)):
+                e.wait_countdown = min(10, e.shoot_countdown)
+                e.wait_turn      = true
+
+    elif e.type == ENEMY_TYPE_BUGGER:
+        enemy_bugger_set_mode(e, BUGGER_MODE_FOLLOW)
+
+    if e.hp <= 0: enemy_kill(e)
+    else: play_sound(SOUND_ENEMY_HIT)
 
 
 func enemy_kill(e: Enemy*):
@@ -159,22 +243,12 @@ func enemy_kill(e: Enemy*):
     play_sound(SOUND_ENEMY_DIE)
 
 
-func enemy_hit(e: Enemy*):
-    if e.state != ENEMY_STATE_NORMAL: return
-    e.hp -= 1
-    e.hit_countdown = 3
 
-    if e.type == ENEMY_TYPE_PATROL and e.aim_countdown == 0:
-        e.shoot_countdown /= 2
-        if e.facing_left != (box_center_x(e.box) > box_center_x(hero.box)):
-            e.wait_countdown = min(10, e.shoot_countdown)
-            e.wait_turn      = true
+# ---------------------------------------------------------------------------
+# patrol
+# ---------------------------------------------------------------------------
 
-    if e.hp <= 0: enemy_kill(e)
-    else: play_sound(SOUND_ENEMY_HIT)
-
-
-func enemy_update_patrol(e: Enemy*):
+func enemy_patrol_update(e: Enemy*):
     if e.aim_countdown > 0:
         e.frame = 0
     elif e.wait_countdown > 0:
@@ -192,7 +266,7 @@ func enemy_update_patrol(e: Enemy*):
         var face_x = e.facing_left ? e.box.x : e.box.x + e.box.w - 1
         var foot_y = e.box.y + e.box.h
         var turn = -1
-        if hit or not check_collision_down(face_x, foot_y, foot_y - 1):
+        if hit or not level_test_down(face_x, foot_y, foot_y - 1):
             turn = 1
         else:
             e.run_tick += 1
@@ -247,9 +321,34 @@ func enemy_update_patrol(e: Enemy*):
             e.burst_left = rand(1, 2)
 
 
+# ---------------------------------------------------------------------------
+# bugger
+# ---------------------------------------------------------------------------
+const BUGGER_MODE_SLEEP  = 0
+const BUGGER_MODE_FOLLOW = 1
+const BUGGER_MODE_WALK   = 2
+
+const BUGGER_SPEED           = 14
+const BUGGER_WALK_SPEED      = 7
+const BUGGER_ACCEL           = 1
+const BUGGER_WAKE_FRAMES     = 50
+const BUGGER_LOC_LOST_FRAMES = 180
 
 
-func spider_has_loc(e: Enemy*) int:
+func enemy_bugger_set_mode(e: Enemy*, mode):
+    e.mode = mode
+    e.wait_countdown = 0
+    if mode == BUGGER_MODE_SLEEP:
+        e.pace_countdown = BUGGER_WAKE_FRAMES
+    elif mode == BUGGER_MODE_FOLLOW:
+        e.facing_left = box_center_x(e.box) > box_center_x(hero.box)
+        e.pace_countdown = BUGGER_LOC_LOST_FRAMES
+    elif mode == BUGGER_MODE_WALK:
+        e.pace_countdown = rand(60 * 5, 60 * 10)
+
+
+func enemy_bugger_has_loc(e: Enemy*) int:
+    if hero.state != HERO_STATE_NORMAL: return 0
     if not box_encloses(camera.box, e.box): return 0
     var ex = box_center_x(e.box)
     var ey = box_center_y(e.box)
@@ -257,7 +356,8 @@ func spider_has_loc(e: Enemy*) int:
     var hy = box_center_y(hero.box)
     return level_has_los(ex, ey, hx, hy)
 
-func enemy_update_spider(e: Enemy*):
+
+func enemy_bugger_update(e: Enemy*):
     if not e.active: return
 
     var hx = box_center_x(hero.box)
@@ -265,194 +365,124 @@ func enemy_update_spider(e: Enemy*):
 
     var ex = box_center_x(e.box)
     var ey = box_center_y(e.box)
-    var loc = spider_has_loc(e)
+    var loc = enemy_bugger_has_loc(e)
 
-    if e.mode == SPIDER_MODE_SLEEP:
+    if e.mode == BUGGER_MODE_SLEEP:
         if loc:
-            e.mode = SPIDER_MODE_FOLLOW
-            e.pace_countdown = 0
-            e.wait_countdown = 0
-    elif e.mode == SPIDER_MODE_FOLLOW:
-        if loc:
-            e.pace_countdown = 0
+            e.pace_countdown -= 1
+            if e.pace_countdown == 0:
+                enemy_bugger_set_mode(e, BUGGER_MODE_FOLLOW)
         else:
-            e.pace_countdown += 1
-            if e.pace_countdown >= SPIDER_LOC_LOST_FRAMES:
-                e.mode = SPIDER_MODE_WALK
-                e.pace_countdown = rand(120, 360)
-                e.wait_countdown = 0
-    elif e.mode == SPIDER_MODE_WALK:
-        if loc:
-            e.mode = SPIDER_MODE_FOLLOW
-            e.pace_countdown = 0
-            e.wait_countdown = 0
-        else:
-            if e.pace_countdown > 0: e.pace_countdown -= 1
-            else:
-                e.mode = SPIDER_MODE_SLEEP
-                e.vx = 0
-                e.wait_countdown = 0
+            e.pace_countdown = BUGGER_WAKE_FRAMES
 
-    var dx   = 0
-    var jump = 0
+    elif e.mode == BUGGER_MODE_FOLLOW:
+        if hero.state != HERO_STATE_NORMAL:
+            enemy_bugger_set_mode(e, BUGGER_MODE_WALK)
+        elif loc:
+            e.pace_countdown = BUGGER_LOC_LOST_FRAMES
+        else:
+            e.pace_countdown -= 1
+            if e.pace_countdown == 0:
+                enemy_bugger_set_mode(e, BUGGER_MODE_WALK)
+
+    elif e.mode == BUGGER_MODE_WALK:
+        if loc:
+            enemy_bugger_set_mode(e, BUGGER_MODE_FOLLOW)
+        else:
+            e.pace_countdown -= 1
+            if e.pace_countdown == 0:
+                enemy_bugger_set_mode(e, BUGGER_MODE_SLEEP)
+
+
 
     if e.no_turn_countdown > 0: e.no_turn_countdown -= 1
+    if e.wait_countdown > 0:
+        e.wait_countdown -= 1
+        if e.wait_countdown == 0 and e.wait_turn: e.facing_left = not e.facing_left
 
-    if e.mode == SPIDER_MODE_SLEEP:
-        if e.on_ground:
-            e.vx = clamp(0, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
-            e.frame = 0
+    if e.on_ground:
 
-    elif e.mode == SPIDER_MODE_FOLLOW:
-        var want_left = hx < ex
-        if e.on_ground:
-            if e.wait_countdown > 0:
-                e.wait_countdown -= 1
-                e.vx = clamp(0, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
-                e.frame = 0
-            elif e.no_turn_countdown <= 0 and want_left != e.facing_left:
-                e.facing_left = want_left
-                e.wait_countdown = rand(10, 20)
-            else:
-                var wall_x  = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
-                var ledge_x = e.facing_left ? e.box.x      : e.box.x + e.box.w - 1
+        var speed  = 0
+        var jump   = 0
+        var foot_y = e.box.y + e.box.h
+        var foot_x = e.facing_left ? e.box.x : e.box.x + e.box.w - 1
 
-                if abs(e.vx) == SPIDER_SPEED:
-                    if check_collision(wall_x, e.box.y, e.facing_left ? DIR_LEFT : DIR_RIGHT):
-                        jump = 44
-                    elif not check_collision_down(ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1):
+
+        if e.wait_countdown:
+        elif e.mode == BUGGER_MODE_WALK:
+            speed = BUGGER_WALK_SPEED
+            # turn around on ledge
+            if not level_test_down(foot_x, foot_y, foot_y - 1):
+                e.wait_countdown = 20
+                e.wait_turn      = true
+
+        elif e.mode == BUGGER_MODE_FOLLOW:
+            speed = BUGGER_SPEED
+
+            # turn around to hero
+            var want_left = hx < ex
+            if e.no_turn_countdown <= 0 and want_left != e.facing_left and loc:
+                e.wait_countdown = 20
+                e.wait_turn      = true
+
+            if e.ground_frames > 15:
+                if abs(hx - ex) <= 35 and hero.box.y < ey:
+                    # attack
+                    jump = 38
+                elif abs(e.vx) > BUGGER_SPEED - 3:
+                    var wall_x = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
+                    if want_left == e.facing_left and level_test(wall_x, e.box.y, 0):
+                        jump = 38
+                    elif not level_test_down(foot_x, foot_y, foot_y - 1):
                         jump = 24
-                    else:
-                        if (abs(hx - ex) <= 35
-                        and abs(hy - ey) <= 20): jump = 44
-                    if jump:
-                        e.vy = -jump
-                        e.on_ground = false
+                if jump:
+                    e.vy = -jump
+                    e.on_ground = false
+                    e.ground_frames = 0
+                    play_sound(SOUND_BUGGER_JUMP)
 
-                dx = e.facing_left ? -1 : 1
+        e.vx = clamp(e.facing_left ? -speed : speed, e.vx - BUGGER_ACCEL, e.vx + BUGGER_ACCEL)
 
-            e.vx = clamp(dx * SPIDER_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
-
-    elif e.mode == SPIDER_MODE_WALK:
-        if e.on_ground:
-            var walk_wall_x  = e.facing_left ? e.box.x - 10 : e.box.x + e.box.w - 1 + 10
-            var walk_ledge_x = e.facing_left ? e.box.x      : e.box.x + e.box.w - 1
-            var walk_wall_dir = e.facing_left ? DIR_LEFT : DIR_RIGHT
-            if e.no_turn_countdown <= 0:
-                if (check_collision(walk_wall_x, e.box.y, walk_wall_dir)
-                or not check_collision_down(walk_ledge_x, e.box.y + e.box.h, e.box.y + e.box.h - 1)):
-                    e.facing_left = not e.facing_left
-                    e.no_turn_countdown = 10
-            dx = e.facing_left ? -1 : 1
-            e.vx = clamp(dx * SPIDER_WALK_SPEED, e.vx - SPIDER_ACCEL, e.vx + SPIDER_ACCEL)
+        e.ground_frames += 1
+    else:
+        e.ground_frames = 0
 
 
     if level_move_box_x(e.sx, e.box, e.vx):
         if e.on_ground:
-            if e.mode == SPIDER_MODE_WALK:
-                e.facing_left = not e.facing_left
-                e.vx = 0
-                e.no_turn_countdown = 10
+            if e.mode == BUGGER_MODE_WALK:
+                e.wait_countdown = 20
+                e.wait_turn      = true
             else:
+                # walk away from the wall
                 e.facing_left = e.vx > 0
-                e.vx = 0
-                e.no_turn_countdown = rand(30, 50)
+                e.no_turn_countdown = 30
+            e.vx = 0
         else:
             e.vx = -e.vx
-            e.wait_turn = true
 
     e.vy += GRAVITY
     e.vy = min(e.vy, SP * 4)
-    var was_air = not e.on_ground
+    e.on_ground = false
     var d = level_move_box_y(e.sy, e.box, e.vy)
     if d == DIR_DOWN:
         e.on_ground = true
         e.vy = 0
-        if was_air and e.wait_turn and e.mode == SPIDER_MODE_FOLLOW:
-            e.wait_countdown = rand(10, 40)
-            e.wait_turn = false
     elif d == DIR_UP:
         e.vy = 8
-        e.on_ground = false
-    else:
-        e.on_ground = false
-
-    if e.mode == SPIDER_MODE_SLEEP:
-        e.frame = 0
-    elif e.wait_countdown == 0:
-        e.run_tick += 1
-        e.frame = 1 + e.run_tick / 4 % 4
 
     var t = level_get_tile(e.box.x, e.box.y)
     if t == 'l':
         enemy_kill(e)
         e.vy = 4
 
-
-
-func enemy_update_all():
-    var view = camera.box
-    box_grow(view, 32)
-
-    for e in enemies:
-        if e.state == ENEMY_STATE_DEAD: continue
-
-        if e.state == ENEMY_STATE_DYING:
-            e.sx += e.vx
-            e.sy += e.vy
-            e.box.x = e.sx / SP
-            e.box.y = e.sy / SP
-
-            if e.hit_countdown > 5:
-                particle_spawn(PARTICLE_TYPE_DEBRIS,
-                               rand(e.box.x, e.box.x + e.box.w - 1),
-                               rand(e.box.y, e.box.y + e.box.h - 1))
-
-            if e.hit_countdown > 0: e.hit_countdown -= 1
-            else:
-                e.state  = ENEMY_STATE_DEAD
-                e.active = false
-
-                # scoring
-                hero.score += (
-                    e.type == ENEMY_TYPE_PATROL ? 100 :
-                    e.type == ENEMY_TYPE_SPIDER ? 150 :
-                    0)
-
-            continue
-
-        if e.state != ENEMY_STATE_NORMAL: continue
-
-
-        var prev_active = e.active
-        e.active = box_intersects(view, e.box)
-        if e.active and not prev_active:
-            e.facing_left = e.sx > hero.sx
-
-        if e.hit_countdown > 0: e.hit_countdown -= 1
-
-        if e.type == ENEMY_TYPE_PATROL: enemy_update_patrol(e)
-        elif e.type == ENEMY_TYPE_SPIDER: enemy_update_spider(e)
-
-
-func enemy_draw_all():
-    for e in enemies:
-        if not e.active: continue
-
-
-        if e.state == ENEMY_STATE_DYING and e.hit_countdown & 2: continue
-
-        if e.type == ENEMY_TYPE_PATROL:
-            camera_sprite(e.box.x - 4, e.box.y - 15, 16, 32,
-                          256 + e.frame * 16,
-                          0 + (e.hit_countdown > 0) * 32,
-                          e.facing_left)
-        elif e.type == ENEMY_TYPE_SPIDER:
-            camera_sprite(e.box.x - 2, e.box.y - 5, 16, 16,
-                          256 + e.frame * 16,
-                          80 + (e.hit_countdown > 0) * 16,
-                          e.facing_left)
-
-
-        # box
-        # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
+    # animation
+    if not e.on_ground:
+        e.frame = e.vy < 0 ? 5 : 6
+        if abs(e.vy) < 10: e.frame = 4
+    elif e.mode == BUGGER_MODE_SLEEP: e.frame = 7
+    elif e.wait_countdown > 0: e.frame = 0
+    else:
+        e.run_tick += 1
+        var rate = e.mode == BUGGER_MODE_WALK ? 8 : 4
+        e.frame = 1 + e.run_tick / rate % 4

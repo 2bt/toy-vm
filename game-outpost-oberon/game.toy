@@ -47,191 +47,35 @@ var game: Game
 
 struct Camera:
     box: Box
+    ground_y  # last hero center-y while on ground (or below it while falling)
 
-var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H } }
+var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H }, 0 }
 
-struct Dot:
-    x
-    y
-var dots: Dot[256]
-var dot_count
-
-struct Hero:
-    state
-    sx
-    sy
-    vx
-    vy
-    box: Box
-
-    facing_left
-    on_ground
-
-    lives
-    score
-    frame
-    run_tick
-    shoot_countdown
-    hit_countdown
-
-var hero: Hero
-
-struct HeroBullet:
-    alive
-    x
-    y
-    facing_left
-
-var hero_bullets: HeroBullet[8]
-
-
-include "level.toy"
-
-
-# ---------------------------------------------------------------------------
-# helpers used by particle.toy / enemy.toy (must be declared before those includes)
-# ---------------------------------------------------------------------------
-
-func camera_sprite(x, y, w, h, s, t, f):
-    sprite(x - camera.box.x, y - camera.box.y, w, h, s, t, f)
-
-func dot(x, y):
-    dots[dot_count] = {x, y}
-    dot_count += 1
-
-func draw_dots():
-    for i = 0, dot_count:
-        var d = dots[i]
-        camera_sprite(d.x, d.y, 1, 1, 13, 24, 0)
-    dot_count = 0
-
-func check_collision(x, y, dir) int:
-    dot(x, y)
-    if level_get_tile(x, y) != '0': return 0
-    if dir == DIR_LEFT:  return TS - (x % TS)
-    if dir == DIR_RIGHT: return -1 - (x % TS)
-    if dir == DIR_UP:    return TS - (y % TS)
-    if dir == DIR_DOWN:  return -1 - (y % TS)
-
-func check_collision_down(x, y, py) int:
-    dot(x, y)
-    var t = level_get_tile(x, y)
-    if (t == '0' or
-        t == '^' and (y / TS) > (py / TS)):
-        return -1 - (y % TS)
-    return 0
-
-
-# Resolve axis motion for enemy boxes. Mutates sx/sy and box.x/box.y.
-# Probes: two points on the leading face (simple; not hero-grade).
-func level_move_box_x(sx: int*, box: Box*, dx) int:
-    sx.* = sx.* + dx
-    var x = sx.* / SP
-    if x == box.x: return 0
-
-    var y1 = box.y + box.h - 1
-    var o
-    if dx < 0:
-        o = max(check_collision(x, box.y, DIR_LEFT), check_collision(x, y1, DIR_LEFT))
-        if o:
-            x += o
-            sx.* = x * SP
-            box.x = x
-            return DIR_LEFT
-    else:
-        o = min(check_collision(x + box.w - 1, box.y, DIR_RIGHT),
-                check_collision(x + box.w - 1, y1, DIR_RIGHT))
-        if o:
-            x += o
-            sx.* = x * SP + SP - 1
-            box.x = sx.* / SP
-            return DIR_RIGHT
-    box.x = x
-    return 0
-
-
-func level_move_box_y(sy: int*, box: Box*, dy) int:
-    sy.* = sy.* + dy
-    var y = sy.* / SP
-    if y == box.y: return 0
-
-    var x1 = box.x + box.w - 1
-    var o
-    if dy > 0:
-        o = min(check_collision_down(box.x, y + box.h - 1, box.y + box.h - 1),
-                check_collision_down(x1, y + box.h - 1, box.y + box.h - 1))
-        if o:
-            y += o
-            sy.* = y * SP + SP - 1
-            box.y = sy.* / SP
-            return DIR_DOWN
-    else:
-        o = max(check_collision(box.x, y, DIR_UP), check_collision(x1, y, DIR_UP))
-        if o:
-            y += o
-            sy.* = y * SP
-            box.y = y
-            return DIR_UP
-    box.y = y
-    return 0
-
-
-const HERO_W = 6
-const HERO_H = 11
-
-func hero_init():
-    hero = {}
-    hero.box.w = HERO_W
-    hero.box.h = HERO_H
-    hero.lives = 3
-
-func hero_set_state(s):
-    if s == HERO_STATE_DYING and hero.state != HERO_STATE_NORMAL: return
-    hero.state = s
-    if s == HERO_STATE_SPAWNING:
-        hero.hit_countdown = HERO_SPAWN_FRAMES
-        play_sound(SOUND_SPAWN1)
-        play_sound(SOUND_SPAWN2)
-    elif s == HERO_STATE_DYING:
-        hero.hit_countdown = 20
-        hero.vx = 0
-        hero.vy = 0
-        play_sound(SOUND_HERO_DIE)
-    elif s == HERO_STATE_EXITING:
-        play_sound(SOUND_EXIT1)
-        play_sound(SOUND_EXIT2)
-        hero.hit_countdown = HERO_EXIT_FRAMES
-        hero.vx = 0
-        hero.vy = 0
-    elif s == HERO_STATE_NORMAL:
-        hero.hit_countdown = 0
-
-
-include "particle.toy"
-include "enemy.toy"
-
-
-# ---------------------------------------------------------------------------
-# camera
-# ---------------------------------------------------------------------------
 const CAM_MARGIN_H = 120
 const CAM_MARGIN_T = 28
 const CAM_MARGIN_B = 80
 
+func camera_sprite(x, y, w, h, s, t, f):
+    sprite(x - camera.box.x, y - camera.box.y, w, h, s, t, f)
+
 func camera_center_on_hero():
     camera.box.x = box_center_x(hero.box) - SCREEN_W / 2
     camera.box.y = box_center_y(hero.box) - SCREEN_H / 2
-
+    camera.ground_y = box_center_y(hero.box)
 
 func camera_follow_hero():
     var hx = box_center_x(hero.box)
     var hy = box_center_y(hero.box)
+    # lock vertical settle target to last stand height; track down while falling
+    if hero.on_ground or hy > camera.ground_y: camera.ground_y = hy
+
     camera.box.x = clamp(camera.box.x, hx + CAM_MARGIN_H - SCREEN_W, hx - CAM_MARGIN_H)
 
-    var ty = hy - SCREEN_H / 2
-    camera.box.y = clamp(camera.box.y, ty, hy - CAM_MARGIN_T)
-    # soft-settle toward vertically centering the hero
-    if hero.on_ground and ty > 0: camera.box.y += (ty - camera.box.y) / 8
+    # live hy: keep hero inside top margin on big jumps / force down when falling
+    camera.box.y = clamp(camera.box.y, hy - SCREEN_H / 2, hy - CAM_MARGIN_T)
+    # soft-settle up toward last grounded height (continues mid-jump after a climb)
+    var ty = camera.ground_y - SCREEN_H / 2
+    if ty > 0 and camera.box.y > ty: camera.box.y += (ty - camera.box.y) / 8
 
 func camera_return_toward_spawn():
     var tx = clamp(box_center_x(hero.box) - SCREEN_W / 2, 0, level.w * TS - SCREEN_W)
@@ -249,245 +93,21 @@ func camera_return_toward_spawn():
     camera.box.x += dx
     camera.box.y += dy
 
-# ---------------------------------------------------------------------------
-# hero bullets
-# ---------------------------------------------------------------------------
 
-func hero_bullet_spawn(x, y, facing_left):
-    for b in hero_bullets:
-        if b.alive: continue
-        b.alive       = true
-        b.x           = x
-        b.y           = y
-        b.facing_left = facing_left
-        return
-
-func hero_bullet_update_all():
-    var view = camera.box
-    box_grow(view, 8)
-
-    for b in hero_bullets:
-        if not b.alive: continue
-        b.x += b.facing_left ? -3 : 3
-
-        if not box_has_point(view, b.x, b.y):
-            b.alive = 0
-
-        var dir = b.facing_left ? DIR_LEFT : DIR_RIGHT
-        var o = check_collision(b.x, b.y, dir)
-        if o:
-            b.alive = false
-            particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
-            play_sound(SOUND_BULLET_WALL)
-            continue
-
-        for e in enemies:
-            if not e.state: continue
-            if box_has_point(e.box, b.x, b.y):
-                b.alive = false
-                enemy_hit(e)
-                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
-                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
-                continue
-
-func hero_bullet_draw_all():
-    for b in hero_bullets:
-        if not b.alive: continue
-        camera_sprite(b.x - (b.facing_left ? 0 : 5), b.y, 6, 1,
-                      0, 32 + 1, 0)
-
-
-# ---------------------------------------------------------------------------
-# hero
-# ---------------------------------------------------------------------------
-
-func hero_place_at_start():
-    hero.sx = (level.spawn_x + 5) * SP
-    hero.sy = (level.spawn_y + 5) * SP + SP - 1
-    hero.box.x = hero.sx / SP
-    hero.box.y = hero.sy / SP
-    if check_collision_down(hero.box.x, hero.box.y + hero.box.h,
-                            hero.box.y + hero.box.h - 1):
-        hero.frame = 0
-        hero.on_ground = true
-    else:
-        hero.frame = 4
-        hero.on_ground = false
-
-    hero.vx              = 0
-    hero.vy              = 0
-    hero.facing_left     = false
-    hero.shoot_countdown = 0
-    hero.hit_countdown   = 0
-    hero.run_tick        = 0
-
-
-func hero_update():
-    if hero.state == HERO_STATE_RETURNING:
-        camera_return_toward_spawn()
-        return
-
-    if hero.state == HERO_STATE_SPAWNING:
-        if hero.hit_countdown > 0: hero.hit_countdown -= 1
-        else: hero_set_state(HERO_STATE_NORMAL)
-
-    elif hero.state == HERO_STATE_EXITING:
-        if hero.hit_countdown > 0: hero.hit_countdown -= 1
-        else:
-            game.state = GAME_STATE_LEVEL_DONE
-            game.countdown = LEVEL_DONE_FRAMES
-
-    elif hero.state == HERO_STATE_DYING:
-        if hero.hit_countdown > 5:
-            particle_spawn(PARTICLE_TYPE_DEBRIS,
-                            rand(hero.box.x, hero.box.x + hero.box.w - 1),
-                            rand(hero.box.y, hero.box.y + hero.box.h - 1))
-
-        hero.sy += hero.vy
-        hero.box.y = hero.sy / SP
-        if hero.hit_countdown > 0: hero.hit_countdown -= 1
-        else:
-            hero.lives -= 1
-            if hero.lives <= 0:
-                hero.lives = 0
-                game.state = GAME_STATE_GAME_OVER
-                play_sound(SOUND_GAME_OVER)
-            else:
-                hero_place_at_start()
-                hero_set_state(HERO_STATE_RETURNING)
-
-    if hero.state != HERO_STATE_NORMAL:
-        if hero.state != HERO_STATE_RETURNING:
-            camera_follow_hero()
-        return
-
-    # horizontal movement
-    var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
-    if dx: hero.facing_left = dx < 0
-    var accel = hero.on_ground ? ACCEL_GROUND : ACCEL_AIR
-    hero.vx = clamp(RUN_MAX * dx, hero.vx - accel, hero.vx + accel)
-    hero.sx += hero.vx
-
-    var x = hero.sx / SP
-    var y = hero.sy / SP
-
-    # horizontal collision
-    var o
-    o = max(check_collision(x + 1, y +  2, DIR_LEFT),
-            check_collision(x - 1, y +  8, DIR_LEFT))
-    if o:
-        x += o
-        hero.sx = x * SP
-        hero.vx = 0
-    o = min(check_collision(x + 4, y +  2, DIR_RIGHT),
-            check_collision(x + 6, y +  8, DIR_RIGHT))
-    if o:
-        x += o
-        hero.sx = x * SP
-        if hero.vx > 0: hero.sx += SP - 1
-        hero.vx = 0
-
-    # jump
-    if hero.on_ground and btnp(BTN_A):
-        hero.vy = -JUMP_FORCE
-        play_sound(SOUND_JUMP)
-    elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
-
-    # gravity
-    hero.vy += GRAVITY
-    hero.vy = min(hero.vy, SP * 4)
-
-    # floor collision
-    var py = hero.sy / SP
-    hero.sy += hero.vy
-    y = hero.sy / SP
-    o = min(check_collision_down(x + 0, y + 10, py + 10),
-            check_collision_down(x + 5, y + 10, py + 10))
-    if o:
-        if not hero.on_ground: play_sound(SOUND_LAND)
-        hero.on_ground = true
-        y += o
-        hero.sy = y * SP + SP - 1
-        hero.vy = 0
-    else:
-        hero.on_ground = false
-
-    # ceiling collision
-    o = check_collision(x + 3 - hero.facing_left, y + 0, DIR_UP)
-    if o:
-        y += o
-        hero.sy = y * SP
-        hero.vy = 8
-
-    # shoot
-    if hero.shoot_countdown > 0:
-        hero.shoot_countdown -= 1
-    elif btn(BTN_B):
-        hero.shoot_countdown = 20
-        play_sound(SOUND_HERO_SHOOT)
-        var bx = hero.facing_left ? x - 1 : x + 6
-        hero_bullet_spawn(bx, y + 4, hero.facing_left)
-
-    # animation
-    hero.frame = 0
-    if not hero.on_ground:
-        hero.frame = 4
-    elif dx:
-        hero.frame = 1 + hero.run_tick / 4 % 4
-        hero.run_tick += 1
-    else:
-        hero.run_tick = 4
-        hero.frame = 0
-
-    hero.box.x = hero.sx / SP
-    hero.box.y = hero.sy / SP
-
-    # check enemies
-    for e in enemies:
-        if not e.active: continue
-        if e.state != ENEMY_STATE_NORMAL: continue
-        if box_intersects(hero.box, e.box):
-            hero_set_state(HERO_STATE_DYING)
-            return
-
-    # lava
-    var t = level_get_tile(hero.box.x, hero.box.y)
-    if t == 'l':
-        hero_set_state(HERO_STATE_DYING)
-        hero.vy = 4
-        return
-
-    # level exit
-    if t == 'E': hero_set_state(HERO_STATE_EXITING)
-
-    camera_follow_hero()
-
-func hero_draw():
-    if hero.state == HERO_STATE_RETURNING: return
-    if (hero.state == HERO_STATE_DYING or
-        hero.state == HERO_STATE_SPAWNING or
-        hero.state == HERO_STATE_EXITING) and hero.hit_countdown & 2: return
-
-    var row = 0
-    if (hero.state == HERO_STATE_DYING
-    or hero.state == HERO_STATE_EXITING
-    or hero.state == HERO_STATE_SPAWNING): row = 2
-    elif hero.shoot_countdown > 1: row = 1
-
-    camera_sprite(hero.box.x - 5, hero.box.y - 5, 16, 16,
-                  hero.frame * 16,
-                  128 + row * 16,
-                  hero.facing_left)
+include "level.toy"
+include "particle.toy"
+include "enemy.toy"
+include "hero.toy"
 
 
 # ---------------------------------------------------------------------------
 # game loop
 # ---------------------------------------------------------------------------
 
-# func draw_blend(v):
-#     for r = 0, 12:
-#         var h = clamp(v - r * 3, 0, 16)
-#         for c = 0, 20: sprite(c * 16, r * 16, 16, h, 0, 32, 0)
+func game_init():
+    hero_init()
+    game_load_level(0)
+
 
 func game_load_level(n):
     game.level = n
@@ -506,13 +126,8 @@ func game_load_level(n):
     game.state     = GAME_STATE_LEVEL
     game.countdown = LEVEL_CARD_FRAMES
 
-func game_init():
-    hero_init()
-    game_load_level(0)
-
 
 func game_update():
-
     if game.state == GAME_STATE_LEVEL:
         if game.countdown > 0: game.countdown -= 1
         else:
@@ -558,7 +173,7 @@ func game_draw():
     particle_draw_all()
     level_draw_walls()
 
-    draw_dots()
+    level_draw_dots()
 
     # HUD
     strnum(str, hero.lives)

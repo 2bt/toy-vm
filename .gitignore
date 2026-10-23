@@ -5,4 +5,5 @@ code
 !game-breakout/code
 !game-outpost-oberon/code
 *.asm
+*.aseprite
 docs/

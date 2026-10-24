@@ -21,7 +21,7 @@ public:
     };
 
     static constexpr int MIXRATE = 48000;
-    static constexpr int VOICES  = 4;
+    static constexpr int VOICES  = 8;
 
     static void callback(void* u, uint8_t* stream, int bytes) {
         constexpr int SAMPLES_PER_FRAME = MIXRATE / 60;

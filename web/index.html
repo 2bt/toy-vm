@@ -106,7 +106,7 @@ const GAMES = [
 const SCREEN_W = 320, SCREEN_H = 180;
 const MEM_SIZE = 1 << 24;
 const STEP_LIMIT = 1000000;
-const VOICES = 4;
+const VOICES = 8;
 
 const BTN_UP = 0;
 const BTN_DOWN = 1;
@@ -401,7 +401,7 @@ function runVM(mem, code) {
 }
 
 const APU_WORKLET = `
-const VOICES = 4;
+const VOICES = 8;
 const TRI = 1, SAW = 2, PULSE = 3, NOISE = 4;
 
 function noiseNibble(s) {
@@ -657,6 +657,7 @@ function frame(timestamp) {
       ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
       runVM(mem, code);
       if (apuNode) apuNode.port.postMessage({ type: "voices", voices: voiceInputs });
+      voiceInputs = Array.from({ length: VOICES }, () => ({ pitch: 0, pw: 0, vol: 0, wave: 0 }));
     } catch (e) {
       showError(String(e.message || e));
       stopGame();

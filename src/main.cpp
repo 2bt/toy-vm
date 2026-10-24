@@ -231,6 +231,7 @@ int main(int argc, char** argv) {
         SDL_RenderClear(renderer);
         vm.run(interrupt);
         apu.next_frame(voice_inputs);
+        voice_inputs = {};
         SDL_RenderPresent(renderer);
     }
 

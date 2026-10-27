@@ -1,3 +1,6 @@
+## Compiler
++ [ ] better variable scopes
+
 ## Outpost Oberon
 
 + [x] hero-enemy collision
@@ -8,6 +11,7 @@
 + [x] level exit -> restart level
 + [x] touch buttons in web client
 + [x] sfx
++ [ ] checkpoint
 + [ ] more enemies
 + [ ] more levels
 

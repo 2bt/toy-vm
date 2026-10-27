@@ -314,6 +314,20 @@ class ExecTests(unittest.TestCase):
                 print_n((p as int*)[1])
         """), "3\n7\n7\n")
 
+    def test_pointer_array_global_size(self):
+        # int*[N] must occupy N words so the next global is not overlapped
+        self.assertEqual(self.run_toy("""
+            var ptrs: int*[4]
+            var marker = 7
+            func tick():
+                for p in ptrs: p.* = 0
+                ptrs[0] = &marker
+                ptrs[3] = &marker
+                print_n(marker)
+                print_n(ptrs[0].*)
+                print_n(ptrs[3].*)
+        """), "7\n7\n7\n")
+
     def test_pointer_cast_non_ptr_rejected(self):
         compiled = self.compile_text("""
             func tick():

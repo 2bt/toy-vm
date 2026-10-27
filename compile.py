@@ -304,8 +304,8 @@ class Parser:
         return Type(base, ptr, array)
 
     def type_size(self, t):
-        if t.ptr > 0: return 1
         n = t.array or 1
+        if t.ptr > 0: return n
         if t.base == "int": return n
         return n * self.get_struct(t.base).size
 
@@ -455,6 +455,7 @@ class Parser:
                     n = self.eat("id").v
                     t = self.type()
                     self.eat("eol")
+                    if n in fields: self.error(f"field '{n}' already exists")
                     fields[n] = TyField(t, offset)
                     offset += self.type_size(t)
                 self.eat("dedent")

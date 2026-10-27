@@ -23,7 +23,7 @@ token_regex = re.compile(r"""
     [ \t]*(?P<id>      [A-Za-z][A-Za-z0-9_]*       )|
     [ \t]*(?P<sym>     ==|!=|<=|>=|\|=|&=|\+=|-=|\*=|/=|%=|
                        [+\-*/%{}()<>\[\]=,.:&|@?]  )|
-    [ \t]*(?P<string>  "(?:[^"\\\n]|\\.)*"         )|
+    [ \t]*(?P<string>  "(?:[^"\\]|\\.)*"           )|
     [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
     [ \t]*(?P<other>   [^ \t]+                     )
 """, re.VERBOSE)
@@ -63,16 +63,19 @@ def tokenize(path):
             if new_indent != indents[-1]:
                 sys.exit(f"{path.name}:{line}: inconsistent indentation")
         if k == "string":
-            v = ast.literal_eval(v)
-            # Adjacent literals concatenate (like C/Python). Works across lines
-            # inside ()/[]/{} where newlines are not turned into eol tokens.
+            loc = (path, line)
+            line += v.count("\n")
+            v = ast.literal_eval('"' + v[1:-1].replace("\n", "\\n") + '"')
             if out and out[-1].k == "string":
-                prev = out[-1]
-                out[-1] = Token("string", prev.v + v, prev.loc)
-                continue
+                out[-1] = Token("string", out[-1].v + v, out[-1].loc)
+            else:
+                out.append(Token("string", v, loc))
+            continue
         if k == "char":
             k, v = "num", str(ord(ast.literal_eval(v)))
         if k == "id" and v in KEYWORDS: k = v
+        if k == "other" and v[:1] == '"':
+            sys.exit(f"{path.name}:{line}: unterminated string")
 
         if k == "sym":
             k = v
@@ -1097,7 +1100,6 @@ class Codegen:
     def newtmp(self, *ts):
         for t in ts:
             if t in self.tmp_vars: return t
-            if t.startswith("[") and t[1:-1] in self.tmp_vars: return t[1:-1]
         t = f"{self.current_func.name}._T{self.tmp_i}"
         self.tmp_i += 1
         self.tmp_vars[t] = INT

@@ -71,6 +71,22 @@ class ExecTests(unittest.TestCase):
                 ))
         """), "ok\nab\nc\n4\nxy\n")
 
+    def test_multiline_string_literal(self):
+        self.assertEqual(self.run_toy(
+            'func tick():\n'
+            '    print("a\nb")\n'
+            '    print_n("x\ny".len)\n'
+            '    print("c\\nd")\n'
+        ), "a\nb\n4\nc\nd\n")
+
+    def test_unterminated_string(self):
+        compiled = self.compile_text('''
+            func tick():
+                var s = "hello
+        ''')
+        self.assertNotEqual(compiled.returncode, 0)
+        self.assertIn("unterminated", compiled.stderr)
+
     def test_string_index_const(self):
         self.assertEqual(self.run_toy("""
             const C = "hello"[2]
@@ -253,6 +269,26 @@ class ExecTests(unittest.TestCase):
                 p.* = 6
                 print_n(p.*)
         """), "6\n")
+
+    def test_struct_field_ptr_arith(self):
+        # n*10 + v.pos.* must not clobber the pointer tmp used for [T]
+        self.assertEqual(self.run_toy("""
+            struct V:
+                pad
+                pos: int*
+            func read_num(v: V*) int:
+                var n = 0
+                while v.pos.* >= 48 and v.pos.* <= 57:
+                    n = n * 10 + v.pos.* - 48
+                    v.pos += 1
+                return n
+            func tick():
+                var s: int[] = "70"
+                var voice: V = { 0, s }
+                var n = read_num(voice)
+                print_n(n / 10)
+                print_n(n % 10)
+        """), "7\n0\n")
 
     def test_pointer_index_and_postfix_paren(self):
         self.assertEqual(self.run_toy("""

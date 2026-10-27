@@ -151,7 +151,7 @@ Operators (low → high binding): `or`, `and`, comparisons, `|`, `&` (bitwise), 
 
 * Unary: `-`, `not`, `&` (address of lvalue)
 * Assignments: `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`
-* Literals: decimals, `$hex`, `'c'`, `"string"` (zero-terminated `int` array; adjacent string literals concatenate), `{1, 2, 3}` (`int[N]` value, no trailing 0; decays/interns like strings when an address is needed)
+* Literals: decimals, `$hex`, `'c'`, `"string"` (zero-terminated `int` array; may span lines; adjacent string literals concatenate), `{1, 2, 3}` (`int[N]` value, no trailing 0; decays/interns like strings when an address is needed)
 * `true` / `false` / `null` are ordinary constants if you define them
 
 ### Pointers and arrays

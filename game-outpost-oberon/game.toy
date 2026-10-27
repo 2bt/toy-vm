@@ -11,28 +11,10 @@ const GAME_STATE_WIN        = 4
 const LEVEL_COUNT          = 2
 const LEVEL_CARD_FRAMES    = 60
 const LEVEL_DONE_FRAMES    = 48
-const HERO_SPAWN_FRAMES    = 40
-const HERO_EXIT_FRAMES     = 40
 
 const TS      = 16
 const SP      = 16
 const GRAVITY = 2
-
-const DIR_LEFT  = 1
-const DIR_RIGHT = 2
-const DIR_UP    = 3
-const DIR_DOWN  = 4
-
-const HERO_STATE_NORMAL    = 1
-const HERO_STATE_SPAWNING  = 2
-const HERO_STATE_DYING     = 3
-const HERO_STATE_RETURNING = 4
-const HERO_STATE_EXITING   = 5
-
-const RUN_MAX      = 20
-const ACCEL_GROUND = 5
-const ACCEL_AIR    = 2
-const JUMP_FORCE   = 48
 
 # ---------------------------------------------------------------------------
 # data
@@ -68,9 +50,7 @@ func camera_follow_hero():
     var hy = box_center_y(hero.box)
     # lock vertical settle target to last stand height; track down while falling
     if hero.on_ground or hy > camera.ground_y: camera.ground_y = hy
-
     camera.box.x = clamp(camera.box.x, hx + CAM_MARGIN_H - SCREEN_W, hx - CAM_MARGIN_H)
-
     # live hy: keep hero inside top margin on big jumps / force down when falling
     camera.box.y = clamp(camera.box.y, hy - SCREEN_H / 2, hy - CAM_MARGIN_T)
     # soft-settle up toward last grounded height (continues mid-jump after a climb)
@@ -78,8 +58,8 @@ func camera_follow_hero():
     if ty > 0 and camera.box.y > ty: camera.box.y += (ty - camera.box.y) / 8
 
 func camera_return_toward_spawn():
-    var tx = clamp(box_center_x(hero.box) - SCREEN_W / 2, 0, level.w * TS - SCREEN_W)
-    var ty = clamp(box_center_y(hero.box) - SCREEN_H / 2, 0, level.h * TS - SCREEN_H)
+    var tx = box_center_x(hero.box) - SCREEN_W / 2
+    var ty = box_center_y(hero.box) - SCREEN_H / 2
     var dx = tx - camera.box.x
     var dy = ty - camera.box.y
     var l = sqrt(dx * dx + dy * dy)
@@ -115,7 +95,6 @@ func game_load_level(n):
     else: level_init(LEVEL2_DATA)
 
     hero_place_at_start()
-    hero_set_state(HERO_STATE_RETURNING)
     camera_center_on_hero()
 
     enemy_init_all()
@@ -132,6 +111,7 @@ func game_update():
         if game.countdown > 0: game.countdown -= 1
         else:
             game.state = GAME_STATE_PLAY
+            music_play(MUSIC1_DATA)
         return
 
     if game.state == GAME_STATE_LEVEL_DONE:
@@ -141,6 +121,7 @@ func game_update():
             else: game.state = GAME_STATE_WIN
         # world still ticks below (blend-to-black later)
     elif game.state == GAME_STATE_GAME_OVER or game.state == GAME_STATE_WIN:
+        music_play("")
         if btnp(BTN_A):
             game_init()
 
@@ -177,9 +158,9 @@ func game_draw():
 
     # HUD
     strnum(str, hero.lives)
-    draw_text(0, SCREEN_H - 8, str)
+    draw_text(2, 2, str)
     strnum(str, hero.score)
-    draw_text(SCREEN_W - strlen(str) * 8, SCREEN_H - 8, str)
+    draw_text(SCREEN_W - strlen(str) * 8 - 2, 2, str)
 
     if game.state == GAME_STATE_GAME_OVER:
         draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, "GAME OVER")

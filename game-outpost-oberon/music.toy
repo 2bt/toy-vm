@@ -1,0 +1,226 @@
+var MUSIC1_DATA = "
+
+$0 a100 d0 s100 r20 N=80,Pp30w2~0
+$1 a100s100r40 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
+$2 a100d15s100 N=70,Pp128=44,=42s0,N=70,P=41,N=70
+$3 a100s100r40 T=90,~0
+
+@0 t14 v80 q2 o2 i0
+    c,=,>c,<c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
+    c,=,>c,<c,=,c,>c,=,,<c,>*20c<,g>,d,c,<a+,c,
+
+@1 t7 v100 o5
+    i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+    i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
+    i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+    i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,c,
+
+"
+
+
+func skip_space(p: int**):
+    while p.*.* == ' ' or p.*.* == '\n': p.* += 1
+
+func isdigit(c) int:
+    return c >= '0' and c <= '9'
+
+func read_num(p: int**) int:
+    var n = 0
+    var minus = false
+    while p.*.* == '-':
+        minus = not minus
+        p.* += 1
+    while isdigit(p.*.*):
+        n = n * 10 + p.*.* - '0'
+        p.* += 1
+    skip_space(p)
+    return minus ? -n : n
+
+
+struct InstrStream:
+    pos: int*
+    loop: int*
+
+struct NoteStream:
+    voice_index
+    start: int*
+    pos: int*
+
+    skip
+    octave
+    next_note
+    next_wait
+    next_instr
+    next_quant
+    next_volume
+    next_porta
+
+    quant
+    volume
+    porta
+    pitch
+    porta_pitch
+
+    wait
+    gate
+    attacking
+    level
+
+    instr_stream: InstrStream
+
+    attack
+    decay
+    sustain
+    release
+    wave
+    pitch_offset
+    abs_pitch
+    pw
+    pw_rate
+
+
+
+var instruments: int*[32]
+var note_streams: NoteStream[4]
+
+
+func music_play(music: int*):
+    for n in instruments: n.* = null
+    for s in note_streams: s.* = {}
+    var c
+    var i
+    var p = music
+    while p.*:
+        c = p.*
+        p += 1
+        if c == '$':
+            i = read_num(p)
+            instruments[i] = p
+        elif c == '@':
+            i = read_num(p)
+            if i < note_streams.len and not note_streams[i].start:
+                note_streams[i].voice_index = i
+                note_streams[i].start       = p
+                note_streams[i].pos         = p
+
+const NOTE_EMPTY = -1
+const NOTE_OFF   = -2
+
+func music_read_row(v: NoteStream*) int:
+    if not v.pos: return false
+    v.next_note  = NOTE_EMPTY
+    v.next_porta = 0
+
+    while true:
+        if v.skip:
+            while v.pos.* and v.pos.* != '@': v.pos += 1
+            if not v.pos.*:
+                v.skip = false
+                v.pos = v.start
+                continue
+            v.pos += 1
+            if read_num(v.pos) != v.voice_index: continue
+            v.skip = false
+        var c = v.pos.*
+        if c == '@':
+            v.skip = true
+            continue
+        if c == '\0':
+            v.pos = v.start
+            continue
+        v.pos += 1
+        if   c == ' ' or c == '\n':
+        elif c == ',': break
+        elif c == 'v': v.next_volume = read_num(v.pos)
+        elif c == 't': v.next_wait   = read_num(v.pos)
+        elif c == 'i': v.next_instr  = read_num(v.pos)
+        elif c == 'q': v.next_quant  = read_num(v.pos)
+        elif c == '*': v.next_porta  = read_num(v.pos)
+        elif c == 'o': v.octave      = read_num(v.pos)
+        elif c == '<': v.octave -= 1
+        elif c == '>': v.octave += 1
+        elif c == '+': v.next_note += 1
+        elif c == '-': v.next_note -= 1
+        elif c == '=': v.next_note = NOTE_OFF
+        elif c >= 'a' and c <= 'g': v.next_note = stridx("c d ef g a b", c) + 12 * v.octave
+        else:
+            print("music error")
+            print(v.pos - 1)
+            v.pos = null
+            return false
+    return true
+
+
+
+func music_update():
+
+    for v in note_streams:
+        if not v.start: continue
+
+        if v.wait == v.quant:
+            if v.next_note != NOTE_EMPTY and v.next_porta == 0: v.gate = false
+        if v.wait <= 0:
+            v.wait = v.next_wait
+            if v.next_note >= 0:
+                v.porta_pitch = v.next_note * 8
+                if v.next_porta == 0:
+                    v.pitch        = v.porta_pitch
+                    v.gate         = true
+                    v.attacking    = true
+                    v.instr_stream = { instruments[v.next_instr] }
+            v.quant  = v.next_quant
+            v.volume = v.next_volume
+            v.porta  = v.next_porta
+            if not music_read_row(v): continue
+        v.wait -= 1
+
+
+        # instrument
+        v.pitch = v.pitch
+        var s = &v.instr_stream
+        while s.pos and s.pos.*:
+            var c = s.pos.*
+            s.pos += 1
+            if   c == ' ': continue
+            elif c == 'a': v.attack  = read_num(s.pos)
+            elif c == 'd': v.decay   = read_num(s.pos)
+            elif c == 's': v.sustain = read_num(s.pos)
+            elif c == 'r': v.release = read_num(s.pos)
+            elif c == 'p': v.pw      = read_num(s.pos)
+            elif c == 'w': v.pw_rate = read_num(s.pos)
+            elif c == 'T': v.wave = WAVE_TRI
+            elif c == 'S': v.wave = WAVE_SAW
+            elif c == 'P': v.wave = WAVE_PULSE
+            elif c == 'N': v.wave = WAVE_NOISE
+            elif c == '=' or c == '~':
+                v.pitch_offset = read_num(s.pos) * 8
+                v.abs_pitch    = c == '='
+            elif c == '|': s.loop = s.pos
+            elif c == ',': break
+            else: s.pos = s.loop
+
+        # adsr
+        if v.gate:
+            if v.attacking:
+                v.level += v.attack
+                if v.level > 100:
+                    v.level     = 100
+                    v.attacking = false
+            elif v.level > v.sustain:
+                v.level -= max(1, v.level * v.decay / 64)
+                v.level = max(v.level, v.sustain)
+        else:
+            v.level -= max(1, v.level * v.release / 64)
+            v.level = max(v.level, 0)
+
+        # portamento
+        if v.pitch != v.porta_pitch:
+            v.pitch = clamp(v.porta_pitch, v.pitch - v.porta, v.pitch + v.porta)
+
+        var pitch = v.pitch_offset
+        if not v.abs_pitch: pitch += v.pitch
+        sound(v.voice_index + 4, pitch, v.pw, v.volume * v.level / 256, v.wave)
+
+        # pw sweep
+        v.pw += v.pw_rate
+        v.pw %= 256

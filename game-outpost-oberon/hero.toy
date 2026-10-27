@@ -1,5 +1,20 @@
+const HERO_STATE_NORMAL    = 1
+const HERO_STATE_SPAWNING  = 2
+const HERO_STATE_DYING     = 3
+const HERO_STATE_RETURNING = 4
+const HERO_STATE_EXITING   = 5
+
 const HERO_W = 6
 const HERO_H = 11
+
+const HERO_SPAWN_FRAMES    = 40
+const HERO_EXIT_FRAMES     = 40
+
+const RUN_MAX      = 20
+const ACCEL_GROUND = 5
+const ACCEL_AIR    = 2
+const JUMP_FORCE   = 50
+
 
 
 struct Hero:
@@ -61,18 +76,17 @@ func hero_set_state(s):
 
 
 func hero_place_at_start():
+    hero_set_state(HERO_STATE_RETURNING)
     hero.sx = (level.spawn_x + 5) * SP
     hero.sy = (level.spawn_y + 5) * SP + SP - 1
     hero.box.x = hero.sx / SP
     hero.box.y = hero.sy / SP
-    if level_test_down(hero.box.x, hero.box.y + hero.box.h,
-                            hero.box.y + hero.box.h - 1):
+    if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
         hero.frame = 0
         hero.on_ground = true
     else:
         hero.frame = 4
         hero.on_ground = false
-
     hero.vx              = 0
     hero.vy              = 0
     hero.facing_left     = false
@@ -159,7 +173,6 @@ func hero_update():
                 play_sound(SOUND_GAME_OVER)
             else:
                 hero_place_at_start()
-                hero_set_state(HERO_STATE_RETURNING)
 
     if hero.state != HERO_STATE_NORMAL:
         if hero.state != HERO_STATE_RETURNING:
@@ -179,43 +192,47 @@ func hero_update():
     # horizontal collision
     var o
     o = max(level_test(x + 1, y +  2, DIR_LEFT),
-            level_test(x - 1, y +  8, DIR_LEFT))
+            level_test(x - 1, y +  5, DIR_LEFT))
     if o:
         x += o
         hero.sx = x * SP
         hero.vx = 0
     o = min(level_test(x + 4, y +  2, DIR_RIGHT),
-            level_test(x + 6, y +  8, DIR_RIGHT))
+            level_test(x + 6, y +  5, DIR_RIGHT))
     if o:
         x += o
-        hero.sx = x * SP
-        if hero.vx > 0: hero.sx += SP - 1
+        hero.sx = x * SP + SP - 1
         hero.vx = 0
 
     # jump
     if hero.on_ground and btnp(BTN_A):
         hero.vy = -JUMP_FORCE
-        play_sound(SOUND_JUMP)
+        play_sound(SOUND_HERO_JUMP)
     elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
 
     # gravity
     hero.vy += GRAVITY
     hero.vy = min(hero.vy, SP * 4)
+    # hero.vy = SP * (btnp(BTN_DOWN) - btnp(BTN_UP)) * 4
 
     # floor collision
     var py = hero.sy / SP
     hero.sy += hero.vy
     y = hero.sy / SP
-    o = min(level_test_down(x + 0, y + 10, py + 10),
-            level_test_down(x + 5, y + 10, py + 10))
-    if o:
-        if not hero.on_ground: play_sound(SOUND_LAND)
-        hero.on_ground = true
-        y += o
-        hero.sy = y * SP + SP - 1
-        hero.vy = 0
+    if hero.vy > 0:
+        o = min(level_test_down(x + 0, y + 10, py + 10),
+                level_test_down(x + 5, y + 10, py + 10))
+        if o:
+            if not hero.on_ground: play_sound(SOUND_LAND)
+            hero.on_ground = true
+            y += o
+            hero.sy = y * SP + SP - 1
+            hero.vy = 0
+        else:
+            hero.on_ground = false
     else:
         hero.on_ground = false
+
 
     # ceiling collision
     o = level_test(x + 3 - hero.facing_left, y + 0, DIR_UP)
@@ -236,7 +253,7 @@ func hero_update():
     # animation
     hero.frame = 0
     if not hero.on_ground:
-        hero.frame = 4
+        hero.frame = hero.vy < 0 ? 3 : 4
     elif dx:
         hero.frame = 1 + hero.run_tick / 4 % 4
         hero.run_tick += 1

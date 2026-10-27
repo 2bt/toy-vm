@@ -15,8 +15,8 @@ const ENEMY_BULLET_TYPE_BASIC = 1
 struct EnemyBullet:
     alive
     type
-    x
-    y
+    sx
+    sy
     vx
     vy
 
@@ -28,8 +28,8 @@ func enemy_bullet_spawn(type, x, y) EnemyBullet*:
         b.* = {}
         b.alive = true
         b.type = type
-        b.x = x
-        b.y = y
+        b.sx = x * SP
+        b.sy = y * SP
         return b
     return null
 
@@ -40,24 +40,27 @@ func enemy_bullet_update_all():
     for b in enemy_bullets:
         if not b.alive: continue
 
-        if b.type == ENEMY_BULLET_TYPE_BASIC:
-            b.x += b.vx
-            b.y += b.vy
+        var x = b.sx / SP
+        var y = b.sy / SP
 
-            if not box_has_point(view, b.x, b.y):
+        if b.type == ENEMY_BULLET_TYPE_BASIC:
+            b.sx += b.vx
+            b.sy += b.vy
+
+            if not box_has_point(view, x, y):
                 b.alive = 0
                 continue
 
             var dir = b.vx > 0 ? DIR_RIGHT : DIR_LEFT
-            var o = level_test(b.x, b.y, dir)
+            var o = level_test(x, y, dir)
             if o:
                 b.alive = false
-                particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
+                particle_spawn(PARTICLE_TYPE_FLASH, x + o, y)
                 play_sound(SOUND_BULLET_WALL)
                 continue
 
             if hero.state == HERO_STATE_NORMAL:
-                if box_has_point(hero.box, b.x, b.y):
+                if box_has_point(hero.box, x, y):
                     b.alive = false
                     hero_set_state(HERO_STATE_DYING)
                     continue
@@ -65,8 +68,10 @@ func enemy_bullet_update_all():
 func enemy_bullet_draw_all():
     for b in enemy_bullets:
         if not b.alive: continue
+        var x = b.sx / SP
+        var y = b.sy / SP
         if b.type == ENEMY_BULLET_TYPE_BASIC:
-            camera_sprite(b.x - (b.vx > 0 ? 5 : 0), b.y, 6, 1,
+            camera_sprite(x - (b.vx > 0 ? 5 : 0), y, 6, 1,
                           0, 32 + 1, 0)
 
 
@@ -115,8 +120,7 @@ func enemy_init_all():
             var x = c * TS
             var y = r * TS
             var t = level_get_tile_at_cr(c, r)
-            # if   t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
-            if   t == 'p': enemy_spawn(ENEMY_TYPE_BUGGER, x, y)
+            if   t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
             elif t == 'b': enemy_spawn(ENEMY_TYPE_BUGGER, x, y)
 
 func enemy_spawn(type, x, y):
@@ -131,6 +135,8 @@ func enemy_spawn(type, x, y):
             e.box.h           = 17
             e.hp              = 2
             e.pace_countdown  = rand(30, 80)
+            e.shoot_countdown = rand(0, 100)
+
 
         elif type == ENEMY_TYPE_BUGGER:
             e.box.w     = 12
@@ -189,7 +195,7 @@ func enemy_update_all():
 
         if e.hit_countdown > 0: e.hit_countdown -= 1
 
-        if e.type == ENEMY_TYPE_PATROL: enemy_patrol_update(e)
+        if   e.type == ENEMY_TYPE_PATROL: enemy_patrol_update(e)
         elif e.type == ENEMY_TYPE_BUGGER: enemy_bugger_update(e)
 
 
@@ -292,7 +298,7 @@ func enemy_patrol_update(e: Enemy*):
         if e.aim_countdown == 5:
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, muzzle_y)
             if b:
-                b.vx = e.facing_left ? -2 : 2
+                b.vx = e.facing_left ? -28 : 28
                 play_sound(SOUND_PATROL_SHOOT)
 
         if e.aim_countdown == 0:

@@ -77,26 +77,26 @@ var SOUND_BULLET_WALL: SoundEffect = {
     },
 }
 
-var SOUND_JUMP: SoundEffect = {
+var SOUND_HERO_JUMP: SoundEffect = {
     1, {
-        SND_VOL, 50,
-        SND_WAVE, WAVE_PULSE,
-        SND_PW, 32, 0,
-        SND_PITCH, 44 * 8,
-        1,
-        SND_VOL_SLIDE, 0, 30,
-        SND_PITCH_INC, 4 * 8,
-        1,
-        SND_PITCH_INC, 4 * 8,
+        SND_VOL, 10,
+        SND_VOL_SLIDE, 50, 50,
+        SND_WAVE, WAVE_SAW,
+        SND_PITCH, 45 * 8,
         SND_LOOP,
         1,
-        SND_PITCH_INC, 4,
+        SND_PITCH_INC, 6,
         SND_END,
     },
+    {
+        3,
+        SND_VOL_SLIDE, 0, 20,
+        SND_END,
+    }
 }
 
 var SOUND_BUGGER_JUMP: SoundEffect = {
-    1, {
+    3, {
         SND_VOL, 50,
         SND_WAVE, WAVE_PULSE,
         SND_PW, 32, 0,
@@ -370,9 +370,7 @@ func update_vol(v: Voice*):
     if v.vol == v.vol_target: return
 
     var d = abs(v.vol - v.vol_target)
-    var step = d * v.vol_rate / 64
-    if step < 1: step = 1
-
+    var step = max(1, d * v.vol_rate / 64)
     if v.vol < v.vol_target:
         v.vol = min(v.vol + step, v.vol_target)
     else:

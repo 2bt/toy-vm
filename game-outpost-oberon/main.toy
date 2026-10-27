@@ -1,6 +1,7 @@
 include "api.toy"
 include "util.toy"
 include "sound.toy"
+include "music.toy"
 include "game.toy"
 
 
@@ -8,11 +9,12 @@ var is_initialized
 
 func tick():
     if not is_initialized:
-        game_init()
         is_initialized = true
+        game_init()
 
     game_update()
     game_draw()
     sound_update()
+    music_update()
 
     not_prev_input = -1-input

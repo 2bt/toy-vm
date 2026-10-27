@@ -1,13 +1,16 @@
 var MUSIC1_DATA = "
 
-$0 a100 d0 s100 r20 N=80,Pp30w2~0
+$0 a100 d0 s100 r20 N=80,PW30w2~0
 $1 a100s100r40 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
-$2 a100d15s100 N=70,Pp128=44,=42s0,N=70,P=41,N=70
+$2 a100d15s100 N=70,PW128=44,=42s0,N=70,P=41,N=70
 $3 a100s100r40 T=90,~0
+$4 a30d30s50r10 PW128~0w1,~12,,,,,,,,,,,,,,,,V5v25
 
 @0 t14 v80 q2 o2 i0
-    c,=,>c,<c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
+    c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
     c,=,>c,<c,=,c,>c,=,,<c,>*20c<,g>,d,c,<a+,c,
+    c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
+    c,=,>c,<c,=,c,>c,=,,<c,>c<,c,g,a+,<a+,c>,
 
 @1 t7 v100 o5
     i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
@@ -15,11 +18,25 @@ $3 a100s100r40 T=90,~0
     i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
     i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,c,
 
+@2 v100 t14 o4 i4 q2
+    ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+    ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+    ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+    ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+    a+,,,,,,,,a,,,,,,,f,g,c,=,,,,,, ,,,,,,,,
+    # a+,,,,,,,,a,,,,,,,f,g,>c,=,c,=,,,, ,,,,,,,,
+    a+,,,,,,,,a,,,,,,,f,g,>c,=,c,=,,,, ,,,,,,,t7c,d,t14
+    d+,,,,,,,,f,,,,,,,, g,c,=,,,,,, ,,,,,,,,
+    d+,,,,,,f,,d,,,,,,,<a+, a+,>c,=,c,=,,, ,,,,,,,,,
 "
 
 
 func skip_space(p: int**):
     while p.*.* == ' ' or p.*.* == '\n': p.* += 1
+
+func skip_line(p: int**):
+    while p.*.* and p.*.* != '\n': p.* += 1
+    if p.*.*: p.* += 1
 
 func isdigit(c) int:
     return c >= '0' and c <= '9'
@@ -78,6 +95,10 @@ struct NoteStream:
     pw
     pw_rate
 
+    vib_pos
+    vib_rate
+    vib_depth
+
 
 
 var instruments: int*[32]
@@ -86,16 +107,19 @@ var note_streams: NoteStream[4]
 
 func music_play(music: int*):
     for n in instruments: n.* = null
-    for s in note_streams: s.* = {}
+    for s in note_streams:
+        s.* = {}
+        s.next_note = NOTE_OFF
     var c
     var i
     var p = music
     while p.*:
         c = p.*
         p += 1
-        if c == '$':
+        if c == '#': skip_line(p)
+        elif c == '$':
             i = read_num(p)
-            instruments[i] = p
+            if i < instruments.len: instruments[i] = p
         elif c == '@':
             i = read_num(p)
             if i < note_streams.len and not note_streams[i].start:
@@ -130,6 +154,7 @@ func music_read_row(v: NoteStream*) int:
             continue
         v.pos += 1
         if   c == ' ' or c == '\n':
+        elif c == '#': skip_line(v.pos)
         elif c == ',': break
         elif c == 'v': v.next_volume = read_num(v.pos)
         elif c == 't': v.next_wait   = read_num(v.pos)
@@ -176,18 +201,19 @@ func music_update():
 
 
         # instrument
-        v.pitch = v.pitch
         var s = &v.instr_stream
         while s.pos and s.pos.*:
             var c = s.pos.*
             s.pos += 1
-            if   c == ' ': continue
-            elif c == 'a': v.attack  = read_num(s.pos)
-            elif c == 'd': v.decay   = read_num(s.pos)
-            elif c == 's': v.sustain = read_num(s.pos)
-            elif c == 'r': v.release = read_num(s.pos)
-            elif c == 'p': v.pw      = read_num(s.pos)
-            elif c == 'w': v.pw_rate = read_num(s.pos)
+            if   c == ' ':
+            elif c == 'a': v.attack    = read_num(s.pos)
+            elif c == 'd': v.decay     = read_num(s.pos)
+            elif c == 's': v.sustain   = read_num(s.pos)
+            elif c == 'r': v.release   = read_num(s.pos)
+            elif c == 'W': v.pw        = read_num(s.pos)
+            elif c == 'w': v.pw_rate   = read_num(s.pos)
+            elif c == 'V': v.vib_depth = read_num(s.pos)
+            elif c == 'v': v.vib_rate  = read_num(s.pos)
             elif c == 'T': v.wave = WAVE_TRI
             elif c == 'S': v.wave = WAVE_SAW
             elif c == 'P': v.wave = WAVE_PULSE
@@ -219,8 +245,19 @@ func music_update():
 
         var pitch = v.pitch_offset
         if not v.abs_pitch: pitch += v.pitch
+
+        if v.vib_depth:
+            var x = v.vib_pos % 128
+            if x > 64: x = 128 - x
+            if v.vib_pos >= 128: x = -x
+            pitch += x * v.vib_depth / 64
+
         sound(v.voice_index + 4, pitch, v.pw, v.volume * v.level / 256, v.wave)
 
         # pw sweep
         v.pw += v.pw_rate
         v.pw %= 256
+
+        # vib
+        v.vib_pos += v.vib_rate
+        v.vib_pos %= 256

@@ -91,7 +91,7 @@ func unstick_balls():
     for b in balls:
         if b.state != BALL_STATE_STICKING: continue
         b.state = BALL_STATE_FLYING
-        play_sound(SOUND_UNSTICK)
+        sound_play(SOUND_UNSTICK)
 
 
 func init_stage():
@@ -163,7 +163,7 @@ func block_collision(b: Ball*, axis):
                     n.y = b.y
                     if rand(0, 1) == 0: b.vx *= -1
     if overlap:
-        play_sound(SOUND_BLOCK)
+        sound_play(SOUND_BLOCK)
         if axis == AXIS_X:
             b.vx *= -1
             b.x = ((b.x / Q) + overlap) * Q
@@ -180,7 +180,7 @@ func update_ball(b: Ball*):
     # pad y collision
     var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap:
-        play_sound(SOUND_BING)
+        sound_play(SOUND_BING)
 
         b.y = ((b.y / Q) + overlap) * Q
         if   pad.vy > 0: b.vy = abs(pad.vy)
@@ -202,7 +202,7 @@ func update_ball(b: Ball*):
     # pad collision
     overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap:
-        play_sound(SOUND_BING)
+        sound_play(SOUND_BING)
 
         b.x    = ((b.x / Q) + overlap) * Q
         b.spin = pad.vy
@@ -224,7 +224,7 @@ func update_ball(b: Ball*):
     if b.x > (SCREEN_W - BALL_W - BORDER) * Q:
         b.x = (SCREEN_W - BALL_W - BORDER) * Q
         b.vx = -abs(b.vx)
-        play_sound(SOUND_BING)
+        sound_play(SOUND_BING)
 
     # move y
     if b.state != BALL_STATE_STICKING: b.y += b.vy
@@ -240,11 +240,11 @@ func update_ball(b: Ball*):
         if abs(b.vx) < 100:
             if b.vx > 0: b.vx += 10
             if b.vx < 0: b.vx -= 10
-        play_sound(SOUND_BING)
+        sound_play(SOUND_BING)
     if b.y > (SCREEN_H - BALL_W - BORDER) * Q:
         b.y = (SCREEN_H - BALL_W - BORDER) * Q
         b.vy = -abs(b.vy)
-        play_sound(SOUND_BING)
+        sound_play(SOUND_BING)
 
     # die
     if b.x < -BALL_W * Q: b.state = BALL_STATE_DEAD
@@ -289,15 +289,15 @@ func update_stage():
         balls_spinning = 0
         for b in balls: update_ball(b)
         if balls_alive == 0:
-            play_sound(SOUND_DIE)
+            sound_play(SOUND_DIE)
             if lives > 0:
                 lives -= 1
                 new_ball()
             else:
                 game_state = GAME_STATE_DEAD
         if prev_spinning != balls_spinning:
-            if prev_spinning == 0: play_sound(SOUND_SPIN)
-            if balls_spinning == 0: play_sound(SOUND_NOSPIN)
+            if prev_spinning == 0: sound_play(SOUND_SPIN)
+            if balls_spinning == 0: sound_play(SOUND_NOSPIN)
 
         # stage clear
         if blocks_alive <= 0:

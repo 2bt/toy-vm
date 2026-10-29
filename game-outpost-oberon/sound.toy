@@ -307,7 +307,7 @@ struct Voice:
 var voices: Voice[4]
 
 
-func play_sound(e: SoundEffect*):
+func sound_play(e: SoundEffect*):
     var v = &voices[e.voice_index]
     v.cmd_streams = {}
     v.cmd_streams[0].pos = e.start0

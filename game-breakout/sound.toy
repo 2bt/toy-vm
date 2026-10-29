@@ -149,7 +149,7 @@ var sound_effects: SoundEffect[] = {
 }
 
 
-func play_sound(s):
+func sound_play(s):
     var effect: SoundEffect* = sound_effects[s]
     var stream: SoundCommandStream* = sound_command_streams[effect.index]
     stream.pos  = effect.start

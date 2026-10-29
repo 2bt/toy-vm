@@ -56,7 +56,7 @@ func enemy_bullet_update_all():
             if o:
                 b.alive = false
                 particle_spawn(PARTICLE_TYPE_FLASH, x + o, y)
-                play_sound(SOUND_BULLET_WALL)
+                sound_play(SOUND_BULLET_WALL)
                 continue
 
             if hero.state == HERO_STATE_NORMAL:
@@ -238,7 +238,7 @@ func enemy_hit(e: Enemy*):
         enemy_bugger_set_mode(e, BUGGER_MODE_FOLLOW)
 
     if e.hp <= 0: enemy_kill(e)
-    else: play_sound(SOUND_ENEMY_HIT)
+    else: sound_play(SOUND_ENEMY_HIT)
 
 
 func enemy_kill(e: Enemy*):
@@ -246,7 +246,7 @@ func enemy_kill(e: Enemy*):
     e.hit_countdown = 20
     e.vx = 0
     e.vy = 0
-    play_sound(SOUND_ENEMY_DIE)
+    sound_play(SOUND_ENEMY_DIE)
 
 
 
@@ -293,13 +293,13 @@ func enemy_patrol_update(e: Enemy*):
     if e.aim_countdown > 0:
         e.aim_countdown -= 1
         if e.aim_countdown == 19:
-            play_sound(SOUND_CHARGE)
+            sound_play(SOUND_CHARGE)
             particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
         if e.aim_countdown == 5:
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, muzzle_y)
             if b:
                 b.vx = e.facing_left ? -28 : 28
-                play_sound(SOUND_PATROL_SHOOT)
+                sound_play(SOUND_PATROL_SHOOT)
 
         if e.aim_countdown == 0:
             e.burst_left -= 1
@@ -445,7 +445,7 @@ func enemy_bugger_update(e: Enemy*):
                     e.vy = -jump
                     e.on_ground = false
                     e.ground_frames = 0
-                    play_sound(SOUND_BUGGER_JUMP)
+                    sound_play(SOUND_BUGGER_JUMP)
 
         e.vx = clamp(e.facing_left ? -speed : speed, e.vx - BUGGER_ACCEL, e.vx + BUGGER_ACCEL)
 

@@ -1,16 +1,16 @@
-var MUSIC1_DATA = "
+var MUSIC_LEVEL = "
 $0 a0 d10 s50 r7 N=80,PW30w2~0
 $1 a0 s64 r2 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
 $2 a0 d5 s64 N=70,PW128=44,=42s0,N=70,P=41,N=70
 $3 a0 s64 r3 T=90,~0
 
-@0 t14 v80 q2 o2 i0 |
+@0 t14 v51 q2 o2 i0 |
 c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
 c,=,>c,<c,=,<a+,*20>c,=,,c,>*20c<,g>,d,c,t7<a+,b,t14>c<,
 c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
 c,=,>c,<c,=,<a+,*20>c,=,,c,>c<,c,g,a+,<a+,b>,
 
-@1 t7 v100 o5 q2 |
+@1 t7 v64 o5 q2 |
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
@@ -23,9 +23,9 @@ i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,c,
 
-$4 a16 d12 s0 r4 PW128~0w1V0,~12,60V6v25
-$5 a1  d3 s30 r20 PW128~0w1V0,~12,60V6v25
-@2 v100 t14 o4 q2 |
+$4 a16 d12 s0 r4 PW128~0w1Y0,~12,60Y6y25
+$5 a1  d3 s30 r20 PW128~0w1Y0,~12,60Y6y25
+@2 v64 t14 o4 q2 |
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
@@ -38,34 +38,10 @@ i4 d+,,,,,,f,,d,,,,,,,i5 <a+, a+,>c,=,c<,=,,, ,,,,,,,,,
 $6 a14 d6 s45 r11 T|~0,,~7,,~10,,~15,,
 $7 a14 d6 s45 r11 T|~0,,~7,,~14,,~19,,
 $8 a14 d6 s45 r18 T|~0,,~7,,~14,,~19,,
-@3 v100 t14 o5 |
+@3 v64 t14 o5 |
 i6c,,,,= ,,,, i7c--,,,,= ,,,,
 i8c,,,,= ,,,, ,,,, ,,,,
 "
-
-
-func skip_space(p: int**):
-    while p.*.* == ' ' or p.*.* == '\n': p.* += 1
-
-func skip_line(p: int**):
-    while p.*.* and p.*.* != '\n': p.* += 1
-    if p.*.*: p.* += 1
-
-func isdigit(c) int:
-    return c >= '0' and c <= '9'
-
-func read_num(p: int**) int:
-    var n = 0
-    var minus = false
-    while p.*.* == '-':
-        minus = not minus
-        p.* += 1
-    while isdigit(p.*.*):
-        n = n * 10 + p.*.* - '0'
-        p.* += 1
-    skip_space(p)
-    return minus ? -n : n
-
 
 struct InstrStream:
     pos: int*
@@ -88,6 +64,7 @@ struct NoteStream:
 
     quant
     volume
+    instr_vol
     porta
     pitch
     porta_pitch
@@ -112,17 +89,39 @@ struct NoteStream:
     vib_rate
     vib_depth
 
-
-
 var instruments: int*[32]
 var note_streams: NoteStream[4]
+var music_volume = 32
 
+
+func skip_space(p: int**):
+    while p.*.* == ' ' or p.*.* == '\n': p.* += 1
+
+func skip_line(p: int**):
+    while p.*.* and p.*.* != '\n': p.* += 1
+    if p.*.*: p.* += 1
+
+func isdigit(c) int:
+    return c >= '0' and c <= '9'
+
+func read_num(p: int**) int:
+    var n = 0
+    var minus = false
+    while p.*.* == '-':
+        minus = not minus
+        p.* += 1
+    while isdigit(p.*.*):
+        n = n * 10 + p.*.* - '0'
+        p.* += 1
+    skip_space(p)
+    return minus ? -n : n
 
 func music_play(music: int*):
     for n in instruments: n.* = null
     for s in note_streams:
         s.* = {}
-        s.next_note = NOTE_OFF
+        s.next_note   = NOTE_OFF
+        s.next_volume = 64
     var c
     var i
     var p = music
@@ -190,7 +189,6 @@ func music_read_row(v: NoteStream*) int:
     return true
 
 
-
 func music_update():
     for v in note_streams:
         if not v.pos: continue
@@ -205,7 +203,10 @@ func music_update():
                     v.pitch        = v.porta_pitch
                     v.env          = ENV_ATTACK
                     v.level        = 0
+                    v.instr_vol    = 64
                     v.vib_pos      = 0
+                    v.abs_pitch    = false
+                    v.pitch_offset = 0
                     v.instr_stream = { instruments[v.next_instr] }
             v.quant  = v.next_quant
             v.volume = v.next_volume
@@ -227,8 +228,9 @@ func music_update():
                 elif c == 's': v.sustain   = read_num(s.pos) * ENV_PEAK / 64
                 elif c == 'W': v.pw        = read_num(s.pos)
                 elif c == 'w': v.pw_rate   = read_num(s.pos)
-                elif c == 'V': v.vib_depth = read_num(s.pos)
-                elif c == 'v': v.vib_rate  = read_num(s.pos)
+                elif c == 'v': v.instr_vol = read_num(s.pos)
+                elif c == 'Y': v.vib_depth = read_num(s.pos)
+                elif c == 'y': v.vib_rate  = read_num(s.pos)
                 elif c == 'T': v.wave      = WAVE_TRI
                 elif c == 'S': v.wave      = WAVE_SAW
                 elif c == 'P': v.wave      = WAVE_PULSE
@@ -265,7 +267,9 @@ func music_update():
             if v.vib_pos >= 128: x = -x
             pitch += x * v.vib_depth / 64
 
-        sound(v.voice_index + 4, pitch, v.pw, v.volume * v.level / ENV_PEAK, v.wave)
+        # var vol = v.volume * v.instr_vol * music_volume * v.level / ENV_PEAK / 64 / 64
+        var vol = v.volume * v.instr_vol * v.level / (ENV_PEAK * 64)
+        sound(v.voice_index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
 
         # pw sweep
         v.pw += v.pw_rate

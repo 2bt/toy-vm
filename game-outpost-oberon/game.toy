@@ -74,6 +74,8 @@ func camera_return_toward_spawn():
     camera.box.y += dy
 
 
+
+
 include "level.toy"
 include "particle.toy"
 include "enemy.toy"
@@ -87,6 +89,19 @@ include "hero.toy"
 func game_init():
     hero_init()
     game_load_level(0)
+
+func game_set_state(s):
+    game.state = s
+    if s == GAME_STATE_LEVEL:
+        game.countdown = LEVEL_CARD_FRAMES
+    elif s == GAME_STATE_PLAY:
+        music_play(MUSIC_LEVEL)
+    elif s == GAME_STATE_LEVEL_DONE:
+        game.countdown = LEVEL_DONE_FRAMES
+        music_play("")
+    elif s == GAME_STATE_GAME_OVER:
+        sound_play(SOUND_GAME_OVER)
+        music_play("")
 
 
 func game_load_level(n):
@@ -102,26 +117,22 @@ func game_load_level(n):
     for eb in enemy_bullets: eb.* = {}
     for p in particles: p.* = {}
 
-    game.state     = GAME_STATE_LEVEL
-    game.countdown = LEVEL_CARD_FRAMES
+    game_set_state(GAME_STATE_LEVEL)
 
 
 func game_update():
     if game.state == GAME_STATE_LEVEL:
         if game.countdown > 0: game.countdown -= 1
-        else:
-            game.state = GAME_STATE_PLAY
-            music_play(MUSIC1_DATA)
+        else: game_set_state(GAME_STATE_PLAY)
         return
 
     if game.state == GAME_STATE_LEVEL_DONE:
         if game.countdown > 0: game.countdown -= 1
         else:
             if game.level + 1 < LEVEL_COUNT: game_load_level(game.level + 1)
-            else: game.state = GAME_STATE_WIN
+            else: game_set_state(GAME_STATE_WIN)
         # world still ticks below (blend-to-black later)
     elif game.state == GAME_STATE_GAME_OVER or game.state == GAME_STATE_WIN:
-        music_play("")
         if btnp(BTN_A):
             game_init()
 

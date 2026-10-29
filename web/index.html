@@ -419,7 +419,7 @@ class ToyAPU extends AudioWorkletProcessor {
   constructor() {
     super();
     this.voices = Array.from({ length: VOICES }, () => ({
-      pitch: 0, pw: 0, vol: 0, wave: 0, phase: 0, noise: 0, shift: 1234567,
+      pitch: 0, pw: 0, vol: 0, vol_target: 0, wave: 0, phase: 0, noise: 0, shift: 1234567,
     }));
     this.inputs = null;
     this.sample = 0;
@@ -434,7 +434,7 @@ class ToyAPU extends AudioWorkletProcessor {
       const p = Math.min(800, Math.max(0, m.pitch));
       v.pitch = Math.pow(2, (p * (1 / 8) - 57) * (1 / 12)) * (440 / sampleRate);
       v.pw = (m.pw % 256) / 256;
-      v.vol = Math.min(1, Math.max(0, m.vol * (1 / 256))) * 0.5;
+      v.vol_target = Math.min(1, Math.max(0, m.vol * (1 / 256))) * 0.5;
       v.wave = m.wave;
       if (v.wave === NOISE) v.pitch *= 8;
     }
@@ -459,6 +459,7 @@ class ToyAPU extends AudioWorkletProcessor {
           }
           s = v.noise;
         }
+        v.vol += (v.vol_target - v.vol) * 0.02;
         x += s * v.vol;
       }
       out[i] = x;

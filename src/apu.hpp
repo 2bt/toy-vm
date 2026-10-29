@@ -75,9 +75,9 @@ private:
             VoiceInput const& m = m_voice_inputs[i];
             int p = std::clamp(m.pitch, 0, 800);
             v.pitch = std::exp2f((p * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
-            v.pw    = (m.pw % 256) * (1.0f / 256.0f);
-            v.vol   = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f) * 0.5f;
-            v.wave  = m.wave;
+            v.pw         = (m.pw % 256) * (1.0f / 256.0f);
+            v.vol_target = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f) * 0.5f;
+            v.wave       = m.wave;
             if (v.wave == NOISE) v.pitch *= 8.0f;
         }
     }
@@ -109,6 +109,7 @@ private:
                     }
                     x = v.noise;
                 }
+                v.vol += (v.vol_target - v.vol) * 0.02f;
                 out[i] += x * v.vol;
             }
         }
@@ -118,6 +119,7 @@ private:
         float    pitch{};
         float    pw{};
         float    vol{};
+        float    vol_target{};
         int      wave{};
         float    phase{};
         float    noise{};

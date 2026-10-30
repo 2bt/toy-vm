@@ -143,7 +143,7 @@ for p in items:     # p is a pointer walking the array
 ```
 
 `break` / `continue` work in loops.
-Ternary: `cond ? a : b`.
+Ternary: `cond ? a : b`. GNU form `cond ?: b` reuses `cond`'s value (evaluated once).
 
 ### Expressions
 

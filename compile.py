@@ -115,7 +115,7 @@ Copy     = namedtuple("Copy",     "a b n")
 InitList = namedtuple("InitList", "items")  # items: InitList | (expr, type)
 Block    = namedtuple("Block",    "stmts")
 Not      = namedtuple("Not",      "expr")
-Cond     = namedtuple("Cond",     "cond then els")  # c ? a : b
+Cond     = namedtuple("Cond",     "cond then els")  # c ? a : b  (then=None → c ?: b)
 Call     = namedtuple("Call",     "name setup")  # Block filling formals, then jsr
 While    = namedtuple("While",    "cond body")
 For      = namedtuple("For",      "init cond next body")
@@ -793,12 +793,13 @@ class Parser:
             a = BinOp(op, a, b)
         if minp <= PRECEDENCE["or"] and self.peek("?"):
             if not is_cond(ta): self.error("bad type")
-            self.eat("?")
-            b, tb = self.expr()
+            self.eat()
+            if self.peek(":"): b, tb = None, ta
+            else:              b, tb = self.expr()
             self.eat(":")
             c, tc = self.expr()
             if tb != tc or is_aggregate(tb): self.error("type error")
-            if isinstance(a, Imm): return (b if a.value else c), tb
+            if isinstance(a, Imm): return ((b if b is not None else a) if a.value else c), tb
             return Cond(a, b, c), tb
         return a, ta
 
@@ -1215,9 +1216,16 @@ class Codegen:
 
         if isinstance(node, Cond):
             t = self.newtmp()
+            E = self.label("done")
+            if node.then is None:
+                # c ?: e — mov sets flags; keep value in t for the then path
+                self.emit(f"    mov {t}, {self.value(node.cond)}")
+                self.emit(f"    jne {E}")
+                self.emit(f"    mov {t}, {self.value(node.els)}")
+                self.emit_label(E)
+                return t
             T = self.label("then")
             F = self.label("else")
-            E = self.label("done")
             self.branch(node.cond, T, F)
             self.emit_label(T)
             self.emit(f"    mov {t}, {self.value(node.then)}")

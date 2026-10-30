@@ -158,6 +158,29 @@ class ExecTests(unittest.TestCase):
                 print_n(n)
         """), "2\n3\n6\n2\n4\n8\n1\n1\n7\n1\n")
 
+    def test_elvis(self):
+        # GNU ?: — omit middle; condition value reused, evaluated once.
+        self.assertEqual(self.run_toy("""
+            var n = 0
+            func inc():
+                n += 1
+                return n
+            func zero():
+                n += 1
+                return 0
+            func tick():
+                print_n(5 ?: 9)
+                print_n(0 ?: 9)
+                var a = 4
+                print_n(a ?: 9)
+                a = 0
+                print_n(a ?: 9)
+                print_n(inc() ?: 9)
+                print_n(n)
+                print_n(zero() ?: 7)
+                print_n(n)
+        """), "5\n9\n4\n9\n1\n1\n7\n2\n")
+
     def test_call_and_add(self):
         self.assertEqual(self.run_toy("""
             func add(a, b):

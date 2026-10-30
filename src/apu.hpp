@@ -22,28 +22,31 @@ public:
 
     static constexpr int MIXRATE = 48000;
     static constexpr int VOICES  = 8;
+    using VoiceInputs = std::array<VoiceInput, VOICES>;
 
     static void callback(void* u, uint8_t* stream, int bytes) {
-        constexpr int SAMPLES_PER_FRAME = MIXRATE / 60;
         APU& apu = *(APU*)u;
         float* buffer = (float*)stream;
         int    length = bytes / sizeof(float);
         while (length > 0) {
             static int sample = 0;
             if (sample == 0) apu.config_voices();
-            int step = std::min(SAMPLES_PER_FRAME - sample, length);
+            int step = std::min(apu.m_frame_samples - sample, length);
             apu.mix(buffer, step);
             apu.capture(buffer, step);
             buffer += step;
             length -= step;
             sample += step;
-            if (sample == SAMPLES_PER_FRAME) sample = 0;
+            if (sample == apu.m_frame_samples) sample = 0;
         }
     }
 
-    void next_frame(std::array<VoiceInput, VOICES>const& voice_inputs) {
+    void next_frame(VoiceInputs const& voice_inputs) {
         std::lock_guard<std::mutex> lock(m_mtx);
-        m_voice_inputs = voice_inputs;
+        m_queue[m_write] = voice_inputs;
+        m_write = (m_write + 1) % m_queue.size();
+        if (m_count < m_queue.size()) m_count++;
+        else m_read = (m_read + 1) % m_queue.size(); // full: drop oldest
     }
 
     void begin_capture() {
@@ -70,9 +73,18 @@ private:
 
     void config_voices() {
         std::lock_guard<std::mutex> lock(m_mtx);
+        if (m_count == 0) {
+            m_frame_samples = MIXRATE / 180; // underrun: re-check sooner
+            return;
+        }
+        // drain a little faster when queue is full, else nominal 60 Hz
+        m_frame_samples = m_count >= m_queue.size() ? MIXRATE / 70 : MIXRATE / 60;
+        VoiceInputs const& in = m_queue[m_read];
+        m_read = (m_read + 1) % m_queue.size();
+        m_count--;
         for (size_t i = 0; i < m_voices.size(); ++i) {
             Voice&            v = m_voices[i];
-            VoiceInput const& m = m_voice_inputs[i];
+            VoiceInput const& m = in[i];
             int p = std::clamp(m.pitch, 0, 800);
             v.pitch = std::exp2f((p * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
             v.pw         = (m.pw % 256) * (1.0f / 256.0f);
@@ -125,11 +137,15 @@ private:
         float    noise{};
         uint32_t shift = 1234567;
     };
-    std::array<Voice, VOICES>      m_voices{};
-    std::array<VoiceInput, VOICES> m_voice_inputs{};
-    std::mutex                     m_mtx{};
+    std::array<Voice, VOICES>  m_voices{};
+    std::array<VoiceInputs, 2> m_queue{};
+    size_t                     m_read{};
+    size_t                     m_write{};
+    size_t                     m_count{};
+    int                        m_frame_samples = MIXRATE / 60;
+    std::mutex                 m_mtx{};
 
-    std::mutex                     m_cap_mtx{};
-    bool                           m_capturing{};
-    std::vector<float>             m_capture{};
+    std::mutex                 m_cap_mtx{};
+    bool                       m_capturing{};
+    std::vector<float>         m_capture{};
 };

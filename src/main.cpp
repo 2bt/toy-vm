@@ -81,12 +81,12 @@ SDL_Texture* load_texture(SDL_Renderer* renderer, std::string file) {
 }
 
 
-VM                                       vm;
-MemMap&                                  mem = *(MemMap*)vm.mem.data();
-std::array<APU::VoiceInput, APU::VOICES> voice_inputs{};
-APU                                      apu;
-SDL_Renderer*                            renderer;
-SDL_Texture*                             sprites;
+VM               vm;
+MemMap&          mem = *(MemMap*)vm.mem.data();
+APU::VoiceInputs voice_inputs{};
+APU              apu;
+SDL_Renderer*    renderer;
+SDL_Texture*     sprites;
 
 
 

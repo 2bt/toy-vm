@@ -1,47 +1,55 @@
 var MUSIC_LEVEL = "
-$0 a0 d10 s50 r7 N=80,PW30w2~0
+$0 a0 d10 s50 r7 v50 N=80,PW30w2~0
 $1 a0 s64 r2 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
 $2 a0 d5 s64 N=70,PW128=44,=42s0,N=70,P=41,N=70
 $3 a0 s64 r3 T=90,~0
-
-@0 t14 v51 q2 o2 i0 |
-c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
-c,=,>c,<c,=,<a+,*20>c,=,,c,>*20c<,g>,d,c,t7<a+,b,t14>c<,
+@0 q2 o2 i0 |
+c,14=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
+c,=,>c,<c,=,<a+,*20>c,=,,c,>*20c<,g>,d,c,<a+,7b,>c<,14
 c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
 c,=,>c,<c,=,<a+,*20>c,=,,c,>c<,c,g,a+,<a+,b>,
 
-@1 t7 v64 o5 q2 |
+@1 o5 q2 |
+,7,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,c,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,v40c,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
+v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,v40c,
 
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
-i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,c,
-
-$4 a16 d12 s0 r4 PW128~0w1Y0,~12,60Y6y25
-$5 a1  d3 s30 r20 PW128~0w1Y0,~12,60Y6y25
-@2 v64 t14 o4 q2 |
+$4 a16 d12 s0 r4 PW128~0w1Y0,~12,40Y6y25
+$5 a1  d3 s30 r20 PW128~0w1Y0,~12,40Y6y25
+@2 o4 q2 |
+,14,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
-i4 a+,,,,,,,,a,,,,,,, i5 f,g,c,=,,,,,, ,,,,,,,,
-i4 a+,,,,,,,,a,,,,,,, i5 f,g,>c,=,c,=,,,, ,,,,,,,t7c,d,t14
-i4 *99d+,,,,,,,,f,,,,,,,, i5 g,c,=,,,,,, ,,,,,,,,
-i4 d+,,,,,,f,,d,,,,,,,i5 <a+, a+,>c,=,c<,=,,, ,,,,,,,,,
+i4a+,,,,,,,,a,,,,,,, i5f,g,c,=,,,,,, ,,,,,,,,
+i4a+,,,,,,,,a,,,,,,, i5f,g,>c,=,c,=,,,, ,,,,,,,c,7d,
+i5d+,14,,,,,,,i4f,,,,,,,, i5g,c,=,,,,,, ,,,,,,,,
+i4d+,,,,,,f,,d,,,,,,,i5<a+, a+,>c,=,c<,=,,, ,,,,,,,,,
 
 $6 a14 d6 s45 r11 T|~0,,~7,,~10,,~15,,
 $7 a14 d6 s45 r11 T|~0,,~7,,~14,,~19,,
 $8 a14 d6 s45 r18 T|~0,,~7,,~14,,~19,,
-@3 v64 t14 o5 |
-i6c,,,,= ,,,, i7c--,,,,= ,,,,
+@3 o5 |
+i6c,14,,,= ,,,, i7c--,,,,= ,,,,
 i8c,,,,= ,,,, ,,,, ,,,,
 "
+
+var MUSIC_GAME_OVER = "
+$0 a0 d12 s64 r10 T |~0,4~-8,4~-16,4~-24,4
+@0 v150 i0 o4 c,4=,100,,,
+
+$1 a3 d12 s0 N|~0,,~16,,
+@1 i1 o1 c,100,,,,
+"
+
+
 
 struct InstrStream:
     pos: int*
@@ -49,11 +57,10 @@ struct InstrStream:
     wait
 
 struct NoteStream:
-    voice_index
+    index
     pos: int*
     loop: int*
 
-    skip
     octave
     next_note
     next_wait
@@ -67,7 +74,7 @@ struct NoteStream:
     instr_vol
     porta
     pitch
-    porta_pitch
+    pitch_target
 
     wait
     env
@@ -101,30 +108,24 @@ func skip_line(p: int**):
     while p.*.* and p.*.* != '\n': p.* += 1
     if p.*.*: p.* += 1
 
-func isdigit(c) int:
-    return c >= '0' and c <= '9'
-
 func read_num(p: int**) int:
     var n = 0
     var minus = false
     while p.*.* == '-':
         minus = not minus
         p.* += 1
-    while isdigit(p.*.*):
+    while p.*.* >= '0' and p.*.* <= '9':
         n = n * 10 + p.*.* - '0'
         p.* += 1
     skip_space(p)
     return minus ? -n : n
 
-func music_play(music: int*):
+
+func music_play(p: int*):
     for n in instruments: n.* = null
-    for s in note_streams:
-        s.* = {}
-        s.next_note   = NOTE_OFF
-        s.next_volume = 64
+    for s in note_streams: s.* = {}
     var c
     var i
-    var p = music
     while p.*:
         c = p.*
         p += 1
@@ -134,9 +135,14 @@ func music_play(music: int*):
             if i < instruments.len: instruments[i] = p
         elif c == '@':
             i = read_num(p)
-            if i < note_streams.len and not note_streams[i].pos:
-                note_streams[i].voice_index = i
-                note_streams[i].pos         = p
+            if i < note_streams.len:
+                s = note_streams[i]
+                if not s.pos:
+                s.pos         = p
+                s.index       = i
+                s.next_note   = NOTE_OFF
+                s.next_volume = 64
+                s.octave      = 4
 
 
 const NOTE_EMPTY = -1
@@ -154,30 +160,16 @@ func music_read_row(v: NoteStream*) int:
     v.next_note  = NOTE_EMPTY
     v.next_porta = 0
 
-    while v.pos:
-        if v.skip:
-            while v.pos.* and v.pos.* != '@': v.pos += 1
-            if not v.pos.*:
-                v.skip = false
-                v.pos = v.loop
-                continue
-            v.pos += 1
-            if read_num(v.pos) != v.voice_index: continue
-            v.skip = false
+    while true:
         var c = v.pos.*
-        if c == '\0':
-            v.pos = v.loop
-            continue
         v.pos += 1
         if   c == ' ' or c == '\n':
         elif c == '|': v.loop = v.pos
         elif c == '#': skip_line(v.pos)
-        elif c == ',': break
         elif c == 'v': v.next_volume = read_num(v.pos)
-        elif c == 't': v.next_wait   = read_num(v.pos)
         elif c == 'i': v.next_instr  = read_num(v.pos)
         elif c == 'q': v.next_quant  = read_num(v.pos)
-        elif c == '*': v.next_porta  = read_num(v.pos)
+        elif c == '*': v.next_porta  = read_num(v.pos) ?: 9999
         elif c == 'o': v.octave      = read_num(v.pos)
         elif c == '<': v.octave -= 1
         elif c == '>': v.octave += 1
@@ -185,8 +177,20 @@ func music_read_row(v: NoteStream*) int:
         elif c == '-': v.next_note -= 1
         elif c == '=': v.next_note = NOTE_OFF
         elif c >= 'a' and c <= 'g': v.next_note = stridx("c d ef g a b", c) + 12 * v.octave
-        else: v.skip = true
-    return true
+        elif c == ',':
+            v.next_wait = read_num(v.pos) ?: v.next_wait
+            return true
+        else:
+            # skip
+            while true:
+                if c == '\0':
+                    v.pos = v.loop
+                    if not v.pos: return false
+                    break
+                if c == '@' and read_num(v.pos) == v.index:
+                    break
+                c = v.pos.*
+                v.pos += 1
 
 
 func music_update():
@@ -198,9 +202,9 @@ func music_update():
         if v.wait <= 0:
             v.wait = v.next_wait
             if v.next_note >= 0:
-                v.porta_pitch = v.next_note * 8
+                v.pitch_target = v.next_note * 8
                 if v.next_porta == 0:
-                    v.pitch        = v.porta_pitch
+                    v.pitch        = v.pitch_target
                     v.env          = ENV_ATTACK
                     v.level        = 0
                     v.instr_vol    = 64
@@ -217,37 +221,39 @@ func music_update():
 
         # instrument
         var s = &v.instr_stream
-        if s.pos and s.wait <= 0:
-            while s.pos.*:
-                var c = s.pos.*
-                s.pos += 1
-                if   c == ' ':
-                elif c == 'a': v.attack    = env_step(read_num(s.pos))
-                elif c == 'd': v.decay     = ENV_PEAK - env_step(read_num(s.pos))
-                elif c == 'r': v.release   = ENV_PEAK - env_step(read_num(s.pos))
-                elif c == 's': v.sustain   = read_num(s.pos) * ENV_PEAK / 64
-                elif c == 'W': v.pw        = read_num(s.pos)
-                elif c == 'w': v.pw_rate   = read_num(s.pos)
-                elif c == 'v': v.instr_vol = read_num(s.pos)
-                elif c == 'Y': v.vib_depth = read_num(s.pos)
-                elif c == 'y': v.vib_rate  = read_num(s.pos)
-                elif c == 'T': v.wave      = WAVE_TRI
-                elif c == 'S': v.wave      = WAVE_SAW
-                elif c == 'P': v.wave      = WAVE_PULSE
-                elif c == 'N': v.wave      = WAVE_NOISE
-                elif c == '=' or c == '~':
-                    v.pitch_offset = read_num(s.pos) * 8
-                    v.abs_pitch    = c == '='
-                elif c == '|': s.loop = s.pos
-                elif c == ',':
-                    s.wait = max(1, read_num(s.pos)) -1
-                    break
-                else:
-                    s.pos = s.loop
-                    if not s.pos:
+        if s.pos:
+            if s.wait <= 0:
+                while true:
+                    var c = s.pos.*
+                    s.pos += 1
+                    if   c == ' ':
+                    elif c == 'v': v.instr_vol = read_num(s.pos)
+                    elif c == 'a': v.attack    = env_step(read_num(s.pos))
+                    elif c == 'd': v.decay     = ENV_PEAK - env_step(read_num(s.pos))
+                    elif c == 'r': v.release   = ENV_PEAK - env_step(read_num(s.pos))
+                    elif c == 's': v.sustain   = read_num(s.pos) * ENV_PEAK / 64
+                    elif c == 'W': v.pw        = read_num(s.pos)
+                    elif c == 'w': v.pw_rate   = read_num(s.pos)
+                    elif c == 'Y': v.vib_depth = read_num(s.pos)
+                    elif c == 'y': v.vib_rate  = read_num(s.pos)
+                    elif c == 'T': v.wave      = WAVE_TRI
+                    elif c == 'S': v.wave      = WAVE_SAW
+                    elif c == 'P': v.wave      = WAVE_PULSE
+                    elif c == 'N': v.wave      = WAVE_NOISE
+                    elif c == '=' or c == '~':
+                        v.pitch_offset = read_num(s.pos) * 8
+                        v.abs_pitch    = c == '='
+                    elif c == '|': s.loop = s.pos
+                    elif c == ',':
+                        s.wait = read_num(s.pos) ?: 1
                         break
+                    else:
+                        s.pos = s.loop
+                        if not s.pos:
+                            break
+            s.wait -= 1
 
-        # adsr (separate ifs so instant attack can enter decay same frame)
+        # adsr
         if v.env == ENV_ATTACK:
             v.level = min(v.level + v.attack, ENV_PEAK)
             if v.level == ENV_PEAK: v.env = ENV_DECAY
@@ -255,21 +261,21 @@ func music_update():
         if v.env == ENV_RELEASE: v.level = v.level * v.release / ENV_PEAK
 
         # portamento
-        if v.pitch != v.porta_pitch:
-            v.pitch = clamp(v.porta_pitch, v.pitch - v.porta, v.pitch + v.porta)
-
+        if v.pitch != v.pitch_target:
+            v.pitch = clamp(v.pitch_target, v.pitch - v.porta, v.pitch + v.porta)
         var pitch = v.pitch_offset
         if not v.abs_pitch: pitch += v.pitch
 
+        # vibrato
         if v.vib_depth:
             var x = v.vib_pos % 128
             if x > 64: x = 128 - x
             if v.vib_pos >= 128: x = -x
             pitch += x * v.vib_depth / 64
 
-        # var vol = v.volume * v.instr_vol * music_volume * v.level / ENV_PEAK / 64 / 64
+        # set APU registers
         var vol = v.volume * v.instr_vol * v.level / (ENV_PEAK * 64)
-        sound(v.voice_index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
+        sound(v.index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
 
         # pw sweep
         v.pw += v.pw_rate

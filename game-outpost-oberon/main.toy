@@ -1,7 +1,7 @@
 include "api.toy"
 include "util.toy"
-include "sound.toy"
 include "music.toy"
+include "sound.toy"
 include "game.toy"
 
 
@@ -14,7 +14,7 @@ func tick():
 
     game_update()
     game_draw()
-    sound_update()
+    sfx_update()
     music_update()
 
     not_prev_input = -1-input

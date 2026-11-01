@@ -58,17 +58,15 @@ func hero_set_state(s):
     hero.state = s
     if s == HERO_STATE_SPAWNING:
         hero.hit_countdown = HERO_SPAWN_FRAMES
-        sound_play(SOUND_SPAWN1)
-        sound_play(SOUND_SPAWN2)
+        sfx_play(SFX_SPAWN)
     elif s == HERO_STATE_DYING:
         hero.hit_countdown = 20
         hero.vx = 0
         hero.vy = 0
-        sound_play(SOUND_HERO_DIE)
+        sfx_play(SFX_EXPLOSION)
     elif s == HERO_STATE_EXITING:
         music_play("")
-        sound_play(SOUND_EXIT1)
-        sound_play(SOUND_EXIT2)
+        sfx_play(SFX_EXIT)
         hero.hit_countdown = HERO_EXIT_FRAMES
         hero.vx = 0
         hero.vy = 0
@@ -78,8 +76,8 @@ func hero_set_state(s):
 
 func hero_place_at_start():
     hero_set_state(HERO_STATE_RETURNING)
-    hero.sx = (level.spawn_x + 5) * SP
-    hero.sy = (level.spawn_y + 5) * SP + SP - 1
+    hero.sx = (level.spawn_x - hero.box.w / 2) * SP
+    hero.sy = level.spawn_y * SP + SP - 1
     hero.box.x = hero.sx / SP
     hero.box.y = hero.sy / SP
     if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
@@ -122,11 +120,11 @@ func hero_bullet_update_all():
         if o:
             b.alive = false
             particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
-            sound_play(SOUND_BULLET_WALL)
+            sfx_play(SFX_BULLET_WALL)
             continue
 
         for e in enemies:
-            if not e.state: continue
+            if e.state != ENEMY_STATE_NORMAL: continue
             if box_has_point(e.box, b.x, b.y):
                 b.alive = false
                 enemy_hit(e)
@@ -205,7 +203,7 @@ func hero_update():
     # jump
     if hero.on_ground and btnp(BTN_A):
         hero.vy = -JUMP_FORCE
-        sound_play(SOUND_HERO_JUMP)
+        sfx_play(SFX_HERO_JUMP)
     elif not btn(BTN_A) and hero.vy < -10: hero.vy = -10
 
     # gravity
@@ -221,7 +219,7 @@ func hero_update():
         o = min(level_test_down(x + 0, y + 10, py + 10),
                 level_test_down(x + 5, y + 10, py + 10))
         if o:
-            if not hero.on_ground: sound_play(SOUND_LAND)
+            if not hero.on_ground: sfx_play(SFX_LAND)
             hero.on_ground = true
             y += o
             hero.sy = y * SP + SP - 1
@@ -244,7 +242,8 @@ func hero_update():
         hero.shoot_countdown -= 1
     elif btn(BTN_B):
         hero.shoot_countdown = 20
-        sound_play(SOUND_HERO_SHOOT)
+        sfx_play(SFX_HERO_SHOOT)
+
         var bx = hero.facing_left ? x - 1 : x + 6
         hero_bullet_spawn(bx, y + 4, hero.facing_left)
 

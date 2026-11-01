@@ -100,8 +100,7 @@ func game_set_state(s):
         game.countdown = LEVEL_DONE_FRAMES
         music_play("")
     elif s == GAME_STATE_GAME_OVER:
-        sound_play(SOUND_GAME_OVER)
-        music_play("")
+        music_play(MUSIC_GAME_OVER)
 
 
 func game_load_level(n):
@@ -176,4 +175,4 @@ func game_draw():
     if game.state == GAME_STATE_GAME_OVER:
         draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, "GAME OVER")
     elif game.state == GAME_STATE_WIN:
-        draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, "COMPLETE")
+        draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, "THE END")

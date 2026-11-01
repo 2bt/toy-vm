@@ -56,7 +56,7 @@ func enemy_bullet_update_all():
             if o:
                 b.alive = false
                 particle_spawn(PARTICLE_TYPE_FLASH, x + o, y)
-                sound_play(SOUND_BULLET_WALL)
+                sfx_play(SFX_BULLET_WALL)
                 continue
 
             if hero.state == HERO_STATE_NORMAL:
@@ -203,7 +203,6 @@ func enemy_draw_all():
     for e in enemies:
         if not e.active: continue
 
-
         if e.state == ENEMY_STATE_DYING and e.hit_countdown & 2: continue
 
         if e.type == ENEMY_TYPE_PATROL:
@@ -211,12 +210,12 @@ func enemy_draw_all():
                           256 + e.frame * 16,
                           0 + (e.hit_countdown > 0) * 32,
                           e.facing_left)
+
         elif e.type == ENEMY_TYPE_BUGGER:
             camera_sprite(e.box.x - 2, e.box.y - 5, 16, 16,
                           256 + e.frame * 16,
                           80 + (e.hit_countdown > 0) * 16,
                           e.facing_left)
-
 
         # box
         # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
@@ -238,7 +237,7 @@ func enemy_hit(e: Enemy*):
         enemy_bugger_set_mode(e, BUGGER_MODE_FOLLOW)
 
     if e.hp <= 0: enemy_kill(e)
-    else: sound_play(SOUND_ENEMY_HIT)
+    else: sfx_play(SFX_ENEMY_HIT)
 
 
 func enemy_kill(e: Enemy*):
@@ -246,7 +245,7 @@ func enemy_kill(e: Enemy*):
     e.hit_countdown = 20
     e.vx = 0
     e.vy = 0
-    sound_play(SOUND_ENEMY_DIE)
+    sfx_play(SFX_EXPLOSION)
 
 
 
@@ -293,13 +292,13 @@ func enemy_patrol_update(e: Enemy*):
     if e.aim_countdown > 0:
         e.aim_countdown -= 1
         if e.aim_countdown == 19:
-            sound_play(SOUND_CHARGE)
+            sfx_play(SFX_CHARGE)
             particle_spawn(PARTICLE_TYPE_CHARGE, muzzle_x, muzzle_y)
         if e.aim_countdown == 5:
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_BASIC, muzzle_x, muzzle_y)
             if b:
                 b.vx = e.facing_left ? -28 : 28
-                sound_play(SOUND_PATROL_SHOOT)
+                sfx_play(SFX_PATROL_SHOOT)
 
         if e.aim_countdown == 0:
             e.burst_left -= 1
@@ -445,7 +444,7 @@ func enemy_bugger_update(e: Enemy*):
                     e.vy = -jump
                     e.on_ground = false
                     e.ground_frames = 0
-                    sound_play(SOUND_BUGGER_JUMP)
+                    sfx_play(SFX_BUGGER_JUMP)
 
         e.vx = clamp(e.facing_left ? -speed : speed, e.vx - BUGGER_ACCEL, e.vx + BUGGER_ACCEL)
 

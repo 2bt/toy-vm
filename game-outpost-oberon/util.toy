@@ -82,6 +82,12 @@ func draw_centered_text(x, y, msg: int*):
     draw_text(x - strlen(msg) * 4, y, msg)
 
 
+
+# Vec
+struct Vec:
+    x
+    y
+
 # box
 struct Box:
     x

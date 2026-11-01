@@ -1,380 +1,124 @@
-const SND_END       = 0
-const SND_PITCH     = 100
-const SND_PITCH_INC = 101
-const SND_VOL       = 102  # vol = vol_target = val; vol_rate = 0
-const SND_VOL_SLIDE = 103  # vol_target, vol_rate (rate: close gap*rate/64 per frame)
-const SND_PW        = 104
-const SND_WAVE      = 105
-const SND_LOOP      = 106
+var SFX_SPAWN = "
+@3 d8 T=53,,=60|,~7,,~7,,~8,,~-21,
+@2 v50 l15a9r9 N=30|f22,
+"
+var SFX_EXIT = "
+@3 d8 T=82,~-8,,,~-8,,,~-6,,,|~22,,~-8,,~-8,,~-6,,
+@2 v50 l15a9r9 N=90|f-14,
+"
+var SFX_LAND         = "@1 v45 d1 N=38,=33,9"
+var SFX_HERO_JUMP    = "@1 v50 l3 s64r2 S=45,|f6,"
+var SFX_HERO_SHOOT   = "@0 d5 W128w4 P=76,=70,|f-18,,f16,"
+var SFX_BULLET_WALL  = "@2 v32d1 N=100,=70,10"
+var SFX_CHARGE       = "@3 l10a10 N=40|,~4"
+var SFX_PATROL_SHOOT = "@0 d5 W20w2 P=80|,~3,~3,~-3,~-3,"
+var SFX_BUGGER_JUMP  = "@3 d3 W32 P=44,~4,~4|f4,"
+var SFX_ENEMY_HIT    = "@2 d3 N=66,T=60,=54,=50,"
+var SFX_EXPLOSION    = "@3 d8 N|=60,~-10,~-10,~-8,,"
+var SFX_CHECKPOINT   = "@3 l99 a5d10 T=44|,,~7,,~8,,~-14"
 
 
-struct SoundEffect:
-    voice_index
-    start0: int*
-    start1: int*
-
-
-var SOUND_HERO_SHOOT: SoundEffect = {
-    0, {
-        SND_PW, 128, 20,
-        SND_VOL, 40,
-        SND_VOL_SLIDE, 0, 10,
-        SND_WAVE, WAVE_PULSE,
-        SND_PITCH, 76 * 8,
-        1,
-        SND_PITCH, 70 * 8,
-        1,
-        SND_LOOP,
-        SND_PITCH_INC, -2 * 8 - 2,
-        2,
-        SND_PITCH_INC, 2 * 8,
-        1,
-        SND_END,
-    },
-}
-
-var SOUND_PATROL_SHOOT: SoundEffect = {
-    0, {
-        SND_PW, 20, 2,
-        SND_VOL, 60,
-        SND_WAVE, WAVE_PULSE,
-        SND_VOL_SLIDE, 0, 8,
-        SND_PITCH, 80 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, 3 * 8,
-        1,
-        SND_PITCH_INC, 3 * 8,
-        1,
-        SND_PITCH_INC, -3 * 8,
-        1,
-        SND_PITCH_INC, -3 * 8,
-        1,
-        SND_END,
-    },
-}
-
-
-
-var SOUND_BULLET_WALL: SoundEffect = {
-    2, {
-        SND_VOL, 30,
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 100 * 8,
-        1,
-        SND_VOL, 20,
-        SND_PITCH, 70 * 8,
-        1,
-        SND_VOL, 0,
-        SND_END,
-    },
-}
-
-var SOUND_HERO_JUMP: SoundEffect = {
-    1, {
-        SND_VOL, 10,
-        SND_VOL_SLIDE, 50, 50,
-        SND_WAVE, WAVE_SAW,
-        SND_PITCH, 45 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, 6,
-        SND_END,
-    },
-    {
-        3,
-        SND_VOL_SLIDE, 0, 20,
-        SND_END,
-    }
-}
-
-var SOUND_BUGGER_JUMP: SoundEffect = {
-    3, {
-        SND_VOL, 50,
-        SND_WAVE, WAVE_PULSE,
-        SND_PW, 32, 0,
-        SND_PITCH, 44 * 8,
-        1,
-        SND_VOL_SLIDE, 0, 30,
-        SND_PITCH_INC, 4 * 8,
-        1,
-        SND_PITCH_INC, 4 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, 4,
-        SND_END,
-    },
-}
-
-var SOUND_LAND: SoundEffect = {
-    1, {
-        SND_VOL, 45,
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 38 * 8,
-        1,
-        SND_VOL, 20,
-        SND_VOL_SLIDE, 0, 30,
-        SND_PITCH, 33 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, -7,
-        SND_END,
-    },
-}
-
-var SOUND_ENEMY_HIT: SoundEffect = {
-    2, {
-        SND_VOL, 60,
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 66 * 8,
-        1,
-        SND_WAVE, WAVE_TRI,
-        SND_PITCH, 60 * 8,
-        1,
-        SND_PITCH, 54 * 8,
-        SND_VOL_SLIDE, 0, 30,
-        1,
-        SND_PITCH, 50 * 8,
-        SND_END,
-    },
-}
-
-var SOUND_ENEMY_DIE: SoundEffect = {
-    3, {
-        SND_VOL, 80,
-        SND_VOL_SLIDE, 0, 5,
-        SND_LOOP,
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 60 * 8,
-        1,
-        SND_PITCH_INC, -10 * 8,
-        1,
-        SND_PITCH_INC, -10 * 8,
-        1,
-        SND_PITCH_INC, -8 * 8,
-        2,
-        SND_END,
-    },
-}
-var SOUND_HERO_DIE = &SOUND_ENEMY_DIE
-
-
-var SOUND_SPAWN1: SoundEffect = {
-    3, {
-        SND_VOL, 50,
-        SND_WAVE, WAVE_TRI,
-        SND_PITCH, 53 * 8,
-        2,
-        SND_PITCH, 60 * 8,
-        SND_LOOP,
-        2,
-        SND_PITCH_INC, 7 * 8,
-        2,
-        SND_PITCH_INC, 7 * 8,
-        2,
-        SND_PITCH_INC, 8 * 8,
-        2,
-        SND_PITCH_INC, -21 * 8,
-        SND_VOL_SLIDE, 0, 5,
-        SND_END,
-    },
-}
-var SOUND_SPAWN2: SoundEffect = {
-    2, {
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 30 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, 22,
-        SND_END,
-    },
-    {
-        SND_VOL, 10,
-        SND_VOL_SLIDE, 40, 20,
-        10,
-        SND_VOL_SLIDE, 0, 5,
-        SND_END,
-    },
-}
-
-
-var SOUND_EXIT1: SoundEffect = {
-    3, {
-        SND_VOL, 50,
-        SND_WAVE, WAVE_TRI,
-        SND_PITCH, 82 * 8,
-        3,
-        SND_PITCH_INC, -8 * 8,
-        3,
-        SND_PITCH_INC, -8 * 8,
-        3,
-        SND_PITCH_INC, -6 * 8,
-        3,
-        SND_PITCH_INC, 22 * 8,
-        SND_VOL_SLIDE, 0, 3,
-        SND_LOOP,
-        2,
-        SND_PITCH_INC, -8 * 8,
-        2,
-        SND_PITCH_INC, -8 * 8,
-        2,
-        SND_PITCH_INC, -6 * 8,
-        2,
-        SND_PITCH_INC, 22 * 8,
-        SND_END,
-    },
-}
-var SOUND_EXIT2: SoundEffect = {
-    2, {
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 90 * 8,
-        SND_LOOP,
-        1,
-        SND_PITCH_INC, -18,
-        SND_END,
-    },
-    {
-        SND_VOL, 10,
-        SND_VOL_SLIDE, 40, 20,
-        10,
-        SND_VOL_SLIDE, 0, 3,
-        SND_END,
-    },
-}
-
-
-var SOUND_GAME_OVER: SoundEffect = {
-    3, {
-        SND_VOL, 60,
-        SND_WAVE, WAVE_TRI,
-        SND_PITCH, 48 * 8,
-        4,
-        SND_PITCH_INC, -8 * 8,
-        4,
-        SND_PITCH_INC, -8 * 8,
-        4,
-        SND_PITCH_INC, -10 * 8,
-        4,
-        SND_VOL_SLIDE, 0, 5,
-        SND_LOOP,
-        SND_PITCH, 48 * 8,
-        4,
-        SND_PITCH_INC, -8 * 8,
-        4,
-        SND_PITCH_INC, -8 * 8,
-        4,
-        SND_PITCH_INC, -10 * 8,
-        4,
-        SND_END,
-    },
-}
-
-var SOUND_CHARGE: SoundEffect = {
-    3, {
-        SND_VOL, 0,
-        SND_VOL_SLIDE, 60, 5,
-        10,
-        SND_VOL, 0,
-        0,
-    },
-    {
-        SND_WAVE, WAVE_NOISE,
-        SND_PITCH, 40 * 8,
-        1,
-        SND_LOOP,
-        SND_PITCH_INC, 4 * 8,
-        1,
-        0,
-    },
-}
-
-
-struct SoundCommandStream:
+struct SfxStream:
+    index
     pos: int*
     loop: int*
     wait
-
-struct Voice:
+    env
+    level
+    length
+    attack
+    decay
+    sustain
+    release
+    wave
+    volume
     pitch
     pw
     pw_rate
-    vol         # 8.8 fixed (>> 8 for APU)
-    vol_target  # 8.8 fixed
-    vol_rate
-    wave
-    cmd_streams: SoundCommandStream[2]
-
-var voices: Voice[4]
+    vib_pos
+    vib_rate
+    vib_depth
 
 
-func sound_play(e: SoundEffect*):
-    var v = &voices[e.voice_index]
-    v.cmd_streams = {}
-    v.cmd_streams[0].pos = e.start0
-    v.cmd_streams[1].pos = e.start1
+var sfx_streams: SfxStream[4]
 
+func sfx_play(p: int*):
+    var c
+    var i
+    while p.*:
+        c = p.*
+        p += 1
+        if c == '#': skip_line(p)
+        elif c == '@':
+            i = read_num(p)
+            if i < sfx_streams.len:
+                var s = &sfx_streams[i]
+                if not s.pos:
+                s.* = {}
+                s.env     = ENV_ATTACK
+                s.attack  = ENV_PEAK
+                s.index   = i
+                s.pos     = p
+                s.volume  = 64
+                s.length  = 999
 
-func update_stream(v: Voice*, s: SoundCommandStream*):
-    while true:
-        if s.wait > 0:
-            s.wait -= 1
-            return
-        var n = s.pos.*
-        s.pos += 1
-        if n == 0:
-            s.pos = s.loop
-            if s.pos: continue
-            return
-        elif n < 100:
-            s.wait = n
-            continue
-        if n == SND_PITCH:
-            v.pitch = s.pos.*
-            s.pos += 1
-        elif n == SND_PITCH_INC:
-            v.pitch += s.pos.*
-            s.pos += 1
-        elif n == SND_VOL:
-            v.vol = s.pos.* * 256
-            v.vol_target = v.vol
-            v.vol_rate = 0
-            s.pos += 1
-        elif n == SND_VOL_SLIDE:
-            v.vol_target = s.pos.* * 256
-            s.pos += 1
-            v.vol_rate = s.pos.*
-            s.pos += 1
-        elif n == SND_PW:
-            v.pw = s.pos.*
-            s.pos += 1
-            v.pw_rate = s.pos.*
-            s.pos += 1
-        elif n == SND_WAVE:
-            v.wave = s.pos.*
-            s.pos += 1
-        elif n == SND_LOOP:
-            s.loop = s.pos
-        else:
-            print("sound error")
+func sfx_update():
+    for s in sfx_streams:
+        if not s.pos: continue
 
+        if s.wait <= 0:
+            while true:
+                var c = s.pos.*
+                s.pos += 1
+                if   c == ' ':
+                elif c == 'v': s.volume    = read_num(s.pos)
+                elif c == 'l': s.length    = read_num(s.pos)
+                elif c == 'a': s.attack    = env_step(read_num(s.pos))
+                elif c == 'd': s.decay     = ENV_PEAK - env_step(read_num(s.pos))
+                elif c == 'r': s.release   = ENV_PEAK - env_step(read_num(s.pos))
+                elif c == 's': s.sustain   = read_num(s.pos) * ENV_PEAK / 64
+                elif c == 'W': s.pw        = read_num(s.pos)
+                elif c == 'w': s.pw_rate   = read_num(s.pos)
+                elif c == 'Y': s.vib_depth = read_num(s.pos)
+                elif c == 'y': s.vib_rate  = read_num(s.pos)
+                elif c == 'T': s.wave      = WAVE_TRI
+                elif c == 'S': s.wave      = WAVE_SAW
+                elif c == 'P': s.wave      = WAVE_PULSE
+                elif c == 'N': s.wave      = WAVE_NOISE
+                elif c == '=': s.pitch     = read_num(s.pos) * 8
+                elif c == '~': s.pitch     += read_num(s.pos) * 8
+                elif c == 'f': s.pitch     += read_num(s.pos)
+                elif c == '|': s.loop      = s.pos
+                elif c == ',':
+                    s.wait = read_num(s.pos) ?: 1
+                    break
+                else:
+                    s.pos = s.loop
+                    if not s.pos:
+                        break
+        s.wait -= 1
 
-func update_vol(v: Voice*):
-    if v.vol_rate == 0: return
-    if v.vol == v.vol_target: return
+        # adsr
+        if s.env == ENV_ATTACK:
+            s.level = min(s.level + s.attack, ENV_PEAK)
+            if s.level == ENV_PEAK: s.env = ENV_DECAY
+        if s.env == ENV_DECAY: s.level = s.sustain + (s.level - s.sustain) * s.decay / ENV_PEAK
+        if s.env == ENV_RELEASE: s.level = s.level * s.release / ENV_PEAK
 
-    var d = abs(v.vol - v.vol_target)
-    var step = max(1, d * v.vol_rate / 64)
-    if v.vol < v.vol_target:
-        v.vol = min(v.vol + step, v.vol_target)
-    else:
-        v.vol = max(v.vol - step, v.vol_target)
+        var pitch = s.pitch
+        if s.vib_depth:
+            # return 64 - abs(((x + 64) & 255) - 128);
+            var x = s.vib_pos % 128
+            if x > 64: x = 128 - x
+            if s.vib_pos >= 128: x = -x
+            pitch += x * s.vib_depth / 64
 
-func sound_update():
-    for i = 0, 4:
-        var v = &voices[i]
-        update_vol(v)
-        v.pw += v.pw_rate
-        v.pw %= 256
-        for s in v.cmd_streams:
-            if s.pos: update_stream(v, s)
-        sound(i, v.pitch, v.pw, v.vol / 256, v.wave)
+        # set APU registers
+        sound(s.index, pitch, s.pw, s.volume * s.level / ENV_PEAK, s.wave)
+
+        s.pw += s.pw_rate
+        s.pw %= 256
+        s.vib_pos += s.vib_rate
+        s.vib_pos %= 256
+        s.length -= 1
+        if s.length <= 0: s.env = ENV_RELEASE

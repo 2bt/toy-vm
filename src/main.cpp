@@ -31,37 +31,12 @@ struct MemMap {
     int32_t ret;
     int32_t input;
 
-    // interrupts
-    union {
-        struct {
-            int32_t msg;
-        } print;
-        struct {
-            int32_t x;
-            int32_t y;
-            int32_t w;
-            int32_t h;
-            int32_t s;
-            int32_t t;
-            int32_t flip;
-        } sprite;
-        struct {
-            int32_t i;
-            int32_t pitch;
-            int32_t pw;
-            int32_t vol;
-            int32_t wave;
-        } sound;
-        struct {
-            int32_t lo;
-            int32_t hi;
-        } rand;
-        struct {
-            int32_t a;
-            int32_t b;
-            int32_t c;
-        } math;
-    };
+    // interrupt args — disjoint so nested int calls don't clobber
+    struct { int32_t msg; } print;                                          // @2
+    struct { int32_t x, y, w, h, s, t, flip; } sprite;                      // @3
+    struct { int32_t i, pitch, pw, vol, wave; } sound;                      // @10
+    struct { int32_t lo, hi; } rand;                                        // @15
+    struct { int32_t a, b, c; } math;                                       // @17
 };
 
 

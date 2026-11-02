@@ -15,7 +15,7 @@ var SFX_PATROL_SHOOT = "@0 d5 W20w2 P=80|,~3,~3,~-3,~-3,"
 var SFX_BUGGER_JUMP  = "@3 d3 W32 P=44,~4,~4|f4,"
 var SFX_ENEMY_HIT    = "@2 d3 N=66,T=60,=54,=50,"
 var SFX_EXPLOSION    = "@3 d8 N|=60,~-10,~-10,~-8,,"
-var SFX_CHECKPOINT   = "@3 l99 a5d10 T=44|,,~7,,~8,,~-14"
+var SFX_CHECKPOINT   = "@3 v72 l99 a5d10 T=44|,,~7,,~8,,~-14"
 
 
 struct SfxStream:
@@ -107,11 +107,8 @@ func sfx_update():
 
         var pitch = s.pitch
         if s.vib_depth:
-            # return 64 - abs(((x + 64) & 255) - 128);
-            var x = s.vib_pos % 128
-            if x > 64: x = 128 - x
-            if s.vib_pos >= 128: x = -x
-            pitch += x * s.vib_depth / 64
+            var x = abs(((s.vib_pos + 64) & 255) - 128)
+            pitch += (x * s.vib_depth + 32) / 64 - s.vib_depth
 
         # set APU registers
         sound(s.index, pitch, s.pw, s.volume * s.level / ENV_PEAK, s.wave)

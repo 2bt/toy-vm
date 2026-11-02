@@ -260,27 +260,20 @@ func music_update():
         if v.env == ENV_DECAY: v.level = v.sustain + (v.level - v.sustain) * v.decay / ENV_PEAK
         if v.env == ENV_RELEASE: v.level = v.level * v.release / ENV_PEAK
 
-        # portamento
+        # pitch
         if v.pitch != v.pitch_target:
             v.pitch = clamp(v.pitch_target, v.pitch - v.porta, v.pitch + v.porta)
         var pitch = v.pitch_offset
         if not v.abs_pitch: pitch += v.pitch
-
-        # vibrato
         if v.vib_depth:
-            var x = v.vib_pos % 128
-            if x > 64: x = 128 - x
-            if v.vib_pos >= 128: x = -x
-            pitch += x * v.vib_depth / 64
+            var x = abs(((v.vib_pos + 64) & 255) - 128)
+            pitch += (x * v.vib_depth + 32) / 64 - v.vib_depth
 
         # set APU registers
         var vol = v.volume * v.instr_vol * v.level / (ENV_PEAK * 64)
         sound(v.index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
 
-        # pw sweep
         v.pw += v.pw_rate
         v.pw %= 256
-
-        # vib
         v.vib_pos += v.vib_rate
         v.vib_pos %= 256

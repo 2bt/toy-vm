@@ -2,13 +2,13 @@
 # constants
 # ---------------------------------------------------------------------------
 
+const GAME_STATE_TITLE      = 99
 const GAME_STATE_LEVEL      = 0
 const GAME_STATE_PLAY       = 1
 const GAME_STATE_LEVEL_DONE = 2
 const GAME_STATE_GAME_OVER  = 3
 const GAME_STATE_WIN        = 4
 
-const LEVEL_COUNT          = 2
 const LEVEL_CARD_FRAMES    = 60
 const LEVEL_DONE_FRAMES    = 48
 
@@ -87,15 +87,20 @@ include "hero.toy"
 # ---------------------------------------------------------------------------
 
 func game_init():
-    hero_init()
-    game_load_level(0)
+    game = {}
+    game_set_state(GAME_STATE_TITLE)
+    game_init_level(LEVEL_TITLE_DATA)
+
 
 func game_set_state(s):
     game.state = s
     if s == GAME_STATE_LEVEL:
         game.countdown = LEVEL_CARD_FRAMES
+
     elif s == GAME_STATE_PLAY:
+        game_init_level(LEVEL_DATA[game.level])
         music_play(MUSIC_LEVEL)
+
     elif s == GAME_STATE_LEVEL_DONE:
         game.countdown = LEVEL_DONE_FRAMES
         music_play("")
@@ -103,23 +108,29 @@ func game_set_state(s):
         music_play(MUSIC_GAME_OVER)
 
 
-func game_load_level(n):
-    game.level = n
-    if n == 0: level_init(LEVEL1_DATA)
-    else: level_init(LEVEL2_DATA)
-
+func game_init_level(data: int*):
+    level_init(data)
     hero_place_at_start()
     camera_center_on_hero()
-
     enemy_init_all()
     for b in hero_bullets: b.* = {}
     for eb in enemy_bullets: eb.* = {}
     for p in particles: p.* = {}
 
-    game_set_state(GAME_STATE_LEVEL)
-
 
 func game_update():
+
+    if game.state == GAME_STATE_TITLE:
+        level_update()
+        enemy_update_all()
+        enemy_bullet_update_all()
+        particle_update_all()
+        if btnp(BTN_A) or btnp(BTN_B):
+            hero_init()
+            game_set_state(GAME_STATE_LEVEL)
+        return
+
+
     if game.state == GAME_STATE_LEVEL:
         if game.countdown > 0: game.countdown -= 1
         else: game_set_state(GAME_STATE_PLAY)
@@ -128,11 +139,16 @@ func game_update():
     if game.state == GAME_STATE_LEVEL_DONE:
         if game.countdown > 0: game.countdown -= 1
         else:
-            if game.level + 1 < LEVEL_COUNT: game_load_level(game.level + 1)
-            else: game_set_state(GAME_STATE_WIN)
-        # world still ticks below (blend-to-black later)
+            game.level += 1
+            if game.level >= LEVEL_DATA.len:
+                game_set_state(GAME_STATE_WIN)
+            else:
+                game_init_level(LEVEL_DATA[game.level])
+                game_set_state(GAME_STATE_LEVEL)
+                return
+
     elif game.state == GAME_STATE_GAME_OVER or game.state == GAME_STATE_WIN:
-        if btnp(BTN_A):
+        if btnp(BTN_A) or btnp(BTN_B):
             game_init()
 
     level_update()
@@ -146,7 +162,35 @@ func game_update():
     particle_update_all()
 
 
+
+func draw_hud():
+    # sprite(2, 2, 6, 11, 5, 165, 0)
+    strnum(str, hero.lives)
+    draw_text(2, SCREEN_H - 10, "x")
+    draw_text(10, SCREEN_H - 10, str)
+    strnum(str, hero.score)
+    draw_text(SCREEN_W - strlen(str) * 8 - 2, SCREEN_H - 10, str)
+
+
+func draw_blend():
+
+
 func game_draw():
+
+    if game.state == GAME_STATE_TITLE:
+
+        level_draw_background()
+        enemy_draw_all()
+        enemy_bullet_draw_all()
+        particle_draw_all()
+        level_draw_walls()
+
+        # title
+        sprite(SCREEN_W/2 - 112/2, 28, 112, 64, 256, 448, 0)
+
+        draw_blend()
+        return
+
     if game.state == GAME_STATE_LEVEL:
         var p = strcpy(str, "LEVEL ")
         strnum(p, game.level + 1)
@@ -159,6 +203,9 @@ func game_draw():
     if game.state == GAME_STATE_PLAY:
         hero_draw()
 
+    draw_blend()
+
+
     hero_bullet_draw_all()
     enemy_bullet_draw_all()
     particle_draw_all()
@@ -166,11 +213,7 @@ func game_draw():
 
     level_draw_dots()
 
-    # HUD
-    strnum(str, hero.lives)
-    draw_text(2, 2, str)
-    strnum(str, hero.score)
-    draw_text(SCREEN_W - strlen(str) * 8 - 2, 2, str)
+    draw_hud()
 
     if game.state == GAME_STATE_GAME_OVER:
         draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, "GAME OVER")

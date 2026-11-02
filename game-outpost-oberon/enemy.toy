@@ -59,7 +59,7 @@ func enemy_bullet_update_all():
                 sfx_play(SFX_BULLET_WALL)
                 continue
 
-            if hero.state == HERO_STATE_NORMAL:
+            if hero_can_take_damage():
                 if box_has_point(hero.box, x, y):
                     b.alive = false
                     hero_set_state(HERO_STATE_DYING)
@@ -275,7 +275,7 @@ func enemy_patrol_update(e: Enemy*):
             turn = 1
         else:
             e.run_tick += 1
-            e.frame = 1 + e.run_tick / 4 % 4
+            e.frame = 1 + e.run_tick / 6 % 4
             e.pace_countdown -= 1
             if e.pace_countdown == 0: turn = rand(0, 4) == 0
         if turn >= 0:

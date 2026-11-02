@@ -8,6 +8,7 @@ const HERO_W = 6
 const HERO_H = 11
 
 const HERO_SPAWN_FRAMES    = 40
+const HERO_IFRAMES         = 75
 const HERO_EXIT_FRAMES     = 40
 
 const RUN_MAX      = 20
@@ -50,7 +51,7 @@ func hero_init():
     hero = {}
     hero.box.w = HERO_W
     hero.box.h = HERO_H
-    hero.lives = 3
+    hero.lives = 5
 
 
 func hero_set_state(s):
@@ -71,7 +72,11 @@ func hero_set_state(s):
         hero.vx = 0
         hero.vy = 0
     elif s == HERO_STATE_NORMAL:
-        hero.hit_countdown = 0
+        hero.hit_countdown = HERO_IFRAMES
+
+
+func hero_can_take_damage():
+    return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
 
 
 func hero_place_at_start():
@@ -175,6 +180,8 @@ func hero_update():
             camera_follow_hero()
         return
 
+    if hero.hit_countdown > 0: hero.hit_countdown -= 1
+
     # horizontal movement
     var dx = btn(BTN_RIGHT) - btn(BTN_LEFT)
     if dx: hero.facing_left = dx < 0
@@ -262,12 +269,13 @@ func hero_update():
     hero.box.y = hero.sy / SP
 
     # check enemies
-    for e in enemies:
-        if not e.active: continue
-        if e.state != ENEMY_STATE_NORMAL: continue
-        if box_intersects(hero.box, e.box):
-            hero_set_state(HERO_STATE_DYING)
-            return
+    if hero_can_take_damage():
+        for e in enemies:
+            if not e.active: continue
+            if e.state != ENEMY_STATE_NORMAL: continue
+            if box_intersects(hero.box, e.box):
+                hero_set_state(HERO_STATE_DYING)
+                return
 
     # lava
     var t = level_get_tile(hero.box.x, hero.box.y)
@@ -284,14 +292,10 @@ func hero_update():
 
 func hero_draw():
     if hero.state == HERO_STATE_RETURNING: return
-    if (hero.state == HERO_STATE_DYING or
-        hero.state == HERO_STATE_SPAWNING or
-        hero.state == HERO_STATE_EXITING) and hero.hit_countdown & 2: return
+    if hero.hit_countdown & 2: return
 
     var row = 0
-    if (hero.state == HERO_STATE_DYING
-    or hero.state == HERO_STATE_EXITING
-    or hero.state == HERO_STATE_SPAWNING): row = 2
+    if hero.state != HERO_STATE_NORMAL: row = 2
     elif hero.shoot_countdown > 1: row = 1
 
     camera_sprite(hero.box.x - 5, hero.box.y - 5, 16, 16,

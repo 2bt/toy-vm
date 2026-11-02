@@ -50,17 +50,17 @@ Pinned by games (see e.g. `game-breakout/prelude.toy`) via `var` / formals `@ ad
 |------|------|
 | `0` | `ret` — host writes interrupt results (e.g. `rand`, `sqrt`) |
 | `1` | `input` — button bitfield (`1<<0` up … `1<<5` B) |
-| `2…` | interrupt argument block (overlaid per call) |
+| `2…` | interrupt argument blocks (disjoint per interrupt) |
 
 Interrupts (`asm "int #N"`):
 
-| N | Name | Args @ 2+ | Notes |
-|---|------|-----------|--------|
-| 1 | print | `msg` (`int*`) | zero-terminated chars; newline after |
-| 2 | sprite | `x y w h s t flip` | blit from `sprite.png` |
-| 3 | sound | `i pitch pw vol wave` | voice `i` |
-| 4 | rand | `lo hi` | result → `mem[0]` |
-| 5 | sqrt | `a` | result → `mem[0]` |
+| N | Name | Args | Notes |
+|---|------|------|--------|
+| 1 | print | `msg` @ 2 (`int*`) | zero-terminated chars; newline after |
+| 2 | sprite | `x y w h s t flip` @ 3–9 | blit from `sprite.png` |
+| 3 | sound | `i pitch pw vol wave` @ 10–14 | voice `i` |
+| 4 | rand | `lo hi` @ 15–16 | result → `mem[0]` |
+| 5 | sqrt | `a` @ 17 | result → `mem[0]` |
 
 Screen is 320×180.
 

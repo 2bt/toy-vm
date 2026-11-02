@@ -87,7 +87,7 @@ private:
             VoiceInput const& m = in[i];
             int p = std::clamp(m.pitch, 0, 800);
             v.pitch = std::exp2f((p * (1.0f / 8.0f) - 57.0f) * (1.0f / 12.0f)) * (440.0f / MIXRATE);
-            v.pw         = (m.pw % 256) * (1.0f / 256.0f);
+            v.pw         = (m.pw % 1024) * (1.0f / 1024.0f);
             v.vol_target = std::clamp(m.vol * (1.0f / 256.0f), 0.0f, 1.0f) * 0.5f;
             v.wave       = m.wave;
             if (v.wave == NOISE) v.pitch *= 8.0f;

@@ -90,13 +90,14 @@ func game_init():
     game = {}
     game_set_state(GAME_STATE_TITLE)
     game_init_level(LEVEL_TITLE_DATA)
+    music_play(MUSIC_TITLE)
 
 
 func game_set_state(s):
     game.state = s
     if s == GAME_STATE_LEVEL:
         game.countdown = LEVEL_CARD_FRAMES
-
+        music_play("")
     elif s == GAME_STATE_PLAY:
         game_init_level(LEVEL_DATA[game.level])
         music_play(MUSIC_LEVEL)

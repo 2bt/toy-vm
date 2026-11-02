@@ -77,7 +77,7 @@ func sfx_update():
                 elif c == 'd': s.decay     = ENV_PEAK - env_step(read_num(s.pos))
                 elif c == 'r': s.release   = ENV_PEAK - env_step(read_num(s.pos))
                 elif c == 's': s.sustain   = read_num(s.pos) * ENV_PEAK / 64
-                elif c == 'W': s.pw        = read_num(s.pos)
+                elif c == 'W': s.pw        = read_num(s.pos) * 4
                 elif c == 'w': s.pw_rate   = read_num(s.pos)
                 elif c == 'Y': s.vib_depth = read_num(s.pos)
                 elif c == 'y': s.vib_rate  = read_num(s.pos)
@@ -114,7 +114,7 @@ func sfx_update():
         sound(s.index, pitch, s.pw, s.volume * s.level / ENV_PEAK, s.wave)
 
         s.pw += s.pw_rate
-        s.pw %= 256
+        s.pw %= 1024
         s.vib_pos += s.vib_rate
         s.vib_pos %= 256
         s.length -= 1

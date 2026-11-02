@@ -1,16 +1,122 @@
-var MUSIC_LEVEL = "
-$0 a0 d10 s50 r7 v50 N=80,PW30w2~0
-$1 a0 s64 r2 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
-$2 a0 d5 s64 N=70,PW128=44,=42s0,N=70,P=41,N=70
-$3 a0 s64 r3 T=90,~0
-@0 q2 o2 i0 |
-c,14=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
-c,=,>c,<c,=,<a+,*20>c,=,,c,>*20c<,g>,d,c,<a+,7b,>c<,14
-c,=,,c,=,c,>c,=,,<c,>*20c<,=,c--,*20c,=,,
-c,=,>c,<c,=,<a+,*20>c,=,,c,>c<,c,g,a+,<a+,b>,
+var MUSIC_TITLE = "
+$0 s64 r3 N=77,PW100w2~0,180w-2
+$1 s64 r3 N=77,PW40w4~0
+$3 v32 s64 r2 N=90,PW128w2~0
 
-@1 o5 q2 |
-,7,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+# thunder
+$4 d15 N=66,|PW128=35,,T,=38,v10,,,v64
+
+# kick & snare
+$5 v70 s64r2 N=66,PW128=38,=35,T=32,=30,
+$6 v70 s64d20 N=66,PW128=42,=38,N=66,P=35,
+
+# chords and lead
+$10 d8s40r8 N=94,S|~7,,~0,,~3,,
+$11 d8s40r8 N=94,S|~8,,~0,,~5,,
+$12 d8s40r8 N=94,S|~7,,~0,,~4,,
+$15 d7s50r11 N=94,PW50w20~0,10Y2y20,30Y8
+
+
+@0 t7 q2 o2
+@1 t7 q2 o3
+@2 t7 q2 o3
+
+
+# intro
+@0 i0 <g>,*3c,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+c,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+@1 i3
+,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',    c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',
+c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',    c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',
+c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',    c,c',c,c,c,c',c,c',     c,c,c',c,c',c',c,c',
+@2 o3 i4 v80
+,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+c,,,,,,,, ,,,,,,c,c, c,,,,,,,, ,,,,,,c,c,
+c,,,,,,,, ,,,,,,c,c, c,,,,,,,, c,,,c,,c,,c,
+
+
+# loop start
+
+@0 t7 i1 |
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+
+c,,c',c,c,c,c--,a+,     c,c,c',c,c--,a+,c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+<g+,,g+',g+,g+,g+,g+--,g+--',     g+,g+,g+',g+,g+--,g+--',g+',g+,   g+,g+',g+,g+,g+',g+,g+,g+',     g+,g+',g+,g+,g+--,g+--,g+,g+',>
+<f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',>
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+
+c,,c',c,c,c,c--,a+,     c,c,c',c,c--,a+,c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+<g+,,g+',g+,g+,g+,g+--,g+--',     g+,g+,g+',g+,g+--,g+--',g+',g+,   g+,g+',g+,g+,g+',g+,g+,g+',     g+,g+',g+,g+,g+--,g+--,g+,g+',>
+<f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',>
+
+@1 t7 |
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+<i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,i5g+,    i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+'>,
+<i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,i5f,    i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,f'>,
+
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+<i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,i5g+,    i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+'>,
+<i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,i5f,    i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,f'>,
+
+@2 v64 t14 o4 |
+=,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
+q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,i10g,, ,,,,,,=,,
+
+q2 i15 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
+c,<g>,d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7d+,,g, ,14,,,,,=,,
+
+q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,i10g,, ,,,,,,=,,
+q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,,i11g,,i10g,,,,,=,,
+
+q2 i15 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
+c,<g>,d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7d+,,g, ,14,,,,,=,,
+"
+
+
+
+
+
+
+
+
+var MUSIC_LEVEL = "
+$0 d10 s50 r7 v50 N=80,PW30w2~0
+$1 s64 r2 N=90,T=43,=40,=37,=32,=30,=27,=22,=14
+$2 d5 s64 N=70,PW128=44,=42s0,N=70,P=41,N=70
+$3 s64 r3 T=90,~0
+@0 q2 o2 i0 |
+c,14=,,c,=,c,>c,=,,<c,>*150c<,=,c--,*150c,=,,
+c,=,>c,<c,=,<a+,*150>c,=,,c,>*150c<,g>,d,c,<a+,7b,>c<,14
+c,=,,c,=,c,>c,=,,<c,>*150c<,=,c--,*150c,=,,
+c,=,>c,<c,=,<a+,*150>c,=,,c,>c<,c,g,a+,<a+,b>,
+
+@1 o5 t7 q2 |
+,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,,
 v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,,c,
@@ -23,8 +129,8 @@ v64 i1c,,i3g,i1c,i2c,,i1c,i3g,>f,g,i1c,i3g<,i2c,,c,v40c,
 
 $4 a16 d12 s0 r4 PW128~0w1Y0,~12,40Y6y25
 $5 a1  d3 s30 r20 PW128~0w1Y0,~12,40Y6y25
-@2 o4 q2 |
-,14,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
+@2 o4 t14 q2 |
+,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,, ,,,,,,,,,,,,,,,,
@@ -42,7 +148,7 @@ i8c,,,,= ,,,, ,,,, ,,,,
 "
 
 var MUSIC_GAME_OVER = "
-$0 a0 d12 s64 r10 T |~0,4~-8,4~-16,4~-24,4
+$0 d12 s64 r10 T |~0,4~-8,4~-16,4~-24,4
 @0 v150 i0 o4 c,4=,100,,,
 
 $1 a3 d12 s0 N|~0,,~16,,
@@ -137,7 +243,7 @@ func music_play(p: int*):
             i = read_num(p)
             if i < note_streams.len:
                 s = note_streams[i]
-                if not s.pos:
+                if s.pos: continue
                 s.pos         = p
                 s.index       = i
                 s.next_note   = NOTE_OFF
@@ -164,8 +270,8 @@ func music_read_row(v: NoteStream*) int:
         var c = v.pos.*
         v.pos += 1
         if   c == ' ' or c == '\n':
-        elif c == '|': v.loop = v.pos
         elif c == '#': skip_line(v.pos)
+        elif c == '|': v.loop = v.pos
         elif c == 'v': v.next_volume = read_num(v.pos)
         elif c == 'i': v.next_instr  = read_num(v.pos)
         elif c == 'q': v.next_quant  = read_num(v.pos)
@@ -173,10 +279,12 @@ func music_read_row(v: NoteStream*) int:
         elif c == 'o': v.octave      = read_num(v.pos)
         elif c == '<': v.octave -= 1
         elif c == '>': v.octave += 1
+        elif c == '\'': v.next_note += 12
         elif c == '+': v.next_note += 1
         elif c == '-': v.next_note -= 1
         elif c == '=': v.next_note = NOTE_OFF
         elif c >= 'a' and c <= 'g': v.next_note = stridx("c d ef g a b", c) + 12 * v.octave
+        elif c == 't': v.next_wait = read_num(v.pos)
         elif c == ',':
             v.next_wait = read_num(v.pos) ?: v.next_wait
             return true
@@ -187,8 +295,8 @@ func music_read_row(v: NoteStream*) int:
                     v.pos = v.loop
                     if not v.pos: return false
                     break
-                if c == '@' and read_num(v.pos) == v.index:
-                    break
+                if c == '@' and read_num(v.pos) == v.index: break
+                if c == '#': skip_line(v.pos)
                 c = v.pos.*
                 v.pos += 1
 
@@ -202,19 +310,23 @@ func music_update():
         if v.wait <= 0:
             v.wait = v.next_wait
             if v.next_note >= 0:
-                v.pitch_target = v.next_note * 8
+                v.pitch_target = v.next_note * 64
                 if v.next_porta == 0:
+                    v.instr_vol    = 64
                     v.pitch        = v.pitch_target
                     v.env          = ENV_ATTACK
                     v.level        = 0
-                    v.instr_vol    = 64
-                    v.vib_pos      = 0
-                    v.abs_pitch    = false
-                    v.pitch_offset = 0
                     v.instr_stream = { instruments[v.next_instr] }
+                    v.attack       = ENV_PEAK
+                    v.sustain      = 0
+                    v.pitch_offset = 0
+                    v.abs_pitch    = false
+                    v.vib_pos      = 0
+                    v.vib_rate     = 0
+                    v.vib_depth    = 0
+            if v.next_note != NOTE_EMPTY: v.porta = v.next_porta
             v.quant  = v.next_quant
             v.volume = v.next_volume
-            v.porta  = v.next_porta
             if not music_read_row(v): continue
         v.wait -= 1
 
@@ -232,7 +344,7 @@ func music_update():
                     elif c == 'd': v.decay     = ENV_PEAK - env_step(read_num(s.pos))
                     elif c == 'r': v.release   = ENV_PEAK - env_step(read_num(s.pos))
                     elif c == 's': v.sustain   = read_num(s.pos) * ENV_PEAK / 64
-                    elif c == 'W': v.pw        = read_num(s.pos)
+                    elif c == 'W': v.pw        = read_num(s.pos) * 4
                     elif c == 'w': v.pw_rate   = read_num(s.pos)
                     elif c == 'Y': v.vib_depth = read_num(s.pos)
                     elif c == 'y': v.vib_rate  = read_num(s.pos)
@@ -241,7 +353,7 @@ func music_update():
                     elif c == 'P': v.wave      = WAVE_PULSE
                     elif c == 'N': v.wave      = WAVE_NOISE
                     elif c == '=' or c == '~':
-                        v.pitch_offset = read_num(s.pos) * 8
+                        v.pitch_offset = read_num(s.pos) * 64
                         v.abs_pitch    = c == '='
                     elif c == '|': s.loop = s.pos
                     elif c == ',':
@@ -265,6 +377,7 @@ func music_update():
             v.pitch = clamp(v.pitch_target, v.pitch - v.porta, v.pitch + v.porta)
         var pitch = v.pitch_offset
         if not v.abs_pitch: pitch += v.pitch
+        pitch /= 8
         if v.vib_depth:
             var x = abs(((v.vib_pos + 64) & 255) - 128)
             pitch += (x * v.vib_depth + 32) / 64 - v.vib_depth
@@ -274,6 +387,6 @@ func music_update():
         sound(v.index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
 
         v.pw += v.pw_rate
-        v.pw %= 256
+        v.pw %= 1024
         v.vib_pos += v.vib_rate
         v.vib_pos %= 256

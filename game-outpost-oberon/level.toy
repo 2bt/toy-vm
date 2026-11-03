@@ -25,7 +25,7 @@ var LEVEL1_DATA = (
     "00                                00b    ^^^^^    b00          00                                         0"
     "00                                00^^           ^^00          00                                         0"
     "00       b p b                 p                             b 00                                         0"
-    "00   000000000^^               0                          b 00000                                         0"
+    "00   000000000^^              c0                          b 00000                                         0"
     "00   000000000             p       b  00000000000  b     00000000                                         0"
     "00EEE000000000^^         ^^^^     0000000000000000000                    p        p              0000000000"
     "00000000000000b                 p 0000000000000000000^^               0000000    ^^^0  p         0000000000"
@@ -44,8 +44,8 @@ var LEVEL1_DATA = (
     "0000000000000                             000                            b000 p       b     000000000000000"
     "0SSS000000000                             000                            ^000^^^^  000000000000000000000000"
     "0   000000000                      b      000              b                       000000000000000000000000"
-    "0   000000000                      00     000             ^^^     p              ^^000000000000000000000000"
-    "0                      b     p     00     000        b        p  00   p   p        000000000000000000000000"
+    "0   000000000                      00     000             ^^^     p             c00000000000000000000000000"
+    "0                      b     p     00     000        b        p  00   p   p      00000000000000000000000000"
     "0                     000    000          000^^^^^0000000000000  00  00   000000000000000000000000000000000"
     "0                 p    0000  00000000000          0000000000000      00   000000000000000000000000000000000"
     "0000000000000     00         00000000000   C    000000000000000lllllllllll000000000000000000000000000000000"
@@ -128,8 +128,7 @@ func level_init(data: int*):
         for c = 0, level.w:
             var t = level_get_tile_at_cr(c, r)
             if t == 'C':
-                if level.checkpoint_count >= level.checkpoints.len:
-                    print("error: not enough checkpoints")
+                if level.checkpoint_count >= level.checkpoints.len: print("error: not enough checkpoints")
                 level.checkpoints[level.checkpoint_count] = { c * TS, r * TS }
                 level.checkpoint_count += 1
 
@@ -203,7 +202,6 @@ func level_test(x, y, dir) int:
     if dir == DIR_RIGHT: return -1 - (x % TS)
     if dir == DIR_UP:    return TS - (y % TS)
     if dir == DIR_DOWN:  return -1 - (y % TS)
-
 
 func level_test_down(x, y, py) int:
     # level_dot(x, y)

@@ -10,7 +10,8 @@
 
 enemies:
 + [x] patrol
-+ [ ] bugger
++ [x] bugger
++ [x] wall cannon
 + [ ] drone?
 
 other game elements:

@@ -24,6 +24,7 @@ struct Game:
     state
     level
     countdown
+    tick
 
 var game: Game
 
@@ -120,6 +121,7 @@ func game_init_level(data: int*):
 
 
 func game_update():
+    game.tick += 1
 
     if game.state == GAME_STATE_TITLE:
         level_update()
@@ -187,7 +189,8 @@ func game_draw():
         level_draw_walls()
 
         # title
-        sprite(SCREEN_W/2 - 112/2, 28, 112, 64, 256, 448, 0)
+        var h = clamp(game.tick / 2 - 5, 0, 60)
+        sprite(SCREEN_W/2 - 112/2, 28 + 60 - h, 112, h, 256, 448, 0)
 
         draw_blend()
         return

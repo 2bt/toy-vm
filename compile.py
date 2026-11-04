@@ -437,10 +437,10 @@ class Parser:
                 func.frame_size = max(func.frame_size, off + size)
 
     def var_decl(self, name, local=False):
-        """Shared global/local var parsing. Always returns a stmt (NoOp for globals)."""
-        if name in self.var_type: self.error(f"variable '{name}' already exists")
+        """Shared global/local var parsing. Always returns a stmt (NoOp for globals).
+        For locals, name is the short name; declare_local mints the unique name."""
+        if not local and name in self.var_type: self.error(f"variable '{name}' already exists")
         ty = self.type(auto_array_size=True) if self.peek(":") else None
-        dst = VarRef(name)
 
         if self.peek("@"):
             if local: self.error("@ only allowed on globals")
@@ -450,15 +450,19 @@ class Parser:
             return NoOp()
 
         if not self.peek("="):
-            self.var_type[name] = self.finish_type(ty)
+            ty = self.finish_type(ty)
+            if local: self.declare_local(name, ty)
+            else: self.var_type[name] = ty
             return NoOp()
 
         self.eat("=")
         if self.peek("{") and ty is not None and is_aggregate(ty):
             init = self.init_list()
             if is_auto_array(ty): ty = Type(ty.base, ty.ptr, len(init.items))
+            if local:
+                dst = VarRef(self.declare_local(name, ty))
+                return self.lower_init(dst, ty, init)
             self.var_type[name] = ty
-            if local: return self.lower_init(dst, ty, init)
             self.store_var_data(name, self.const_init_data(ty, init))
             return NoOp()
 
@@ -466,17 +470,20 @@ class Parser:
         if isinstance(e, ArrLit) and (ty is None or is_array(ty)):
             if ty is None: ty = arr_type(e)
             else: e, ty = self.fit_arr(e, ty)
-            self.var_type[name] = ty
             if local:
+                dst = VarRef(self.declare_local(name, ty))
                 return Copy(dst, self.intern(e), self.type_size(ty))
+            self.var_type[name] = ty
             self.store_var_data(name, e.data)
             return NoOp()
 
         if ty is not None: e, t = self.coerce(ty, e, t)
-        self.var_type[name] = ty = self.finish_type(ty, t)
+        ty = self.finish_type(ty, t)
         if local:
+            dst = VarRef(self.declare_local(name, ty))
             if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
             return Assign("=", dst, e)
+        self.var_type[name] = ty
         self.store_var_data(name, self.const_init_slot(ty, (e, t)))
         return NoOp()
 
@@ -564,7 +571,10 @@ class Parser:
                 self.head = func.head
                 self.current_func = func
                 self.call_stack.append(func)
-                func.body = self.block()
+                self.begin_function_locals(func)
+                func.body = self.block(already_scoped=True)
+                self.pop_scope(0)  # begin_function_locals pushed one scope at offset 0
+                self.scopes = []
                 self.call_stack.pop()
                 self.current_func = None
 
@@ -604,9 +614,10 @@ class Parser:
                 return
             self.eat()
 
-    def block(self):
+    def block(self, already_scoped=False):
         stmts = []
         self.eat(":")
+        saved = None if already_scoped else self.push_scope()
         if self.peek("eol"):
             self.eat()
             if self.peek("indent"):
@@ -615,6 +626,7 @@ class Parser:
                 self.eat("dedent")
         else:
             stmts.append(self.stmt())
+        if not already_scoped: self.pop_scope(saved)
         return Block(stmts)
 
     def after_if(self):
@@ -711,8 +723,7 @@ class Parser:
         if self.peek("var"):
             self.eat()
             name = self.eat("id").v
-            long = f"{self.current_func.name}.{name}"
-            stmt = self.var_decl(long, local=True)
+            stmt = self.var_decl(name, local=True)
             self.eat("eol")
             return stmt
 
@@ -1030,9 +1041,9 @@ class Parser:
             # variable
             node = None
             if self.current_func:
-                long_name = f"{self.current_func.name}.{name}"
-                if long_name in self.var_type:
-                    node, ty = VarRef(long_name), self.var_type[long_name]
+                unique = self.lookup_local(name)
+                if unique is not None:
+                    node, ty = VarRef(unique), self.var_type[unique]
             if not node:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
                 node, ty = VarRef(name), self.var_type[name]

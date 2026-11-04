@@ -654,9 +654,6 @@ class Parser:
         if self.peek("for"):
             self.eat()
             name = self.eat("id").v
-            long = f"{self.current_func.name}.{name}"
-            if long in self.var_bound: self.error("variable is bound")
-            self.var_bound.add(long)
             if self.peek("="):
                 self.eat()
                 start, t = self.expr()
@@ -672,18 +669,17 @@ class Parser:
                 limit = BinOp("+", start, Imm(offset))
                 t = Type(t.base, t.ptr + 1, None)
             if not is_int(t) and not is_ptr(t): self.error("bad type")
-            if long in self.var_type:
-                if t != self.var_type[long]: self.error("bad type")
-            else:
-                self.var_type[long] = t
-            init = Assign("=", VarRef(long), start)
-            cond = BinOp("<", VarRef(long), limit)
+            saved = self.push_scope()
+            unique = self.declare_local(name, t, bound=True)
+            init = Assign("=", VarRef(unique), start)
+            cond = BinOp("<", VarRef(unique), limit)
             inc = Imm(self.type_size(Type(t.base, t.ptr - 1, None)))
-            next = Assign("+=", VarRef(long), inc)
+            next = Assign("+=", VarRef(unique), inc)
             self.loop += 1
-            body = self.block()
+            body = self.block(already_scoped=True)
             self.loop -= 1
-            self.var_bound.remove(long)
+            self.var_bound.discard(unique)
+            self.pop_scope(saved)
             return For(init, cond, next, body)
 
         if self.peek("break"):

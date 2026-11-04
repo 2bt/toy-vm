@@ -308,6 +308,7 @@ func enemy_kill(e: Enemy*):
     e.hit_countdown = 20
     e.vx = 0
     e.vy = 0
+    if e.type == ENEMY_TYPE_JELLY: enemy_jelly_clear_charge(e)
     sfx_play(SFX_EXPLOSION)
 
 
@@ -606,10 +607,15 @@ func enemy_cannon_update(e: Enemy*):
 # ---------------------------------------------------------------------------
 # jelly
 # ---------------------------------------------------------------------------
-const JELLY_BOB_AMP    = 12
-const JELLY_BOB_HALF   = 40
-const JELLY_ARM_FRAMES = 5
-const JELLY_ARM_RATE   = 4
+const JELLY_BOB_AMP       = 12
+const JELLY_BOB_HALF      = 40
+const JELLY_ARM_FRAMES    = 5
+const JELLY_ARM_RATE      = 4
+const JELLY_LOS_LATCH     = 18
+const JELLY_AIM_FRAMES    = 25
+const JELLY_SHOT_AT       = 5
+const JELLY_COOLDOWN      = 120
+const JELLY_BULLET_SPEED  = 18
 
 func enemy_jelly_clear_charge(e: Enemy*):
     e.charge = null
@@ -626,6 +632,62 @@ func enemy_jelly_update(e: Enemy*):
     e.sy = e.home_sy + yoff * SP
     e.box.x = e.sx / SP
     e.box.y = e.sy / SP
-
-    # rubber arm frames (decorative)
     e.frame = e.run_tick / JELLY_ARM_RATE % JELLY_ARM_FRAMES
+
+    var cx = box_center_x(e.box)
+    var cy = box_center_y(e.box)
+    var hx = box_center_x(hero.box)
+    var hy = box_center_y(hero.box)
+    var loc = (hero.state == HERO_STATE_NORMAL
+        and box_encloses(camera.box, e.box)
+        and level_has_los(cx, cy, hx, hy))
+
+    # keep charge glued to body while aiming
+    if e.charge:
+        if e.charge.ttl <= 0 or e.charge.type != PARTICLE_TYPE_CHARGE:
+            e.charge = null
+        else:
+            e.charge.sx = cx * SP
+            e.charge.sy = cy * SP
+            if e.charge.ttl < 3: e.charge.ttl = 3
+
+    if e.aim_countdown > 0:
+        if not loc:
+            enemy_jelly_clear_charge(e)
+            e.aim_countdown = 0
+            e.pace_countdown = 0
+            e.shoot_countdown = 30
+            return
+
+        if e.aim_countdown == JELLY_AIM_FRAMES:
+            e.charge = particle_spawn(PARTICLE_TYPE_CHARGE, cx, cy)
+            sfx_play(SFX_CHARGE)
+
+        if e.aim_countdown == JELLY_SHOT_AT:
+            var dx = hx - cx
+            var dy = hy - cy
+            var len = sqrt(dx * dx + dy * dy)
+            if len < 1: len = 1
+            var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_AIMED, cx - 1, cy - 1)
+            if b:
+                b.vx = dx * JELLY_BULLET_SPEED / len
+                b.vy = dy * JELLY_BULLET_SPEED / len
+                sfx_play(SFX_CANNON_SHOOT)
+            enemy_jelly_clear_charge(e)
+
+        e.aim_countdown -= 1
+        if e.aim_countdown == 0:
+            e.shoot_countdown = JELLY_COOLDOWN
+            e.pace_countdown = 0
+
+    elif e.shoot_countdown > 0:
+        e.shoot_countdown -= 1
+        e.pace_countdown = 0
+
+    elif loc:
+        e.pace_countdown += 1
+        if e.pace_countdown >= JELLY_LOS_LATCH:
+            e.aim_countdown = JELLY_AIM_FRAMES
+            e.pace_countdown = 0
+    else:
+        e.pace_countdown = 0

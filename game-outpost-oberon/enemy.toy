@@ -5,6 +5,7 @@ const ENEMY_STATE_DYING  = 2
 const ENEMY_TYPE_PATROL  = 1
 const ENEMY_TYPE_BUGGER  = 2
 const ENEMY_TYPE_CANNON  = 3
+const ENEMY_TYPE_JELLY   = 4
 
 const ENEMY_BULLET_TYPE_BASIC = 1
 const ENEMY_BULLET_TYPE_AIMED = 2
@@ -126,6 +127,10 @@ struct Enemy:
     burst_left
     aim_countdown
 
+    # jelly
+    home_sy
+    charge: Particle*
+
 var enemies: Enemy[64]
 
 
@@ -139,6 +144,7 @@ func enemy_init_all():
             if   t == 'p': enemy_spawn(ENEMY_TYPE_PATROL, x, y)
             elif t == 'b': enemy_spawn(ENEMY_TYPE_BUGGER, x, y)
             elif t == 'c': enemy_spawn(ENEMY_TYPE_CANNON, x, y)
+            elif t == 'j': enemy_spawn(ENEMY_TYPE_JELLY, x, y)
 
 func enemy_spawn(type, x, y):
     for e in enemies:
@@ -167,6 +173,13 @@ func enemy_spawn(type, x, y):
             e.facing_left = level_get_tile_at_cr(x / TS + 1, y / TS) == '0'
             e.shoot_countdown = rand(30, 90)
 
+        elif type == ENEMY_TYPE_JELLY:
+            e.box.w = 10
+            e.box.h = 10
+            e.hp    = 1
+            e.shoot_countdown = rand(40, 100)
+            e.charge = null
+
         e.sx = (x + 8 - e.box.w / 2) * SP
         e.sy = (y + 16 - e.box.h) * SP + SP - 1
 
@@ -174,6 +187,10 @@ func enemy_spawn(type, x, y):
             e.sy = (y + 8 - e.box.h / 2) * SP
             if e.facing_left: e.sx += 5 * SP
             else:             e.sx -= 6 * SP
+
+        if type == ENEMY_TYPE_JELLY:
+            e.home_sy = e.sy
+            e.charge  = null
 
         e.box.x = e.sx / SP
         e.box.y = e.sy / SP
@@ -211,6 +228,7 @@ func enemy_update_all():
                     e.type == ENEMY_TYPE_PATROL ? 100 :
                     e.type == ENEMY_TYPE_BUGGER ? 150 :
                     e.type == ENEMY_TYPE_CANNON ? 125 :
+                    e.type == ENEMY_TYPE_JELLY  ? 200 :
                     0)
 
             continue
@@ -228,6 +246,7 @@ func enemy_update_all():
         if   e.type == ENEMY_TYPE_PATROL: enemy_patrol_update(e)
         elif e.type == ENEMY_TYPE_BUGGER: enemy_bugger_update(e)
         elif e.type == ENEMY_TYPE_CANNON: enemy_cannon_update(e)
+        elif e.type == ENEMY_TYPE_JELLY:  enemy_jelly_update(e)
 
 
 func enemy_draw_all():
@@ -254,6 +273,12 @@ func enemy_draw_all():
                           256,
                           112 + (e.hit_countdown > 0) * 16,
                           e.facing_left)
+
+        elif e.type == ENEMY_TYPE_JELLY:
+            camera_sprite(e.box.x - 3, e.box.y - 3, 16, 16,
+                          256 + e.frame * 16,
+                          144 + (e.hit_countdown > 0) * 16,
+                          0)
 
         # box
         # camera_sprite(e.box.x, e.box.y, e.box.w, e.box.h, 0, 480, 0)
@@ -576,3 +601,31 @@ func enemy_cannon_update(e: Enemy*):
             e.pace_countdown = 0
     else:
         e.pace_countdown = 0
+
+
+# ---------------------------------------------------------------------------
+# jelly
+# ---------------------------------------------------------------------------
+const JELLY_BOB_AMP    = 12
+const JELLY_BOB_HALF   = 40
+const JELLY_ARM_FRAMES = 5
+const JELLY_ARM_RATE   = 4
+
+func enemy_jelly_clear_charge(e: Enemy*):
+    e.charge = null
+
+func enemy_jelly_update(e: Enemy*):
+    # triangle-wave bob around home_sy
+    e.run_tick += 1
+    var p = e.run_tick % (JELLY_BOB_HALF * 2)
+    var yoff = 0
+    if p < JELLY_BOB_HALF:
+        yoff = p * JELLY_BOB_AMP * 2 / JELLY_BOB_HALF - JELLY_BOB_AMP
+    else:
+        yoff = (JELLY_BOB_HALF * 2 - p) * JELLY_BOB_AMP * 2 / JELLY_BOB_HALF - JELLY_BOB_AMP
+    e.sy = e.home_sy + yoff * SP
+    e.box.x = e.sx / SP
+    e.box.y = e.sy / SP
+
+    # rubber arm frames (decorative)
+    e.frame = e.run_tick / JELLY_ARM_RATE % JELLY_ARM_FRAMES

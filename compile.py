@@ -255,6 +255,7 @@ class Parser:
         self.var_type     = {}
         self.var_bound    = set()
         self.var_offset   = {}
+        self.var_func     = {}
         self.scopes       = []
         self.frame_offset = 0
         self.mint_count   = {}
@@ -397,6 +398,7 @@ class Parser:
         unique = self.mint_local_name(short)
         self.scopes[-1][short] = unique
         self.var_type[unique] = ty
+        self.var_func[unique] = self.current_func.name
         if unique not in self.var_addr:
             off = self.frame_offset
             self.var_offset[unique] = off
@@ -427,6 +429,7 @@ class Parser:
             if short in self.scopes[-1]:
                 self.error(f"variable '{short}' already exists")
             self.scopes[-1][short] = unique
+            self.var_func[unique] = func.name
             self.mint_count[short] = self.mint_count.get(short, 0) + 1
             if unique not in self.var_addr:
                 ty = self.var_type[unique]
@@ -1508,7 +1511,12 @@ class Codegen:
             # optimize asm
             lines += peephole(self.lines, self.tmp_vars)
             # add temporary variables to locals
-            for t, ty in self.tmp_vars.items(): ast.var_type[t] = ty
+            for t, ty in self.tmp_vars.items():
+                ast.var_type[t] = ty
+                off = self.current_func.frame_size
+                ast.var_offset[t] = off
+                ast.var_func[t] = name
+                self.current_func.frame_size = off + ast.type_size(ty)
 
         # variables with fixed addresses
         self.lines = ["_R = 0"]
@@ -1524,13 +1532,12 @@ class Codegen:
             func = self.funcs[name]
             a = addr
             for f in func.calls: a = max(a, alloc_vars(f))
-            for n, t in ast.var_type.items():
-                if n not in ast.var_addr and n.startswith(f"{name}."):
-                    assert n not in ast.var_data
-                    self.emit(f"{n} = {a}")
-                    a += ast.type_size(t)
-            cache[name] = a
-            return a
+            for n, off in sorted(((n, o) for n, o in ast.var_offset.items() if ast.var_func.get(n) == name),
+                                 key=lambda x: (x[1], x[0])):
+                assert n not in ast.var_data
+                self.emit(f"{n} = {a + off}")
+            cache[name] = a + func.frame_size
+            return cache[name]
         addr = max(alloc_vars(name) for name in func_order)
 
         # global variables

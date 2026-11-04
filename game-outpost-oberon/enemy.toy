@@ -81,16 +81,10 @@ func enemy_bullet_draw_all():
         if b.type == ENEMY_BULLET_TYPE_BASIC:
             camera_sprite(b.box.x, b.box.y, 6, 1, 0, 32 + 1, 0)
         elif b.type == ENEMY_BULLET_TYPE_AIMED:
-            var x = b.box.x - 1
-            var y = b.box.y - 1
-            camera_sprite(x, y, 4, 4, 272, 112, 0)
-            x = (b.sx - b.vx) / SP - 1
-            y = (b.sy - b.vy) / SP - 1
-            camera_sprite(x, y, 4, 4, 272, 112, 0)
-            x = (b.sx - b.vx * 2) / SP - 1
-            y = (b.sy - b.vy * 2) / SP - 1
-            camera_sprite(x, y, 4, 4, 272, 112, 0)
-
+            for i = 0, 4:
+                var x = (b.sx - b.vx * i) / SP - 1
+                var y = (b.sy - b.vy * i) / SP - 1
+                camera_sprite(x, y, 4, 4, 272, 112, 0)
 
 # ---------------------------------------------------------------------------
 # enemies
@@ -119,7 +113,7 @@ struct Enemy:
 
     # patrol / bugger timers (bugger: wait = sleep / turn / land pause;
     # pace = loc-lost / stroll)
-    run_tick
+    anim_tick
     wait_countdown
     wait_turn
     pace_countdown
@@ -177,8 +171,10 @@ func enemy_spawn(type, x, y):
             e.box.w = 10
             e.box.h = 10
             e.hp    = 1
+            e.vx    = 1
+            e.vy    = JELLY_SPEED
             e.shoot_countdown = rand(40, 100)
-            e.charge = null
+
 
         e.sx = (x + 8 - e.box.w / 2) * SP
         e.sy = (y + 16 - e.box.h) * SP + SP - 1
@@ -189,8 +185,7 @@ func enemy_spawn(type, x, y):
             else:             e.sx -= 6 * SP
 
         if type == ENEMY_TYPE_JELLY:
-            e.home_sy = e.sy
-            e.charge  = null
+            e.sy = (y + 8 - e.box.h / 2) * SP
 
         e.box.x = e.sx / SP
         e.box.y = e.sy / SP
@@ -308,7 +303,6 @@ func enemy_kill(e: Enemy*):
     e.hit_countdown = 20
     e.vx = 0
     e.vy = 0
-    if e.type == ENEMY_TYPE_JELLY: enemy_jelly_clear_charge(e)
     sfx_play(SFX_EXPLOSION)
 
 
@@ -338,8 +332,8 @@ func enemy_patrol_update(e: Enemy*):
         if hit or not level_test_down(face_x, foot_y, foot_y - 1):
             turn = 1
         else:
-            e.run_tick += 1
-            e.frame = 1 + e.run_tick / 6 % 4
+            e.anim_tick += 1
+            e.frame = 1 + e.anim_tick / 6 % 4
             e.pace_countdown -= 1
             if e.pace_countdown == 0: turn = rand(0, 4) == 0
         if turn >= 0:
@@ -552,16 +546,16 @@ func enemy_bugger_update(e: Enemy*):
     elif e.mode == BUGGER_MODE_SLEEP: e.frame = 7
     elif e.wait_countdown > 0: e.frame = 0
     else:
-        e.run_tick += 1
+        e.anim_tick += 1
         var rate = e.mode == BUGGER_MODE_WALK ? 8 : 4
-        e.frame = 1 + e.run_tick / rate % 4
+        e.frame = 1 + e.anim_tick / rate % 4
 
 
 # ---------------------------------------------------------------------------
 # cannon
 # ---------------------------------------------------------------------------
+const AIMED_BULLET_SPEED  = 18
 const CANNON_LOS_LATCH    = 25
-const CANNON_BULLET_SPEED = 18
 const CANNON_BURST_FRAMES = 60
 
 func enemy_cannon_update(e: Enemy*):
@@ -583,8 +577,8 @@ func enemy_cannon_update(e: Enemy*):
             if len < 1: len = 1
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_AIMED, mx - 1, my - 1)
             if b:
-                b.vx = dx * CANNON_BULLET_SPEED / len
-                b.vy = dy * CANNON_BULLET_SPEED / len
+                b.vx = dx * AIMED_BULLET_SPEED / len
+                b.vy = dy * AIMED_BULLET_SPEED / len
                 sfx_play(SFX_CANNON_SHOOT)
         e.aim_countdown -= 1
         if e.aim_countdown == 0:
@@ -607,32 +601,20 @@ func enemy_cannon_update(e: Enemy*):
 # ---------------------------------------------------------------------------
 # jelly
 # ---------------------------------------------------------------------------
-const JELLY_BOB_AMP       = 12
-const JELLY_BOB_HALF      = 40
-const JELLY_ARM_FRAMES    = 5
-const JELLY_ARM_RATE      = 4
-const JELLY_LOS_LATCH     = 18
 const JELLY_AIM_FRAMES    = 25
-const JELLY_SHOT_AT       = 5
 const JELLY_COOLDOWN      = 120
-const JELLY_BULLET_SPEED  = 18
-
-func enemy_jelly_clear_charge(e: Enemy*):
-    e.charge = null
+const JELLY_SPEED         = 34
+const JELLY_MAX_SPEED     = 10
 
 func enemy_jelly_update(e: Enemy*):
-    # triangle-wave bob around home_sy
-    e.run_tick += 1
-    var p = e.run_tick % (JELLY_BOB_HALF * 2)
-    var yoff = 0
-    if p < JELLY_BOB_HALF:
-        yoff = p * JELLY_BOB_AMP * 2 / JELLY_BOB_HALF - JELLY_BOB_AMP
-    else:
-        yoff = (JELLY_BOB_HALF * 2 - p) * JELLY_BOB_AMP * 2 / JELLY_BOB_HALF - JELLY_BOB_AMP
-    e.sy = e.home_sy + yoff * SP
-    e.box.x = e.sx / SP
-    e.box.y = e.sy / SP
-    e.frame = e.run_tick / JELLY_ARM_RATE % JELLY_ARM_FRAMES
+    e.anim_tick += 1
+    if e.anim_tick % 3:
+        e.vy += e.vx
+        if abs(e.vy) > JELLY_SPEED: e.vx = -e.vx
+        e.sy += clamp(e.vy, -JELLY_MAX_SPEED, JELLY_MAX_SPEED)
+        e.box.x = e.sx / SP
+        e.box.y = e.sy / SP
+        e.frame = e.anim_tick / 5 % 5
 
     var cx = box_center_x(e.box)
     var cy = box_center_y(e.box)
@@ -642,52 +624,34 @@ func enemy_jelly_update(e: Enemy*):
         and box_encloses(camera.box, e.box)
         and level_has_los(cx, cy, hx, hy))
 
-    # keep charge glued to body while aiming
     if e.charge:
-        if e.charge.ttl <= 0 or e.charge.type != PARTICLE_TYPE_CHARGE:
-            e.charge = null
+        e.charge.sx = cx * SP
+        e.charge.sy = cy * SP
+        if e.charge.ttl <= 0: e.charge = null
+
+    if e.shoot_countdown > 0:
+        e.shoot_countdown -= 1
+        if e.shoot_countdown == 0:
+            e.pace_countdown = 10
+    elif e.pace_countdown > 0:
+        if not loc: e.pace_countdown = 10
         else:
-            e.charge.sx = cx * SP
-            e.charge.sy = cy * SP
-            if e.charge.ttl < 3: e.charge.ttl = 3
+            e.pace_countdown -= 1
+            if e.pace_countdown == 0:
+                e.aim_countdown = 10
+                e.charge = particle_spawn(PARTICLE_TYPE_CHARGE, cx, cy)
+                sfx_play(SFX_CHARGE)
 
-    if e.aim_countdown > 0:
-        if not loc:
-            enemy_jelly_clear_charge(e)
-            e.aim_countdown = 0
-            e.pace_countdown = 0
-            e.shoot_countdown = 30
-            return
-
-        if e.aim_countdown == JELLY_AIM_FRAMES:
-            e.charge = particle_spawn(PARTICLE_TYPE_CHARGE, cx, cy)
-            sfx_play(SFX_CHARGE)
-
-        if e.aim_countdown == JELLY_SHOT_AT:
+    elif e.aim_countdown > 0:
+        e.aim_countdown -= 1
+        if e.aim_countdown == 0:
+            e.shoot_countdown = 120
             var dx = hx - cx
             var dy = hy - cy
             var len = sqrt(dx * dx + dy * dy)
             if len < 1: len = 1
             var b = enemy_bullet_spawn(ENEMY_BULLET_TYPE_AIMED, cx - 1, cy - 1)
             if b:
-                b.vx = dx * JELLY_BULLET_SPEED / len
-                b.vy = dy * JELLY_BULLET_SPEED / len
+                b.vx = dx * AIMED_BULLET_SPEED / len
+                b.vy = dy * AIMED_BULLET_SPEED / len
                 sfx_play(SFX_CANNON_SHOOT)
-            enemy_jelly_clear_charge(e)
-
-        e.aim_countdown -= 1
-        if e.aim_countdown == 0:
-            e.shoot_countdown = JELLY_COOLDOWN
-            e.pace_countdown = 0
-
-    elif e.shoot_countdown > 0:
-        e.shoot_countdown -= 1
-        e.pace_countdown = 0
-
-    elif loc:
-        e.pace_countdown += 1
-        if e.pace_countdown >= JELLY_LOS_LATCH:
-            e.aim_countdown = JELLY_AIM_FRAMES
-            e.pace_countdown = 0
-    else:
-        e.pace_countdown = 0

@@ -324,19 +324,19 @@ func level_draw_background():
                     if color: sprite(x, y + i - 16, TS, 1, 0, 32 + color, 0)
 
             elif t == 'S':
-                q = level.tick * 2 % 32
+                var q = level.tick * 2 % 32
                 for i = 0, 32:
                     q = (q + 5) % 31
-                    color = q >= i ? 0 : q > 10 ? 3 : 6
+                    var color = q >= i ? 0 : q > 10 ? 3 : 6
                     if color: sprite(x, y + 31 - i, TS, 1, 0, 32 + color, 0)
 
     if level.active_checkpoint:
-        x = level.active_checkpoint.x
-        y = level.active_checkpoint.y
-        q = level.checkpoint_tick * 2 % 32
+        var x = level.active_checkpoint.x
+        var y = level.active_checkpoint.y
+        var q = level.checkpoint_tick * 2 % 32
         for i = 0, 32:
             q = (q + 5) % 31
-            color = q >= min(i, level.checkpoint_tick / 4) or q > 10 ? 0 : 3
+            var color = q >= min(i, level.checkpoint_tick / 4) or q > 10 ? 0 : 3
             if color: camera_sprite(x, y + i - 16, TS, 1, 0, 32 + color, 0)
 
 

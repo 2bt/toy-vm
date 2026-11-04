@@ -126,7 +126,7 @@ func init_stage():
         k.state = BLOCK_STATE_DEAD
         k += 1
 
-    i = 5
+    var i = 5
     while i:
         k = blocks[rand(0, blocks_alive - 1)]
         if k.type == BLOCK_TYPE_NORMAL:

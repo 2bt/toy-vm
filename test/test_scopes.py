@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import atexit
 import re
+import shutil
 import sys
 import tempfile
 import textwrap
@@ -13,6 +15,7 @@ import compile as C  # noqa: E402
 
 def write_toy(source: str) -> Path:
     d = Path(tempfile.mkdtemp(dir=ROOT / "test"))
+    atexit.register(shutil.rmtree, d, True)
     p = d / "main.toy"
     p.write_text(textwrap.dedent(source))
     return p

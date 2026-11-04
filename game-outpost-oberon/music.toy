@@ -242,7 +242,7 @@ func music_play(p: int*):
         elif c == '@':
             i = read_num(p)
             if i < note_streams.len:
-                s = note_streams[i]
+                var s = note_streams[i]
                 if s.pos: continue
                 s.pos         = p
                 s.index       = i

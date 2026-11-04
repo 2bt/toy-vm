@@ -230,17 +230,15 @@ func read_num(p: int**) int:
 func music_play(p: int*):
     for n in instruments: n.* = null
     for s in note_streams: s.* = {}
-    var c
-    var i
     while p.*:
-        c = p.*
+        var c = p.*
         p += 1
         if c == '#': skip_line(p)
         elif c == '$':
-            i = read_num(p)
+            var i = read_num(p)
             if i < instruments.len: instruments[i] = p
         elif c == '@':
-            i = read_num(p)
+            var i = read_num(p)
             if i < note_streams.len:
                 var s = note_streams[i]
                 if s.pos: continue

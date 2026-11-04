@@ -384,65 +384,27 @@ class Parser:
         self.scopes.pop()
         self.frame_offset = saved
 
-    def mint_local_name(self, short):
+    def declare_local(self, short, ty, *, bound=False):
+        if short in self.scopes[-1]: self.error(f"variable '{short}' already exists")
         n = self.mint_count.get(short, 0)
         self.mint_count[short] = n + 1
-        func = self.current_func.name
-        return f"{func}.{short}" if n == 0 else f"{func}.{short}.{n}"
-
-    def declare_local(self, short, ty, *, bound=False):
-        if not self.scopes:
-            self.error("local declaration outside function")
-        if short in self.scopes[-1]:
-            self.error(f"variable '{short}' already exists")
-        unique = self.mint_local_name(short)
+        unique = f"{self.current_func.name}.{short}" if n == 0 else f"{self.current_func.name}.{short}.{n}"
         self.scopes[-1][short] = unique
         self.var_type[unique] = ty
         self.var_func[unique] = self.current_func.name
-        if unique not in self.var_addr:
-            off = self.frame_offset
-            self.var_offset[unique] = off
-            size = self.type_size(ty)
-            self.frame_offset = off + size
-            self.current_func.frame_size = max(self.current_func.frame_size, off + size)
-        if bound:
-            self.var_bound.add(unique)
+        self.var_offset[unique] = self.frame_offset
+        self.frame_offset += self.type_size(ty)
+        self.current_func.frame_size = max(self.current_func.frame_size, self.frame_offset)
+        if bound: self.var_bound.add(unique)
         return unique
 
-    def lookup_local(self, short):
-        for scope in reversed(self.scopes):
-            if short in scope:
-                return scope[short]
-        return None
-
-    def begin_function_locals(self, func):
-        self.scopes = []
-        self.frame_offset = 0
-        self.mint_count = {}
-        func.frame_size = 0
-        self.push_scope()
-        # Formals were registered in pass 1 as func.args unique names with var_type
-        # and optional var_addr. Install short names into this scope and assign
-        # offsets for non-@ formals in declaration order.
-        for unique in func.args:
-            short = unique[len(func.name) + 1:]  # safe: formals always "{func}.{short}" with no .n
-            if short in self.scopes[-1]:
-                self.error(f"variable '{short}' already exists")
-            self.scopes[-1][short] = unique
-            self.var_func[unique] = func.name
-            self.mint_count[short] = self.mint_count.get(short, 0) + 1
-            if unique not in self.var_addr:
-                ty = self.var_type[unique]
-                off = self.frame_offset
-                self.var_offset[unique] = off
-                size = self.type_size(ty)
-                self.frame_offset = off + size
-                func.frame_size = max(func.frame_size, off + size)
-
-    def var_decl(self, name, local=False):
+    def var_decl(self, local=False):
         """Shared global/local var parsing. Always returns a stmt (NoOp for globals).
-        For locals, name is the short name; declare_local mints the unique name."""
-        if not local and name in self.var_type: self.error(f"variable '{name}' already exists")
+        For locals, declare_local mints the unique name from the short id."""
+        name_tok = self.eat("id")
+        name = name_tok.v
+        if not local and name in self.var_type:
+            self.error(f"variable '{name}' already exists", name_tok)
         ty = self.type(auto_array_size=True) if self.peek(":") else None
 
         if self.peek("@"):
@@ -517,7 +479,7 @@ class Parser:
                 self.eat("eol")
 
             elif tok.k == "var":
-                self.var_decl(self.eat("id").v, local=False)
+                self.var_decl(local=False)
                 self.eat("eol")
 
             elif tok.k == "struct":
@@ -574,10 +536,23 @@ class Parser:
                 self.head = func.head
                 self.current_func = func
                 self.call_stack.append(func)
-                self.begin_function_locals(func)
+                self.frame_offset = 0
+                self.mint_count = {}
+                func.frame_size = 0
+                scope = {}
+                # Formals from pass 1: install into function scope; skip frame for @.
+                for unique in func.args:
+                    short = unique[len(func.name) + 1:]  # "{func}.{short}", no .n
+                    scope[short] = unique
+                    self.var_func[unique] = func.name
+                    self.mint_count[short] = 1
+                    if unique not in self.var_addr:
+                        self.var_offset[unique] = self.frame_offset
+                        self.frame_offset += self.type_size(self.var_type[unique])
+                        func.frame_size = max(func.frame_size, self.frame_offset)
+                self.scopes = [scope]
                 func.body = self.block(already_scoped=True)
-                self.pop_scope(0)  # begin_function_locals pushed one scope at offset 0
-                self.scopes = []
+                self.pop_scope(0)
                 self.call_stack.pop()
                 self.current_func = None
 
@@ -620,7 +595,7 @@ class Parser:
     def block(self, already_scoped=False):
         stmts = []
         self.eat(":")
-        saved = None if already_scoped else self.push_scope()
+        if not already_scoped: saved = self.push_scope()
         if self.peek("eol"):
             self.eat()
             if self.peek("indent"):
@@ -681,7 +656,6 @@ class Parser:
             self.loop += 1
             body = self.block(already_scoped=True)
             self.loop -= 1
-            self.var_bound.discard(unique)
             self.pop_scope(saved)
             return For(init, cond, next, body)
 
@@ -721,8 +695,7 @@ class Parser:
 
         if self.peek("var"):
             self.eat()
-            name = self.eat("id").v
-            stmt = self.var_decl(name, local=True)
+            stmt = self.var_decl(local=True)
             self.eat("eol")
             return stmt
 
@@ -1040,9 +1013,11 @@ class Parser:
             # variable
             node = None
             if self.current_func:
-                unique = self.lookup_local(name)
-                if unique is not None:
-                    node, ty = VarRef(unique), self.var_type[unique]
+                for scope in reversed(self.scopes):
+                    if name in scope:
+                        unique = scope[name]
+                        node, ty = VarRef(unique), self.var_type[unique]
+                        break
             if not node:
                 if name not in self.var_type: self.error(f"unknown variable '{name}'")
                 node, ty = VarRef(name), self.var_type[name]
@@ -1513,10 +1488,9 @@ class Codegen:
             # add temporary variables to locals
             for t, ty in self.tmp_vars.items():
                 ast.var_type[t] = ty
-                off = self.current_func.frame_size
-                ast.var_offset[t] = off
+                ast.var_offset[t] = self.current_func.frame_size
                 ast.var_func[t] = name
-                self.current_func.frame_size = off + ast.type_size(ty)
+                self.current_func.frame_size += ast.type_size(ty)
 
         # variables with fixed addresses
         self.lines = ["_R = 0"]

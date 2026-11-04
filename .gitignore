@@ -7,3 +7,5 @@ code
 *.asm
 *.aseprite
 docs/
+
+.worktrees/

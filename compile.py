@@ -137,6 +137,7 @@ class Func:
     uses: int = 0
     head: Head = None
     loc: object = None
+    frame_size: int = 0
 
 
 INT = Type("int", 0, None)
@@ -253,6 +254,10 @@ class Parser:
         self.var_data     = {}
         self.var_type     = {}
         self.var_bound    = set()
+        self.var_offset   = {}
+        self.scopes       = []
+        self.frame_offset = 0
+        self.mint_count   = {}
         self.current_func = None
         self.call_stack   = []
         # for includes
@@ -368,6 +373,68 @@ class Parser:
             ty = annotated
         if is_auto_array(ty): self.error("invalid array size")
         return ty
+
+    def push_scope(self):
+        saved = self.frame_offset
+        self.scopes.append({})
+        return saved
+
+    def pop_scope(self, saved):
+        self.scopes.pop()
+        self.frame_offset = saved
+
+    def mint_local_name(self, short):
+        n = self.mint_count.get(short, 0)
+        self.mint_count[short] = n + 1
+        func = self.current_func.name
+        return f"{func}.{short}" if n == 0 else f"{func}.{short}.{n}"
+
+    def declare_local(self, short, ty, *, bound=False):
+        if not self.scopes:
+            self.error("local declaration outside function")
+        if short in self.scopes[-1]:
+            self.error(f"variable '{short}' already exists")
+        unique = self.mint_local_name(short)
+        self.scopes[-1][short] = unique
+        self.var_type[unique] = ty
+        if unique not in self.var_addr:
+            off = self.frame_offset
+            self.var_offset[unique] = off
+            size = self.type_size(ty)
+            self.frame_offset = off + size
+            self.current_func.frame_size = max(self.current_func.frame_size, off + size)
+        if bound:
+            self.var_bound.add(unique)
+        return unique
+
+    def lookup_local(self, short):
+        for scope in reversed(self.scopes):
+            if short in scope:
+                return scope[short]
+        return None
+
+    def begin_function_locals(self, func):
+        self.scopes = []
+        self.frame_offset = 0
+        self.mint_count = {}
+        func.frame_size = 0
+        self.push_scope()
+        # Formals were registered in pass 1 as func.args unique names with var_type
+        # and optional var_addr. Install short names into this scope and assign
+        # offsets for non-@ formals in declaration order.
+        for unique in func.args:
+            short = unique[len(func.name) + 1:]  # safe: formals always "{func}.{short}" with no .n
+            if short in self.scopes[-1]:
+                self.error(f"variable '{short}' already exists")
+            self.scopes[-1][short] = unique
+            self.mint_count[short] = self.mint_count.get(short, 0) + 1
+            if unique not in self.var_addr:
+                ty = self.var_type[unique]
+                off = self.frame_offset
+                self.var_offset[unique] = off
+                size = self.type_size(ty)
+                self.frame_offset = off + size
+                func.frame_size = max(func.frame_size, off + size)
 
     def var_decl(self, name, local=False):
         """Shared global/local var parsing. Always returns a stmt (NoOp for globals)."""

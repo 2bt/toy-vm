@@ -64,8 +64,8 @@ class ScopeTests(unittest.TestCase):
                     var x = 2
                 x = 3
         """)
-        self.assertIn("tick.x", parser.var_type)
-        self.assertIn("tick.x.1", parser.var_type)
+        self.assertIn("tick.x", parser.vars)
+        self.assertIn("tick.x.1", parser.vars)
         # assignment after if must refer to tick.x (unique without .n)
         self.assertRegex(asm, r"mov tick\.x, #3")
 
@@ -94,8 +94,8 @@ class ScopeTests(unittest.TestCase):
                     var z = i
         """)
         # two loop indices minted
-        self.assertIn("tick.i", parser.var_type)
-        self.assertIn("tick.i.1", parser.var_type)
+        self.assertIn("tick.i", parser.vars)
+        self.assertIn("tick.i.1", parser.vars)
 
     def test_sibling_blocks_reuse_offset_and_frame_size(self):
         parser, asm = compile_toy("""
@@ -105,7 +105,7 @@ class ScopeTests(unittest.TestCase):
                 else:
                     var b: int[4]
         """)
-        self.assertEqual(parser.var_offset["tick.a"], parser.var_offset["tick.b"])
+        self.assertEqual(parser.vars["tick.a"].offset, parser.vars["tick.b"].offset)
         self.assertEqual(parser.funcs["tick"].frame_size, 4)
         # same absolute address in asm
         ma = re.search(r"^tick\.a = (\d+)", asm, re.M)
@@ -122,8 +122,8 @@ class ScopeTests(unittest.TestCase):
                     var x = 2
         """)
         self.assertNotEqual(
-            parser.var_offset["tick.x"],
-            parser.var_offset["tick.x.1"],
+            parser.vars["tick.x"].offset,
+            parser.vars["tick.x.1"].offset,
         )
         self.assertEqual(parser.funcs["tick"].frame_size, 2)
 

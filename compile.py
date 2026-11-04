@@ -139,6 +139,15 @@ class Func:
     loc: object = None
     frame_size: int = 0
 
+@dataclass
+class Var:
+    type: Type
+    addr: int | None = None
+    data: list | None = None
+    offset: int | None = None
+    func: str | None = None
+    bound: bool = False
+
 
 INT = Type("int", 0, None)
 
@@ -250,12 +259,7 @@ class Parser:
         self.funcs        = {}
         self.structs      = {}
         self.loop         = 0
-        self.var_addr     = {}
-        self.var_data     = {}
-        self.var_type     = {}
-        self.var_bound    = set()
-        self.var_offset   = {}
-        self.var_func     = {}
+        self.vars         = {}
         self.scopes       = []
         self.frame_offset = 0
         self.mint_count   = {}
@@ -317,9 +321,8 @@ class Parser:
 
     def intern(self, e):
         """Turn an ArrLit into a named global array (for address/copy use)."""
-        name = f"_arr_{len(self.var_data)}"
-        self.var_type[name] = Type("int", 0, len(e.data))
-        self.var_data[name] = e.data
+        name = f"_arr_{sum(1 for k in self.vars if k.startswith('_arr_'))}"
+        self.vars[name] = Var(type=Type("int", 0, len(e.data)), data=e.data)
         return VarRef(name)
 
     def array_lit(self, init):
@@ -335,7 +338,7 @@ class Parser:
 
     def store_var_data(self, name, data):
         if any(x != 0 for x in data):
-            self.var_data[name] = data
+            self.vars[name].data = data
 
     def fit_arr(self, e, ty):
         """Pad/size-check an ArrLit for an int[N] destination. Returns (ArrLit, ty)."""
@@ -354,7 +357,7 @@ class Parser:
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif (is_ptr(want) and want.base == t.base and want.ptr == t.ptr + 1
               and isinstance(e, (VarRef, Deref))):
-            if isinstance(e, VarRef) and e.name in self.var_bound:
+            if isinstance(e, VarRef) and self.vars[e.name].bound:
                 self.error("variable is bound")
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif isinstance(e, ArrLit) and is_array(want):
@@ -390,12 +393,11 @@ class Parser:
         self.mint_count[short] = n + 1
         unique = f"{self.current_func.name}.{short}" if n == 0 else f"{self.current_func.name}.{short}.{n}"
         self.scopes[-1][short] = unique
-        self.var_type[unique] = ty
-        self.var_func[unique] = self.current_func.name
-        self.var_offset[unique] = self.frame_offset
+        self.vars[unique] = Var(
+            type=ty, offset=self.frame_offset, func=self.current_func.name, bound=bound,
+        )
         self.frame_offset += self.type_size(ty)
         self.current_func.frame_size = max(self.current_func.frame_size, self.frame_offset)
-        if bound: self.var_bound.add(unique)
         return unique
 
     def var_decl(self, local=False):
@@ -403,21 +405,20 @@ class Parser:
         For locals, declare_local mints the unique name from the short id."""
         name_tok = self.eat("id")
         name = name_tok.v
-        if not local and name in self.var_type:
+        if not local and name in self.vars:
             self.error(f"variable '{name}' already exists", name_tok)
         ty = self.type(auto_array_size=True) if self.peek(":") else None
 
         if self.peek("@"):
             if local: self.error("@ only allowed on globals")
             self.eat()
-            self.var_addr[name] = self.const_expr()
-            self.var_type[name] = self.finish_type(ty)
+            self.vars[name] = Var(type=self.finish_type(ty), addr=self.const_expr())
             return NoOp()
 
         if not self.peek("="):
             ty = self.finish_type(ty)
             if local: self.declare_local(name, ty)
-            else: self.var_type[name] = ty
+            else: self.vars[name] = Var(type=ty)
             return NoOp()
 
         self.eat("=")
@@ -427,8 +428,10 @@ class Parser:
             if local:
                 dst = VarRef(self.declare_local(name, ty))
                 return self.lower_init(dst, ty, init)
-            self.var_type[name] = ty
-            self.store_var_data(name, self.const_init_data(ty, init))
+            # const_init before insert so interned _arr_* land first in .data
+            data = self.const_init_data(ty, init)
+            self.vars[name] = Var(type=ty)
+            self.store_var_data(name, data)
             return NoOp()
 
         e, t = self.expr()
@@ -438,7 +441,7 @@ class Parser:
             if local:
                 dst = VarRef(self.declare_local(name, ty))
                 return Copy(dst, self.intern(e), self.type_size(ty))
-            self.var_type[name] = ty
+            self.vars[name] = Var(type=ty)
             self.store_var_data(name, e.data)
             return NoOp()
 
@@ -448,8 +451,9 @@ class Parser:
             dst = VarRef(self.declare_local(name, ty))
             if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
             return Assign("=", dst, e)
-        self.var_type[name] = ty
-        self.store_var_data(name, self.const_init_slot(ty, (e, t)))
+        data = self.const_init_slot(ty, (e, t))  # may intern
+        self.vars[name] = Var(type=ty)
+        self.store_var_data(name, data)
         return NoOp()
 
     def get_struct(self, name):
@@ -509,11 +513,13 @@ class Parser:
                 def func_arg():
                     name = self.eat("id").v
                     long = f"{func.name}.{name}"
-                    if long in self.var_type: self.error(f"variable '{name}' already exists")
-                    self.var_type[long] = t = self.type()
+                    if long in self.vars: self.error(f"variable '{name}' already exists")
+                    t = self.type()
+                    addr = None
                     if self.peek("@"):
                         self.eat()
-                        self.var_addr[long] = self.const_expr()
+                        addr = self.const_expr()
+                    self.vars[long] = Var(type=t, addr=addr)
                     func.args.append(long)
 
                 self.eat("(")
@@ -544,11 +550,12 @@ class Parser:
                 for unique in func.args:
                     short = unique[len(func.name) + 1:]  # "{func}.{short}", no .n
                     scope[short] = unique
-                    self.var_func[unique] = func.name
+                    v = self.vars[unique]
+                    v.func = func.name
                     self.mint_count[short] = 1
-                    if unique not in self.var_addr:
-                        self.var_offset[unique] = self.frame_offset
-                        self.frame_offset += self.type_size(self.var_type[unique])
+                    if v.addr is None:
+                        v.offset = self.frame_offset
+                        self.frame_offset += self.type_size(v.type)
                         func.frame_size = max(func.frame_size, self.frame_offset)
                 self.scopes = [scope]
                 func.body = self.block(already_scoped=True)
@@ -705,7 +712,7 @@ class Parser:
             return a
 
         if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().k in ASSIGN_OPS:
-            if isinstance(a, VarRef) and a.name in self.var_bound:
+            if isinstance(a, VarRef) and self.vars[a.name].bound:
                 self.error("variable is bound")
             op = self.eat().k
             if op == "=" and self.peek("{") and is_aggregate(ta):
@@ -858,7 +865,7 @@ class Parser:
             self.eat()
             a, ta = self.primary()
             if not isinstance(a, (VarRef, Deref)): self.error("& operand must be lvalue")
-            if isinstance(a, VarRef) and a.name in self.var_bound:
+            if isinstance(a, VarRef) and self.vars[a.name].bound:
                 self.error("variable is bound")
             if is_array(ta): self.error("address of array not allowed")
             return addr_of(a), Type(ta.base, ta.ptr + 1, None)
@@ -993,7 +1000,7 @@ class Parser:
                     while True:
                         if n_args >= len(func.args): self.error("wrong number of function arguments")
                         formal = func.args[n_args]
-                        ty = self.var_type[formal]
+                        ty = self.vars[formal].type
                         dst = VarRef(formal)
                         if self.peek("{") and is_aggregate(ty):
                             setup.append(self.lower_init(dst, ty, self.init_list()))
@@ -1016,11 +1023,11 @@ class Parser:
                 for scope in reversed(self.scopes):
                     if name in scope:
                         unique = scope[name]
-                        node, ty = VarRef(unique), self.var_type[unique]
+                        node, ty = VarRef(unique), self.vars[unique].type
                         break
             if not node:
-                if name not in self.var_type: self.error(f"unknown variable '{name}'")
-                node, ty = VarRef(name), self.var_type[name]
+                if name not in self.vars: self.error(f"unknown variable '{name}'")
+                node, ty = VarRef(name), self.vars[name].type
 
         return self.postfix(node, ty)
 
@@ -1487,18 +1494,19 @@ class Codegen:
             lines += peephole(self.lines, self.tmp_vars)
             # add temporary variables to locals
             for t, ty in self.tmp_vars.items():
-                ast.var_type[t] = ty
-                ast.var_offset[t] = self.current_func.frame_size
-                ast.var_func[t] = name
+                ast.vars[t] = Var(
+                    type=ty, offset=self.current_func.frame_size, func=name,
+                )
                 self.current_func.frame_size += ast.type_size(ty)
 
         # variables with fixed addresses
         self.lines = ["_R = 0"]
         addr = 1
-        for name, a in ast.var_addr.items():
-            assert name not in ast.var_data
-            self.emit(f"{name} = {a}")
-            addr = max(addr, a + ast.type_size(ast.var_type[name]))
+        for name, v in ast.vars.items():
+            if v.addr is None: continue
+            assert v.data is None
+            self.emit(f"{name} = {v.addr}")
+            addr = max(addr, v.addr + ast.type_size(v.type))
 
         cache = {}
         def alloc_vars(name):
@@ -1506,27 +1514,30 @@ class Codegen:
             func = self.funcs[name]
             a = addr
             for f in func.calls: a = max(a, alloc_vars(f))
-            for n, off in sorted(((n, o) for n, o in ast.var_offset.items() if ast.var_func.get(n) == name),
-                                 key=lambda x: (x[1], x[0])):
-                assert n not in ast.var_data
-                self.emit(f"{n} = {a + off}")
+            for n, v in sorted(
+                ((n, v) for n, v in ast.vars.items() if v.func == name and v.offset is not None),
+                key=lambda x: (x[1].offset, x[0]),
+            ):
+                assert v.data is None
+                self.emit(f"{n} = {a + v.offset}")
             cache[name] = a + func.frame_size
             return cache[name]
         addr = max(alloc_vars(name) for name in func_order)
 
         # global variables
-        for name, ty in ast.var_type.items():
-            if name not in ast.var_addr and name not in ast.var_data and "." not in name:
+        for name, v in ast.vars.items():
+            if v.addr is None and v.data is None and "." not in name:
                 self.emit(f"{name} = {addr}")
-                addr += ast.type_size(ty)
+                addr += ast.type_size(v.type)
 
         # data
         self.emit("")
         self.emit(f"    .data {addr}")
-        for name, data in ast.var_data.items():
+        for name, v in ast.vars.items():
+            if v.data is None: continue
             self.emit(f"{name}:")
             ln = "   "
-            for d in data:
+            for d in v.data:
                 lo = ln
                 ln += f" {d},"
                 if len(ln) > 80:

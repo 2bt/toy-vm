@@ -1,10 +1,10 @@
-const ENEMY_TYPE_PATROL  = 1
-const ENEMY_TYPE_BUGGER  = 2
-const ENEMY_TYPE_CANNON  = 3
-
 const ENEMY_STATE_DEAD   = 0
 const ENEMY_STATE_NORMAL = 1
 const ENEMY_STATE_DYING  = 2
+
+const ENEMY_TYPE_PATROL  = 1
+const ENEMY_TYPE_BUGGER  = 2
+const ENEMY_TYPE_CANNON  = 3
 
 const ENEMY_BULLET_TYPE_BASIC = 1
 const ENEMY_BULLET_TYPE_AIMED = 2
@@ -171,6 +171,7 @@ func enemy_spawn(type, x, y):
         e.sy = (y + 16 - e.box.h) * SP + SP - 1
 
         if type == ENEMY_TYPE_CANNON:
+            e.sy = (y + 8 - e.box.h / 2) * SP
             if e.facing_left: e.sx += 5 * SP
             else:             e.sx -= 6 * SP
 
@@ -535,7 +536,6 @@ func enemy_bugger_update(e: Enemy*):
 # ---------------------------------------------------------------------------
 const CANNON_LOS_LATCH    = 25
 const CANNON_BULLET_SPEED = 18
-# single burst countdown: charge at 60/40/20, fire at 55/35/15
 const CANNON_BURST_FRAMES = 60
 
 func enemy_cannon_update(e: Enemy*):
@@ -562,7 +562,7 @@ func enemy_cannon_update(e: Enemy*):
                 sfx_play(SFX_CANNON_SHOOT)
         e.aim_countdown -= 1
         if e.aim_countdown == 0:
-            e.shoot_countdown = rand(90, 180)
+            e.shoot_countdown = 120
             e.pace_countdown = 0
 
     elif e.shoot_countdown > 0:

@@ -89,8 +89,10 @@ include "hero.toy"
 
 func game_init():
     game = {}
+    # game.level = 1
     game_set_state(GAME_STATE_TITLE)
     game_init_level(LEVEL_TITLE_DATA)
+    music.volume = 48
     music_play(MUSIC_TITLE)
 
 
@@ -101,12 +103,14 @@ func game_set_state(s):
         music_play("")
     elif s == GAME_STATE_PLAY:
         game_init_level(LEVEL_DATA[game.level])
+        music.volume = 32
         music_play(MUSIC_LEVEL)
 
     elif s == GAME_STATE_LEVEL_DONE:
         game.countdown = LEVEL_DONE_FRAMES
         music_play("")
     elif s == GAME_STATE_GAME_OVER:
+        music.volume = 64
         music_play(MUSIC_GAME_OVER)
 
 
@@ -116,7 +120,7 @@ func game_init_level(data: int*):
     camera_center_on_hero()
     enemy_init_all()
     for b in hero_bullets: b.* = {}
-    for eb in enemy_bullets: eb.* = {}
+    for b in enemy_bullets: b.* = {}
     for p in particles: p.* = {}
 
 

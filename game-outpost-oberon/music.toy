@@ -1,12 +1,10 @@
 var MUSIC_TITLE = "
 $0 s64 r3 N=77,PW100w2~0,180w-2
 $1 s64 r1 N=77,PW30w10~0
-$3 v32 s64 r2 N=90,PW128w2~0
+$3 v40d20r2 N=94,PW128w2~0
 
-# thunder
+# thunder, kick, snare
 $4 d15v80 N=66,|PW128=35,,T,=38,v10,,,v80
-
-# kick & snare
 $5 v70 s64r2 N=66,PW128=38,=35,T=32,=30,
 $6 v70 s64d20 N=66,PW128=42,=38,N=66,P=35,
 
@@ -14,13 +12,21 @@ $6 v70 s64d20 N=66,PW128=42,=38,N=66,P=35,
 $10 d8s40r8 N=94,S|~7,,~0,,~3,,
 $11 d8s40r8 N=94,S|~8,,~0,,~5,,
 $12 d8s40r8 N=94,S|~7,,~0,,~4,,
-$15 d7s50r11 N=94,PW50w20~0,10Y2y20,30Y8
+$20 d7s50r11 N=94,PW50w20~0,10Y2y20,30Y8
 
+$13 d15r2 N=94,S|~3,~7,~12,~7,~3,~0,~-5,~0,
+$14 d15r2 N=94,S|~3,~7,~10,~7,~3,~-2,~-5,~0,
+$15 d15r2 N=94,S|~2,~7,~10,~7,~2,~-2,~-5,~0,
+$21 d10r3 N=94,PW128w20~0
+$30 d20r3 N=94,PW128w20~0
+$31 d20r3 N=94,PW128w20~7,,~0
+$33 sd12 s48 r10 N=94,PW128w20~0,10Y4,20
+$34 d12r10 N=94,PW128w20~0,10Y4,20
+$35 d4 s20 r3 N=94,PW160w20~0
 
 @0 t7 q2 o2
 @1 t7 q2 o3
 @2 t7 q2 o3
-
 
 # intro
 @0 i0 <g>,*3c,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
@@ -46,7 +52,7 @@ c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c'
 c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
 <g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
 
-c,,c',c,c,c,c--,a+,     c,c,c',c,c--,a+,c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
 <g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
 <g+,,g+',g+,g+,g+,g+--,g+--',     g+,g+,g+',g+,g+--,g+--',g+',g+,   g+,g+',g+,g+,g+',g+,g+,g+',     g+,g+',g+,g+,g+--,g+--,g+,g+',>
 <f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',>
@@ -56,7 +62,7 @@ c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c'
 c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
 <g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
 
-c,,c',c,c,c,c--,a+,     c,c,c',c,c--,a+,c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
 <g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
 <g+,,g+',g+,g+,g+,g+--,g+--',     g+,g+,g+',g+,g+--,g+--',g+',g+,   g+,g+',g+,g+,g+',g+,g+,g+',     g+,g+',g+,g+,g+--,g+--,g+,g+',>
 <f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',>
@@ -87,20 +93,115 @@ i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c
 =,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,,
 q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,i10g,, ,,,,,,=,,
 
-q2 i15 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
+q2 i20 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
 c,<g>,d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7d+,,g, ,14,,,,,=,,
 
 q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,i10g,, ,,,,,,=,,
 q10 i10g,i11g,g,g,,i10g,i11g,i10g,i11g,,g,,g,7g,,14g,,  i10g,i11g,g,g,,i12f,,i11g,,i10g,,,,,=,,
 
-q2 i15 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
+q2 i20 <g+>,1*60c,13 <g>,14d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7<f,,g>, ,14,,,,,,=,
 c,<g>,d+,d, =,c,,,= ,c,f,d+,d,=,d+,=,   f-,1*40g,13f,14d+,7d,,14  d+,d,c,7d+,,g, ,14,,,,,=,,
+
+# part two
+@0 t7 i1 |
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+<g+,,g+',g+,g+,g+,g+--,g+--',     g+,g+,g+',g+,g+--,g+--',g+',g+,   g+,g+',g+,g+,g+',g+,g+,g+',     g+,g+',g+,g+,g+--,g+--,g+,g+',>
+<f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',>
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+
+@1 t7 |
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+
+i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,i5c,    i5c,i3c,c',c,i6c,i3c',c,c',     i5c,i3c,c',c,i6c,i3c',c,c',
+<i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,i3g',g,i5g,    i5g,i3g,g',g,i6g,i3g',g,g',     i5g,i3g,g',g,i6g,g,g,g>,
+<i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,i5g+,    i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+',     i5g+,i3g+,g+',g+,i6g+,i3g+',g+,g+'>,
+<i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,i5f,    i5f,i3f,f',f,i6f,i3f',f,f',     i5f,i3f,f',f,i6f,i3f',f,f'>,
+
+i5c,i3c,c',c,i5c,i3c',c,c',     i5c,i3c,c',c,i5c,i3c',c,i5c,    i5c,i3c,c',c,i5c,i3c',c,c',     i5c,i6c,c,c,c,i3c',i6c,c,
+i5c,i3c,c',c,i5c,i3c',c,c',     i5c,i3c,c',c,i5c,i3c',c,i5c,    i5c,i3c,c',c,i5c,i3c',c,c',     i5c,i6c,c,c,c,i3c',i6c,c,
+
+@2 v64 t7 o4 |
+i13c,,c,,,c,,c,,,c,,,i14c,,,    i13c,,i15c,,,i13c,,c,,,c,,,i14c,,,
+i13c,,c,,,c,,c,,,c,,,i14c,,,    i13c,,i15c,,,c,,c,,,c,,,i14c,,,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+
+
+# part 3
+
+@0 t7 i1 |
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',
+
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+<g,,g',g,g,g,g--,g--',     g,g,g',g,g--,g--',g',g,   g,g',g,g,g',g,g,g',     g,g',g,g,g--,g--,g,g',>
+c,,c',c,c,c,c--,c--',     c,c,c',c,c--,c--',c',c,   c,c',c,c,c',c,c,c',     c,c',c,c,c--,c--,c,c',
+f,,f',f,f,f,f--,f--',     f,f,f',f,f--,f--',f',f,   f,f',f,f,f',f,f,f',     f,f',f,f,f--,f--,f,f',
+
+
+@1 t7 |
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i5c,c,c,c,
+
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+<i5g,i30g,g',g,i6g,i30g,g,i5g,   i30g',i5g,i31g,g,i6g,i31g',g,i5g,   i5g,i30g,g',g,i6g,i30g,g,i5g,   i30g',i5g,i31g,g,i5g,g,g,g,>
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i6f,i31f',f,i5f,   i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i5f,f,f,f,
+
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i6f,i31f',f,i5f,   i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i5f,f,f,f,
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i6f,i31f',f,i5f,   i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i5f,f,f,f,
+
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+<i5g,i30g,g',g,i6g,i30g,g,i5g,   i30g',i5g,i31g,g,i6g,i31g',g,i5g,   i5g,i30g,g',g,i6g,i30g,g,i5g,   i30g',i5g,i31g,g,i5g,g,g,g,>
+i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,   i5c,i30c,c',c,i6c,i30c,c,i5c,   i30c',i5c,i31c,c,i6c,i31c',c,i5c,
+i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i6f,i31f',f,i5f,   i5f,i30f,f',f,i6f,i30f,f,i5f,   i30f',i5f,i31f,f,i5f,f,f,f,
+
+
+@2 v64 o4 | t7
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+
+i33 c---,1*40c,13,14,,=,i34<g>,c,d, c,1*30d+,13,7 c,1*30d+,13,7 c,1*30d+,13
+c,1*30d+,13,7 d+,14,7 c---,1*30c,13   i33d,14,,,,,,,i35d,d,d,d,7d,,,d,,,d,,,
+i33 c---,1*40c,13,14,,=,i34<g>,c,d, c,1*30d+,13,7 c,1*30d+,13,7 c,1*30d+,13
+c,1*30d+,13,7 f,14,7 c---,1*30c,13   g,14f,d+,f,7i33c,,14,,,i35f,,f,,f,d+,d,c,
+
+i35 d+,7c,d+,f,g,d+,f,c,g,f,g,d+,g,d,f,c,   d+,c,d+,f,g,d+,f,c,g,f,g,d+,g,d,f,c,
+i35 c,d,d+,f,d+,f,g,f,c,d,d+,f,d+,f,g,f,    d+,f,d+,f,g,f,g,c',d+,f,d+,f,g,f,g,c',
+
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+i21 c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>, c,<c>,d+,d+,c,f,f,c,g,c,c,c,<c,f,g,a+>,
+
+i33 c---,1*40c,13,14,,=,i34<g>,c,d, c,1*30d+,13,7 c,1*30d+,13,7 c,1*30d+,13
+c,1*30d+,13,7 d+,14,7 c---,1*30c,13   i33d,14,,,,,,,i35d,d,d,d,7d,,,d,,,d,,,
+i33 c---,1*40c,13,14,,=,i34<g>,c,d, c,1*30d+,13,7 c,1*30d+,13,7 c,1*30d+,13
+c,1*30d+,13,7 f,14,7 c---,1*30c,13   g,14f,d+,f,7i33c,,14,,,i35f,,f,,f,d+,d,c,
+
 "
-
-
-
-
-
 
 
 
@@ -149,9 +250,9 @@ i8c,,,,= ,,,, ,,,, ,,,,
 
 var MUSIC_GAME_OVER = "
 $0 d12 s64 r10 T |~0,4~-8,4~-16,4~-24,4
-@0 v150 i0 o4 c,4=,100,,,
+@0 i0 o4 c,4=,100,,,
 
-$1 a3 d12 s0 N|~0,,~16,,
+$1 v48a3d12 s0 N|~0,,~16,,
 @1 i1 o1 c,100,,,,
 "
 
@@ -162,7 +263,7 @@ struct InstrStream:
     loop: int*
     wait
 
-struct NoteStream:
+struct MusicStream:
     index
     pos: int*
     loop: int*
@@ -202,9 +303,12 @@ struct NoteStream:
     vib_rate
     vib_depth
 
-var instruments: int*[32]
-var note_streams: NoteStream[4]
-var music_volume = 32
+struct Music:
+    volume
+    instruments: int*[99]
+    streams: MusicStream[4]
+
+var music: Music
 
 
 func skip_space(p: int**):
@@ -228,19 +332,19 @@ func read_num(p: int**) int:
 
 
 func music_play(p: int*):
-    for n in instruments: n.* = null
-    for s in note_streams: s.* = {}
+    for n in music.instruments: n.* = null
+    for s in music.streams: s.* = {}
     while p.*:
         var c = p.*
         p += 1
         if c == '#': skip_line(p)
         elif c == '$':
             var i = read_num(p)
-            if i < instruments.len: instruments[i] = p
+            if i < music.instruments.len: music.instruments[i] = p
         elif c == '@':
             var i = read_num(p)
-            if i < note_streams.len:
-                var s = note_streams[i]
+            if i < music.streams.len:
+                var s = &music.streams[i]
                 if s.pos: continue
                 s.pos         = p
                 s.index       = i
@@ -259,7 +363,7 @@ const ENV_PEAK    = 256 * 64
 
 func env_step(rate) int: return ENV_PEAK / (1 + (rate + 8) * rate * 15 / 128)
 
-func music_read_row(v: NoteStream*) int:
+func music_read_row(v: MusicStream*) int:
     if not v.pos: return false
     v.next_note  = NOTE_EMPTY
     v.next_porta = 0
@@ -300,7 +404,7 @@ func music_read_row(v: NoteStream*) int:
 
 
 func music_update():
-    for v in note_streams:
+    for v in music.streams:
         if not v.pos: continue
 
         if v.wait == v.quant:
@@ -314,7 +418,7 @@ func music_update():
                     v.pitch        = v.pitch_target
                     v.env          = ENV_ATTACK
                     v.level        = 0
-                    v.instr_stream = { instruments[v.next_instr] }
+                    v.instr_stream = { music.instruments[v.next_instr] }
                     v.attack       = ENV_PEAK
                     v.sustain      = 0
                     v.pitch_offset = 0
@@ -382,7 +486,7 @@ func music_update():
 
         # set APU registers
         var vol = v.volume * v.instr_vol * v.level / (ENV_PEAK * 64)
-        sound(v.index + 4, pitch, v.pw, vol * music_volume / 64, v.wave)
+        sound(v.index + 4, pitch, v.pw, vol * music.volume / 64, v.wave)
 
         v.pw += v.pw_rate
         v.pw %= 1024

@@ -336,10 +336,6 @@ class Parser:
             data.append(e.value)
         return ArrLit(data)
 
-    def store_var_data(self, name, data):
-        if any(x != 0 for x in data):
-            self.vars[name].data = data
-
     def fit_arr(self, e, ty):
         """Pad/size-check an ArrLit for an int[N] destination. Returns (ArrLit, ty)."""
         if not is_array(ty) or ty.base != "int" or ty.ptr != 0: self.error("type error")
@@ -357,8 +353,7 @@ class Parser:
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif (is_ptr(want) and want.base == t.base and want.ptr == t.ptr + 1
               and isinstance(e, (VarRef, Deref))):
-            if isinstance(e, VarRef) and self.vars[e.name].bound:
-                self.error("variable is bound")
+            if isinstance(e, VarRef) and self.vars[e.name].bound: self.error("variable is bound")
             e, t = addr_of(e), Type(t.base, t.ptr + 1, None)
         elif isinstance(e, ArrLit) and is_array(want):
             e, want = self.fit_arr(e, want)
@@ -393,9 +388,7 @@ class Parser:
         self.mint_count[short] = n + 1
         unique = f"{self.current_func.name}.{short}" if n == 0 else f"{self.current_func.name}.{short}.{n}"
         self.scopes[-1][short] = unique
-        self.vars[unique] = Var(
-            type=ty, offset=self.frame_offset, func=self.current_func.name, bound=bound,
-        )
+        self.vars[unique] = Var(type=ty, offset=self.frame_offset, func=self.current_func.name, bound=bound)
         self.frame_offset += self.type_size(ty)
         self.current_func.frame_size = max(self.current_func.frame_size, self.frame_offset)
         return unique
@@ -428,10 +421,8 @@ class Parser:
             if local:
                 dst = VarRef(self.declare_local(name, ty))
                 return self.lower_init(dst, ty, init)
-            # const_init before insert so interned _arr_* land first in .data
             data = self.const_init_data(ty, init)
-            self.vars[name] = Var(type=ty)
-            self.store_var_data(name, data)
+            self.vars[name] = Var(type=ty, data=data if any(x != 0 for x in data) else None)
             return NoOp()
 
         e, t = self.expr()
@@ -441,8 +432,7 @@ class Parser:
             if local:
                 dst = VarRef(self.declare_local(name, ty))
                 return Copy(dst, self.intern(e), self.type_size(ty))
-            self.vars[name] = Var(type=ty)
-            self.store_var_data(name, e.data)
+            self.vars[name] = Var(type=ty, data=e.data if any(x != 0 for x in e.data) else None)
             return NoOp()
 
         if ty is not None: e, t = self.coerce(ty, e, t)
@@ -452,8 +442,7 @@ class Parser:
             if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
             return Assign("=", dst, e)
         data = self.const_init_slot(ty, (e, t))  # may intern
-        self.vars[name] = Var(type=ty)
-        self.store_var_data(name, data)
+        self.vars[name] = Var(type=ty, data=data if any(x != 0 for x in data) else None)
         return NoOp()
 
     def get_struct(self, name):
@@ -556,7 +545,7 @@ class Parser:
                     if v.addr is None:
                         v.offset = self.frame_offset
                         self.frame_offset += self.type_size(v.type)
-                        func.frame_size = max(func.frame_size, self.frame_offset)
+                        func.frame_size = self.frame_offset
                 self.scopes = [scope]
                 func.body = self.block(already_scoped=True)
                 self.pop_scope(0)
@@ -712,8 +701,7 @@ class Parser:
             return a
 
         if isinstance(a, (VarRef, Deref)) and self.peek() and self.peek().k in ASSIGN_OPS:
-            if isinstance(a, VarRef) and self.vars[a.name].bound:
-                self.error("variable is bound")
+            if isinstance(a, VarRef) and self.vars[a.name].bound: self.error("variable is bound")
             op = self.eat().k
             if op == "=" and self.peek("{") and is_aggregate(ta):
                 init = self.init_list()
@@ -865,8 +853,7 @@ class Parser:
             self.eat()
             a, ta = self.primary()
             if not isinstance(a, (VarRef, Deref)): self.error("& operand must be lvalue")
-            if isinstance(a, VarRef) and self.vars[a.name].bound:
-                self.error("variable is bound")
+            if isinstance(a, VarRef) and self.vars[a.name].bound: self.error("variable is bound")
             if is_array(ta): self.error("address of array not allowed")
             return addr_of(a), Type(ta.base, ta.ptr + 1, None)
         if self.peek("("):
@@ -1494,9 +1481,7 @@ class Codegen:
             lines += peephole(self.lines, self.tmp_vars)
             # add temporary variables to locals
             for t, ty in self.tmp_vars.items():
-                ast.vars[t] = Var(
-                    type=ty, offset=self.current_func.frame_size, func=name,
-                )
+                ast.vars[t] = Var(type=ty, offset=self.current_func.frame_size, func=name)
                 self.current_func.frame_size += ast.type_size(ty)
 
         # variables with fixed addresses

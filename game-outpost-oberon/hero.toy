@@ -191,15 +191,16 @@ func hero_update():
     var y = hero.sy / SP
 
     # horizontal collision
-    var o
-    o = max(level_test(x + 1, y +  2, DIR_LEFT),
-            level_test(x - 1, y +  5, DIR_LEFT))
+    var o =    level_test(x + 1, y +  2, DIR_LEFT)
+    o = max(o, level_test(x - 1, y +  5, DIR_LEFT))
+    o = max(o, level_test(x - 1, y + 11, DIR_LEFT))
     if o:
         x += o
         hero.sx = x * SP
         hero.vx = 0
-    o = min(level_test(x + 6, y +  2, DIR_RIGHT),
-            level_test(x + 8, y +  5, DIR_RIGHT))
+    o =        level_test(x + 6, y +  2, DIR_RIGHT)
+    o = min(o, level_test(x + 8, y +  5, DIR_RIGHT))
+    o = min(o, level_test(x + 8, y + 11, DIR_RIGHT))
     if o:
         x += o
         hero.sx = x * SP + SP - 1

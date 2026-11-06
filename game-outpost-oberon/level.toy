@@ -93,7 +93,7 @@ var level_dots: LevelDot[256]
 var level_dot_count
 
 func level_dot(x, y):
-    return
+    return # XXX
     level_dots[level_dot_count] = {x, y}
     level_dot_count += 1
 

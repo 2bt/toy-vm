@@ -4,6 +4,7 @@
 #include <SDL2/SDL_image.h>
 #include <random>
 #include <cstdio>
+#include <ctime>
 #include <vector>
 
 
@@ -157,7 +158,9 @@ int main(int argc, char** argv) {
         "toy-vm",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         SCREEN_W * 3, SCREEN_H * 3,
-        SDL_WINDOW_RESIZABLE);
+        SDL_WINDOW_RESIZABLE
+        // 0
+    );
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderSetLogicalSize(renderer, SCREEN_W, SCREEN_H);
@@ -171,6 +174,7 @@ int main(int argc, char** argv) {
     constexpr Uint32 FRAME_MS = 1000 / 60;
     Uint32           last_tick = SDL_GetTicks();
     bool             running = true;
+    bool             take_screenshot = false;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -180,7 +184,9 @@ int main(int argc, char** argv) {
                 running = false;
                 break;
             case SDL_KEYDOWN:
+                if (event.key.repeat) break;
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
+                else if (event.key.keysym.scancode == SDL_SCANCODE_RETURN) take_screenshot = true;
                 break;
             }
         }
@@ -206,6 +212,21 @@ int main(int argc, char** argv) {
         vm.run(interrupt);
         apu.next_frame(voice_inputs);
         voice_inputs = {};
+        if (take_screenshot) {
+            take_screenshot = false;
+            int w, h;
+            SDL_GetRendererOutputSize(renderer, &w, &h);
+            SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+            if (surf && SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, surf->pixels, surf->pitch) == 0) {
+                char path[64];
+                snprintf(path, sizeof path, "screenshot-%ld.png", (long)time(nullptr));
+                if (IMG_SavePNG(surf, path) == 0) printf("wrote %s\n", path);
+                else printf("ERROR: cannot write '%s': %s\n", path, IMG_GetError());
+            } else {
+                printf("ERROR: screenshot failed: %s\n", SDL_GetError());
+            }
+            if (surf) SDL_FreeSurface(surf);
+        }
         SDL_RenderPresent(renderer);
     }
 

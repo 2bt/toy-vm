@@ -4,9 +4,6 @@ const HERO_STATE_DYING     = 3
 const HERO_STATE_RETURNING = 4
 const HERO_STATE_EXITING   = 5
 
-const HERO_W = 6
-const HERO_H = 11
-
 const HERO_SPAWN_FRAMES    = 40
 const HERO_IFRAMES         = 75
 const HERO_EXIT_FRAMES     = 40
@@ -17,27 +14,6 @@ const ACCEL_AIR    = 2
 const JUMP_FORCE   = 50
 
 
-
-struct Hero:
-    state
-    sx
-    sy
-    vx
-    vy
-    box: Box
-
-    facing_left
-    on_ground
-
-    lives
-    score
-    frame
-    run_tick
-    shoot_countdown
-    hit_countdown
-
-var hero: Hero
-
 struct HeroBullet:
     alive
     x
@@ -45,58 +21,6 @@ struct HeroBullet:
     facing_left
 
 var hero_bullets: HeroBullet[8]
-
-
-func hero_init():
-    hero = {}
-    hero.box.w = HERO_W
-    hero.box.h = HERO_H
-    hero.lives = 5
-
-
-func hero_set_state(s):
-    if s == HERO_STATE_DYING and hero.state != HERO_STATE_NORMAL: return
-    hero.state = s
-    if s == HERO_STATE_SPAWNING:
-        hero.hit_countdown = HERO_SPAWN_FRAMES
-        sfx_play(SFX_SPAWN)
-    elif s == HERO_STATE_DYING:
-        hero.hit_countdown = 20
-        hero.vx = 0
-        hero.vy = 0
-        sfx_play(SFX_EXPLOSION)
-    elif s == HERO_STATE_EXITING:
-        music_play("")
-        sfx_play(SFX_EXIT)
-        hero.hit_countdown = HERO_EXIT_FRAMES
-        hero.vx = 0
-        hero.vy = 0
-    elif s == HERO_STATE_NORMAL:
-        hero.hit_countdown = HERO_IFRAMES
-
-
-func hero_can_take_damage():
-    return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
-
-
-func hero_place_at_start():
-    hero_set_state(HERO_STATE_RETURNING)
-    hero.sx = (level.spawn_x - hero.box.w / 2) * SP
-    hero.sy = level.spawn_y * SP + SP - 1
-    hero.box.x = hero.sx / SP
-    hero.box.y = hero.sy / SP
-    if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
-        hero.frame = 0
-        hero.on_ground = true
-    else:
-        hero.frame = 4
-        hero.on_ground = false
-    hero.vx              = 0
-    hero.vy              = 0
-    hero.facing_left     = false
-    hero.shoot_countdown = 0
-    hero.hit_countdown   = 0
-    hero.run_tick        = 0
 
 
 func hero_bullet_spawn(x, y, facing_left):
@@ -141,8 +65,82 @@ func hero_bullet_update_all():
 func hero_bullet_draw_all():
     for b in hero_bullets:
         if not b.alive: continue
-        camera_sprite(b.x - (b.facing_left ? 0 : 5), b.y, 6, 1,
-                      0, 32 + 1, 0)
+        camera_sprite(b.x - (b.facing_left ? 0 : 5), b.y, 6, 1, 0, 32 + 1, 0)
+
+
+struct Hero:
+    state
+    sx
+    sy
+    vx
+    vy
+    box: Box
+
+    facing_left
+    on_ground
+
+    lives
+    score
+    frame
+    run_tick
+    shoot_countdown
+    hit_countdown
+
+var hero: Hero
+
+
+
+func hero_init():
+    hero = {}
+    hero.box.w = 8
+    hero.box.h = 14
+    hero.lives = 5
+
+
+func hero_set_state(s):
+    if s == HERO_STATE_DYING and hero.state != HERO_STATE_NORMAL: return
+    hero.state = s
+    if s == HERO_STATE_SPAWNING:
+        hero.hit_countdown = HERO_SPAWN_FRAMES
+        sfx_play(SFX_SPAWN)
+    elif s == HERO_STATE_DYING:
+        hero.hit_countdown = 20
+        hero.vx = 0
+        hero.vy = 0
+        sfx_play(SFX_EXPLOSION)
+    elif s == HERO_STATE_EXITING:
+        music_play("")
+        sfx_play(SFX_EXIT)
+        hero.hit_countdown = HERO_EXIT_FRAMES
+        hero.vx = 0
+        hero.vy = 0
+    elif s == HERO_STATE_NORMAL:
+        hero.hit_countdown = HERO_IFRAMES
+
+
+func hero_can_take_damage():
+    return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
+
+
+func hero_place_at_start():
+    hero_set_state(HERO_STATE_RETURNING)
+    hero.sx = (level.spawn_x - hero.box.w / 2) * SP
+    hero.sy = (level.spawn_y - hero.box.h) * SP + SP - 1
+    hero.box.x = hero.sx / SP
+    hero.box.y = hero.sy / SP
+    if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
+        hero.frame = 0
+        hero.on_ground = true
+    else:
+        hero.frame = 4
+        hero.on_ground = false
+    hero.vx              = 0
+    hero.vy              = 0
+    hero.facing_left     = false
+    hero.shoot_countdown = 0
+    hero.hit_countdown   = 0
+    hero.run_tick        = 0
+
 
 
 func hero_update():
@@ -200,8 +198,8 @@ func hero_update():
         x += o
         hero.sx = x * SP
         hero.vx = 0
-    o = min(level_test(x + 4, y +  2, DIR_RIGHT),
-            level_test(x + 6, y +  5, DIR_RIGHT))
+    o = min(level_test(x + 6, y +  2, DIR_RIGHT),
+            level_test(x + 8, y +  5, DIR_RIGHT))
     if o:
         x += o
         hero.sx = x * SP + SP - 1
@@ -223,8 +221,8 @@ func hero_update():
     hero.sy += hero.vy
     y = hero.sy / SP
     if hero.vy > 0:
-        o = min(level_test_down(x + 0, y + 10, py + 10),
-                level_test_down(x + 5, y + 10, py + 10))
+        o = min(level_test_down(x + 0, y + 13, py + 13),
+                level_test_down(x + 7, y + 13, py + 13))
         if o:
             if not hero.on_ground: sfx_play(SFX_LAND)
             hero.on_ground = true
@@ -238,7 +236,7 @@ func hero_update():
 
 
     # ceiling collision
-    o = level_test(x + 3 - hero.facing_left, y + 0, DIR_UP)
+    o = level_test(x + 4 - hero.facing_left, y + 0, DIR_UP)
     if o:
         y += o
         hero.sy = y * SP
@@ -251,7 +249,7 @@ func hero_update():
         hero.shoot_countdown = 20
         sfx_play(SFX_HERO_SHOOT)
 
-        var bx = hero.facing_left ? x - 1 : x + 6
+        var bx = hero.facing_left ? x - 1 : x + 8
         hero_bullet_spawn(bx, y + 4, hero.facing_left)
 
     # animation
@@ -278,7 +276,7 @@ func hero_update():
                 return
 
     # lava
-    var t = level_get_tile(hero.box.x, hero.box.y)
+    var t = level_get_tile(hero.box.x, hero.box.y + 4)
     if t == 'l':
         hero_set_state(HERO_STATE_DYING)
         hero.vy = 4
@@ -298,7 +296,9 @@ func hero_draw():
     if hero.state != HERO_STATE_NORMAL: row = 2
     elif hero.shoot_countdown > 1: row = 1
 
-    camera_sprite(hero.box.x - 5, hero.box.y - 5, 16, 16,
+    camera_sprite(hero.box.x - 4, hero.box.y - 2, 16, 16,
                   hero.frame * 16,
                   128 + row * 16,
                   hero.facing_left)
+
+    # camera_sprite(hero.box.x, hero.box.y, hero.box.w, hero.box.h, 0, 480, 0)

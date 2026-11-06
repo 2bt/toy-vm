@@ -89,7 +89,6 @@ include "hero.toy"
 
 func game_init():
     game = {}
-    # game.level = 1
     game_set_state(GAME_STATE_TITLE)
     game_init_level(LEVEL_TITLE_DATA)
     music.volume = 48
@@ -160,8 +159,7 @@ func game_update():
 
     level_update()
 
-    if game.state == GAME_STATE_PLAY:
-        hero_update()
+    if game.state == GAME_STATE_PLAY: hero_update()
 
     enemy_update_all()
     hero_bullet_update_all()
@@ -179,9 +177,6 @@ func draw_hud():
     draw_text(SCREEN_W - strlen(str) * 8 - 2, SCREEN_H - 10, str)
 
 
-func draw_blend():
-
-
 func game_draw():
 
     if game.state == GAME_STATE_TITLE:
@@ -194,9 +189,8 @@ func game_draw():
 
         # title
         var h = clamp(game.tick / 2 - 5, 0, 60)
-        sprite(SCREEN_W/2 - 112/2, 28 + 60 - h, 112, h, 256, 448, 0)
+        sprite(SCREEN_W/2 - 112/2, 60 + 60 - h, 112, h, 256, 448, 0)
 
-        draw_blend()
         return
 
     if game.state == GAME_STATE_LEVEL:
@@ -208,16 +202,14 @@ func game_draw():
     level_draw_background()
     enemy_draw_all()
 
-    if game.state == GAME_STATE_PLAY:
-        hero_draw()
-
-    draw_blend()
-
+    if game.state == GAME_STATE_PLAY: hero_draw()
 
     hero_bullet_draw_all()
     enemy_bullet_draw_all()
     particle_draw_all()
     level_draw_walls()
+
+    # if game.state == GAME_STATE_PLAY: hero_draw()
 
     level_draw_dots()
 

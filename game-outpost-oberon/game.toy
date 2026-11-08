@@ -1,3 +1,10 @@
+include "level.toy"
+include "particle.toy"
+include "enemy.toy"
+include "hero.toy"
+include "music_data.toy"
+include "level_data.toy"
+
 # ---------------------------------------------------------------------------
 # constants
 # ---------------------------------------------------------------------------
@@ -31,12 +38,17 @@ var game: Game
 struct Camera:
     box: Box
     ground_y  # last hero center-y while on ground (or below it while falling)
+    sx        # subpixel pos, only during RETURNING
+    sy
+    speed     # subpixel/frame along path, -1 = not started
 
 var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H }, 0 }
 
 const CAM_MARGIN_H = 120
 const CAM_MARGIN_T = 28
 const CAM_MARGIN_B = 80
+const CAM_RETURN_ACCEL     = SP / 2   # 0.5 px/frame²
+const CAM_RETURN_MAX_SPEED = 12 * SP
 
 func camera_sprite(x, y, w, h, s, t, f):
     sprite(x - camera.box.x, y - camera.box.y, w, h, s, t, f)
@@ -59,28 +71,27 @@ func camera_follow_hero():
     if ty > 0 and camera.box.y > ty: camera.box.y += (ty - camera.box.y) / 8
 
 func camera_return_toward_spawn():
-    var tx = box_center_x(hero.box) - SCREEN_W / 2
-    var ty = box_center_y(hero.box) - SCREEN_H / 2
-    var dx = tx - camera.box.x
-    var dy = ty - camera.box.y
+    if camera.speed < 0:
+        camera.sx = camera.box.x * SP
+        camera.sy = camera.box.y * SP
+        camera.speed = 0
+    var tx = (box_center_x(hero.box) - SCREEN_W / 2) * SP
+    var ty = (box_center_y(hero.box) - SCREEN_H / 2) * SP
+    var dx = tx - camera.sx
+    var dy = ty - camera.sy
     var l = sqrt(dx * dx + dy * dy)
-    if l == 0:
+    var ideal = min(CAM_RETURN_MAX_SPEED, sqrt(2 * CAM_RETURN_ACCEL * l))
+    camera.speed = clamp(ideal, camera.speed - CAM_RETURN_ACCEL, camera.speed + CAM_RETURN_ACCEL)
+    if camera.speed >= l:
+        camera.box.x = tx / SP
+        camera.box.y = ty / SP
         hero_set_state(HERO_STATE_SPAWNING)
         return
-    var speed = clamp(l / 8, 4, 20)
-    if l > speed:
-        dx = dx * speed / l
-        dy = dy * speed / l
-    camera.box.x += dx
-    camera.box.y += dy
+    camera.sx += dx * camera.speed / l
+    camera.sy += dy * camera.speed / l
+    camera.box.x = camera.sx / SP
+    camera.box.y = camera.sy / SP
 
-
-
-
-include "level.toy"
-include "particle.toy"
-include "enemy.toy"
-include "hero.toy"
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +104,8 @@ func game_init():
     game_init_level(LEVEL_TITLE_DATA)
     music.volume = 48
     music_play(MUSIC_TITLE)
+    hero.state = HERO_STATE_NORMAL
+
 
 
 func game_set_state(s):
@@ -115,7 +128,7 @@ func game_set_state(s):
 
 func game_init_level(data: int*):
     level_init(data)
-    hero_place_at_start()
+    hero_set_state(HERO_STATE_RETURNING)
     camera_center_on_hero()
     enemy_init_all()
     for b in hero_bullets: b.* = {}
@@ -131,6 +144,9 @@ func game_update():
         enemy_update_all()
         enemy_bullet_update_all()
         particle_update_all()
+        camera.box.x = 0
+        camera.box.y = 32
+
         if btnp(BTN_A) or btnp(BTN_B):
             hero_init()
             game_set_state(GAME_STATE_LEVEL)
@@ -169,7 +185,6 @@ func game_update():
 
 
 func draw_hud():
-    # sprite(2, 2, 6, 11, 5, 165, 0)
     strnum(str, hero.lives)
     draw_text(2, SCREEN_H - 10, "x")
     draw_text(10, SCREEN_H - 10, str)
@@ -180,17 +195,19 @@ func draw_hud():
 func game_draw():
 
     if game.state == GAME_STATE_TITLE:
-
         level_draw_background()
+        # uranus
+        sprite(170, 30, 128, 96, 256, 352, 0)
+
         enemy_draw_all()
         enemy_bullet_draw_all()
         particle_draw_all()
-        level_draw_walls()
 
         # title
-        var h = clamp(game.tick / 2 - 5, 0, 60)
-        sprite(SCREEN_W/2 - 112/2, 60 + 60 - h, 112, h, 256, 448, 0)
+        var h = max(44, 146 - level.tick * 2 / 3)
+        sprite(70, h, 112, 60, 256, 448, 0)
 
+        level_draw_walls()
         return
 
     if game.state == GAME_STATE_LEVEL:
@@ -208,8 +225,6 @@ func game_draw():
     enemy_bullet_draw_all()
     particle_draw_all()
     level_draw_walls()
-
-    # if game.state == GAME_STATE_PLAY: hero_draw()
 
     level_draw_dots()
 

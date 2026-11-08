@@ -1,5 +1,5 @@
 ## Compiler
-+ [ ] better variable scopes
++ [x] better variable scopes
 
 ## Outpost Oberon
 

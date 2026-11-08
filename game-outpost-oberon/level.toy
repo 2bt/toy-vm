@@ -1,5 +1,3 @@
-include "level_data.toy"
-
 struct Level:
     data: int*
     w
@@ -17,7 +15,7 @@ var level: Level
 
 func level_init(data: int*):
     level.data = data
-    level.w    = stridx(data, 'X')
+    level.w    = stridx(data, 'X') + 1
     level.h    = strlen(data) / level.w
     level.tick = 0
 

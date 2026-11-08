@@ -114,32 +114,31 @@ func hero_set_state(s):
         hero.hit_countdown = HERO_EXIT_FRAMES
         hero.vx = 0
         hero.vy = 0
+    elif s == HERO_STATE_RETURNING:
+        camera.speed = -1
+        hero.sx = (level.spawn_x - hero.box.w / 2) * SP
+        hero.sy = (level.spawn_y - hero.box.h) * SP + SP - 1
+        hero.box.x = hero.sx / SP
+        hero.box.y = hero.sy / SP
+        if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
+            hero.frame = 0
+            hero.on_ground = true
+        else:
+            hero.frame = 4
+            hero.on_ground = false
+        hero.vx              = 0
+        hero.vy              = 0
+        hero.facing_left     = false
+        hero.shoot_countdown = 0
+        hero.hit_countdown   = 0
+        hero.run_tick        = 0
+
     elif s == HERO_STATE_NORMAL:
         hero.hit_countdown = HERO_IFRAMES
 
 
 func hero_can_take_damage():
     return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
-
-
-func hero_place_at_start():
-    hero_set_state(HERO_STATE_RETURNING)
-    hero.sx = (level.spawn_x - hero.box.w / 2) * SP
-    hero.sy = (level.spawn_y - hero.box.h) * SP + SP - 1
-    hero.box.x = hero.sx / SP
-    hero.box.y = hero.sy / SP
-    if level_test_down(hero.box.x, hero.box.y + hero.box.h, hero.box.y + hero.box.h - 1):
-        hero.frame = 0
-        hero.on_ground = true
-    else:
-        hero.frame = 4
-        hero.on_ground = false
-    hero.vx              = 0
-    hero.vy              = 0
-    hero.facing_left     = false
-    hero.shoot_countdown = 0
-    hero.hit_countdown   = 0
-    hero.run_tick        = 0
 
 
 
@@ -171,7 +170,7 @@ func hero_update():
                 hero.lives = 0
                 game_set_state(GAME_STATE_GAME_OVER)
             else:
-                hero_place_at_start()
+                hero_set_state(HERO_STATE_RETURNING)
 
     if hero.state != HERO_STATE_NORMAL:
         if hero.state != HERO_STATE_RETURNING:

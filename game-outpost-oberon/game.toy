@@ -47,8 +47,6 @@ var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H }, 0 }
 const CAM_MARGIN_H = 120
 const CAM_MARGIN_T = 28
 const CAM_MARGIN_B = 80
-const CAM_RETURN_ACCEL     = SP / 2   # 0.5 px/frame²
-const CAM_RETURN_MAX_SPEED = 12 * SP
 
 func camera_sprite(x, y, w, h, s, t, f):
     sprite(x - camera.box.x, y - camera.box.y, w, h, s, t, f)
@@ -69,6 +67,10 @@ func camera_follow_hero():
     # soft-settle up toward last grounded height (continues mid-jump after a climb)
     var ty = camera.ground_y - SCREEN_H / 2
     if ty > 0 and camera.box.y > ty: camera.box.y += (ty - camera.box.y) / 8
+
+
+const CAM_RETURN_ACCEL     = SP * 2 / 3
+const CAM_RETURN_MAX_SPEED = 16 * SP
 
 func camera_return_toward_spawn():
     if camera.speed < 0:

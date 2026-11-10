@@ -127,6 +127,26 @@ class ScopeTests(unittest.TestCase):
         )
         self.assertEqual(parser.funcs["tick"].frame_size, 2)
 
+    def test_unreferenced_globals_dropped(self):
+        _, asm = compile_toy("""
+            var unused_str = "never read"
+            var unused_bss: int[50]
+            var A = "reached only through TABLE"
+            var TABLE: int*[] = {A}
+            var used_bss: int[3]
+            var mov = 1
+            var ff = 2
+            var keep = 3
+            func unused():
+                used_bss[0] = 1
+            func tick():
+                var p = TABLE[0]
+                asm "    mov [keep], #$ff"
+        """)
+        labels = set(re.findall(r"(?m)^(\w+)(?::| =)", asm))
+        self.assertTrue({"A", "TABLE", "keep"} <= labels)
+        self.assertFalse({"unused_str", "unused_bss", "used_bss", "mov", "ff"} & labels)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1484,6 +1484,22 @@ class Codegen:
                 ast.vars[t] = Var(type=ty, offset=self.current_func.frame_size, func=name)
                 self.current_func.frame_size += ast.type_size(ty)
 
+        # keep only globals referenced by compiled code, or by data of kept globals.
+        # Scan operands of the final asm: it includes inline asm and reflects peephole removals.
+        used = set()
+        todo = []
+        for l in lines:
+            l = l.split(";")[0].strip()
+            if not l or l.endswith(":"): continue  # label
+            ops = l.split(None, 1)[1:]             # drop mnemonic
+            todo += [w for w in re.findall(r"(?<![\w$])[A-Za-z_][\w.]*", "".join(ops)) if w in ast.vars]
+        while todo:
+            n = todo.pop()
+            if n in used: continue
+            used.add(n)
+            # data words are ints or "sym" / "sym+off"
+            todo += [d.split("+")[0] for d in ast.vars[n].data or [] if isinstance(d, str)]
+
         # variables with fixed addresses
         self.lines = ["_R = 0"]
         addr = 1
@@ -1511,7 +1527,7 @@ class Codegen:
 
         # global variables
         for name, v in ast.vars.items():
-            if v.addr is None and v.data is None and "." not in name:
+            if v.addr is None and v.data is None and "." not in name and name in used:
                 self.emit(f"{name} = {addr}")
                 addr += ast.type_size(v.type)
 
@@ -1519,7 +1535,7 @@ class Codegen:
         self.emit("")
         self.emit(f"    .data {addr}")
         for name, v in ast.vars.items():
-            if v.data is None: continue
+            if v.data is None or name not in used: continue
             self.emit(f"{name}:")
             ln = "   "
             for d in v.data:

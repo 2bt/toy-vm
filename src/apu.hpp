@@ -28,7 +28,7 @@ public:
         float* buffer = (float*)stream;
         int    length = bytes / sizeof(float);
         while (length > 0) {
-            static int sample = 0;
+            int& sample = apu.m_sample;
             if (sample == 0) apu.config_voices();
             int step = std::min(apu.m_frame_samples - sample, length);
             apu.mix(buffer, step);
@@ -141,6 +141,7 @@ private:
     size_t                     m_write{};
     size_t                     m_count{};
     int                        m_frame_samples = MIXRATE / 60;
+    int                        m_sample = 0; // position within the current frame, for callback()
     std::mutex                 m_mtx{};
 
     std::mutex                 m_cap_mtx{};

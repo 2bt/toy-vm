@@ -40,7 +40,7 @@ struct MemMap {
     struct { int32_t x, y, w, h, s, t, flip; } sprite;                      // @3
     struct { int32_t i, pitch, pw, vol, wave; } sound;                      // @10
     struct { int32_t lo, hi; } rand;                                        // @15
-    struct { int32_t a, b, c; } math;                                       // @17
+    struct { int32_t a, pad[2]; } sqrt;                                     // @17 (pad: save stays at @20)
     struct { int32_t addr, len; } save;                                     // @20 save + load
 };
 
@@ -99,7 +99,7 @@ void interrupt(int32_t n) {
         mem.ret = mem.rand.hi < mem.rand.lo ? mem.rand.lo : std::uniform_int_distribution<>(mem.rand.lo, mem.rand.hi)(gen);
     }
     else if (n == INT_SQRT) {
-        mem.ret = mem.math.a > 0 ? std::sqrt(mem.math.a) : 0;
+        mem.ret = mem.sqrt.a > 0 ? std::sqrt(mem.sqrt.a) : 0;
     }
     else if (n == INT_SAVE || n == INT_LOAD) {
         // one save slot per game: raw words in <game-dir>/save; ret = words written/read
@@ -185,7 +185,6 @@ int main(int argc, char** argv) {
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         SCREEN_W * 3, SCREEN_H * 3,
         SDL_WINDOW_RESIZABLE
-        // 0
     );
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);

@@ -401,7 +401,7 @@ const APU_WORKLET = `
 const VOICES = 8;
 const TRI = 1, SAW = 2, PULSE = 3, NOISE = 4;
 
-function noiseNibble(s) {
+function noiseByte(s) {
   return (((s >>> 22) & 1) << 7) |
          (((s >>> 20) & 1) << 6) |
          (((s >>> 16) & 1) << 5) |
@@ -474,7 +474,7 @@ class SmoltAPU extends AudioWorkletProcessor {
         if (v.wave === NOISE) {
           if (v.phase < v.pitch) {
             v.shift = ((v.shift << 1) | (((v.shift >>> 22) ^ (v.shift >>> 17)) & 1)) >>> 0;
-            v.noise = noiseNibble(v.shift) * (1 / 128) - 1;
+            v.noise = noiseByte(v.shift) * (1 / 128) - 1;
           }
           s = v.noise;
         }
@@ -508,7 +508,7 @@ let mem = null;
 let saveKey = null; // localStorage key of the running game
 let code = null;
 let sprites = null;
-let keys = new Set();
+const keys = new Set();
 const touch = new Set();
 let voiceInputs = null;
 let nextFrameTime = 0;
@@ -800,6 +800,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => {
   keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
 });
+window.addEventListener("blur", () => keys.clear()); // no stuck keys after alt-tab
 </script>
 </body>
 </html>

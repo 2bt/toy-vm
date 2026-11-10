@@ -127,6 +127,22 @@ class ScopeTests(unittest.TestCase):
         )
         self.assertEqual(parser.funcs["tick"].frame_size, 2)
 
+    def test_missing_indent_errors(self):
+        msg = compile_fails("""
+            func tick():
+                if 0:
+                var x = 1
+        """)
+        self.assertIn("expected an indented block", msg)
+
+    def test_empty_branch_before_elif_allowed(self):
+        compile_smolt("""
+            func tick():
+                var c = 1
+                if c == 0:
+                elif c == 1: c = 2
+        """)
+
     def test_include_lib_prefix_resolves_to_repo_lib(self):
         _, asm = compile_smolt("""
             include "lib/api.smolt"

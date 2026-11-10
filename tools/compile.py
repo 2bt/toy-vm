@@ -576,11 +576,17 @@ class Parser:
             if k == "indent": depth += 1
             elif k == "dedent": depth -= 1
 
+    def has_body(self):
+        # after "<head>:" and a newline; an empty body is fine only before elif/else
+        if self.peek("indent"): return True
+        if self.peek("elif") or self.peek("else"): return False
+        self.error("expected an indented block", self.head.toks[self.head.i])
+
     def skip_block(self):
         self.eat(":")
         if self.peek("eol"):
             self.eat()
-            if self.peek("indent"): self.skip_indented()
+            if self.has_body(): self.skip_indented()
             return
         while not self.peek("eof"):
             if self.peek("eol"):
@@ -597,7 +603,7 @@ class Parser:
         if not already_scoped: saved = self.push_scope()
         if self.peek("eol"):
             self.eat()
-            if self.peek("indent"):
+            if self.has_body():
                 self.eat()
                 while not self.peek("dedent"): stmts.append(self.stmt())
                 self.eat("dedent")

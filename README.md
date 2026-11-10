@@ -41,6 +41,52 @@ Game Controls:
 * Gamepad: d-pad / left stick, A or Y → A, B or X → B, Start → menu
 
 
+## Hello, Smolt
+
+`games/hello/main.smolt`, a complete game:
+
+```smolt
+include "lib/api.smolt"
+include "lib/util.smolt"
+include "lib/audio.smolt"
+
+var x = 152
+var y = 82
+var score
+
+func tick():
+    # move with the d-pad, stay on screen
+    if btn(BTN_LEFT):  x -= 2
+    if btn(BTN_RIGHT): x += 2
+    if btn(BTN_UP):    y -= 2
+    if btn(BTN_DOWN):  y += 2
+    x = clamp(x, 0, SCREEN_W - 16)
+    y = clamp(y, 0, SCREEN_H - 16)
+
+    # A: count and beep
+    if btnp(BTN_A):
+        score += 1
+        audio_play_sfx("@0 v60 d6 W128 P=60,12")
+
+    # draw: the fish is the 16x16 tile at (0, 24) in sprite.png
+    sprite(x, y, 16, 16, 0, 24, 0)
+    draw_text(8, 8, "Hello, Smolt! Press X.")
+    strnum(str, score)
+    draw_text(8, 20, str)
+
+    audio_update_sfx()
+    not_prev_input = -1 - input  # remember input for btnp() next frame
+```
+
+* `tick()` runs 60 times a second; the screen is cleared before each frame.
+* `btn()` is "held", `btnp()` is "just pressed" (that's what `not_prev_input` at the end is for).
+* `sprite(x, y, w, h, s, t, flip)` copies the `w`×`h` rectangle at (`s`, `t`) of `sprite.png` to the screen.
+* `draw_text()` uses the font in the top 256×24 pixels of `sprite.png` (ASCII 32–127, 8×8 each).
+* `audio_play_sfx()` plays a sound effect string (`v` volume, `d` decay, `W` pulse width, `P` pulse wave, `=` pitch, `,12` hold 12 frames).
+
+Run it with `./run.sh hello`. To start your own game, copy `games/hello` to `games/<name>`.
+
+
 ## Build & Run
 
 Dependencies: C++20, SDL2, SDL2_image, CMake, Python 3

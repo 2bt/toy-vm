@@ -19,10 +19,11 @@ Write games in a C-like language (`.smolt`), compile to bytecode, and run them o
 | Language | Smolt: indentation-based, C-flavoured, compiled to assembly |
 | Hosts | native (C++/SDL2) and browser (JavaScript), same bytecode |
 
-Games live in a folder with:
+Each game is a folder in `games/` with:
 
-* `code` → compiled VM bytecode
+* `main.smolt` → entry point (`func tick():` runs every frame)
 * `sprite.png` → sprite sheet
+* `code` → compiled bytecode (build output, not committed)
 
 Shared code lives in `lib/`. An include path starting with `lib/` always refers to it (e.g. `include "lib/api.smolt"`); any other path is relative to the including file.
 
@@ -45,7 +46,7 @@ Game Controls:
 Dependencies: C++20, SDL2, SDL2_image, CMake, Python 3
 
 ```bash
-./run.sh game-breakout
+./run.sh breakout        # or a path: ./run.sh games/breakout
 ```
 
 This will:
@@ -55,7 +56,9 @@ This will:
 3. Assemble `main.asm` → `code`
 4. Run the game in the VM
 
-Native host: `build/smolt [--once] <game-dir>`. Browser host: `web/index.html` (same bytecode + ABI).
+Native host: `build/smolt [--once] <game-dir>`.
+
+Browser host: `./build.sh` compiles every game and writes `games/index.json` (the game menu); then serve the repo root, e.g. `python3 -m http.server`, and open `/web/`.
 
 
 ## Machine model

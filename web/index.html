@@ -97,11 +97,6 @@
 <script>
 "use strict";
 
-const GAMES = [
-  { id: "game-breakout", title: "Breakout" },
-  { id: "game-outpost-oberon", title: "Outpost Oberon" },
-];
-
 const SCREEN_W = 320, SCREEN_H = 180;
 const MEM_SIZE = 1 << 24;
 const STEP_LIMIT = 1000000;
@@ -743,7 +738,7 @@ function stopGame() {
 async function startGame(gameId) {
   showError("");
   try {
-    const base = "../" + gameId + "/";
+    const base = "../games/" + gameId + "/";
     saveKey = "smolt/" + gameId + "/save";
     const [codeRes, spriteRes] = await Promise.all([
       fetch(base + "code"),
@@ -768,12 +763,18 @@ async function startGame(gameId) {
   }
 }
 
-for (const g of GAMES) {
-  const btn = document.createElement("button");
-  btn.textContent = g.title;
-  btn.onclick = () => { ensureAudio(); startGame(g.id); };
-  gamesEl.appendChild(btn);
-}
+// games/index.json is written by build.sh
+fetch("../games/index.json")
+  .then((r) => { if (!r.ok) throw new Error("no games/index.json — run ./build.sh"); return r.json(); })
+  .then((games) => {
+    for (const g of games) {
+      const btn = document.createElement("button");
+      btn.textContent = g.title;
+      btn.onclick = () => { ensureAudio(); startGame(g.id); };
+      gamesEl.appendChild(btn);
+    }
+  })
+  .catch((e) => showError(String(e.message || e)));
 
 const bootGame = new URLSearchParams(location.search).get("game");
 if (bootGame) startGame(bootGame);

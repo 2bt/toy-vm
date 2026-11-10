@@ -2,14 +2,13 @@
 !.vscode/smolt/
 build
 code
-!game-breakout/code
-!game-outpost-oberon/code
 *.asm
 *.aseprite
 docs/
 
 .worktrees/
-game-*/save
+games/*/save
+games/index.json
 .cache/
 .superpowers/
 screenshot-*.png

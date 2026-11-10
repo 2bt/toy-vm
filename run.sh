@@ -1,4 +1,5 @@
-app="${1:-./game-breakout}"
+app="${1:-breakout}"
+[ -d "$app" ] || app="games/$app"   # ./run.sh breakout == ./run.sh games/breakout
 [ $# -gt 0 ] && shift
 once=; [ -f "$app/sprite.png" ] || once=--once
 

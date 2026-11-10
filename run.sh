@@ -3,6 +3,7 @@ app="${1:-outpost-oberon}"
 [ $# -gt 0 ] && shift
 once=; [ -f "$app/sprite.png" ] || once=--once
 
+{ [ -d build ] || cmake -S . -B build; } && \
 cmake --build build && \
 ./tools/compile.py $app/main.smolt --print && \
 ./build/smolt $app $once "$@"

@@ -25,6 +25,8 @@ enum {
     INT_SOUND,
     INT_RAND,
     INT_SQRT,
+    INT_SAVE,
+    INT_LOAD,
 };
 
 
@@ -38,6 +40,7 @@ struct MemMap {
     struct { int32_t i, pitch, pw, vol, wave; } sound;                      // @10
     struct { int32_t lo, hi; } rand;                                        // @15
     struct { int32_t a, b, c; } math;                                       // @17
+    struct { int32_t addr, len; } save;                                     // @20 save + load
 };
 
 
@@ -63,6 +66,7 @@ APU::VoiceInputs voice_inputs{};
 APU              apu;
 SDL_Renderer*    renderer;
 SDL_Texture*     sprites;
+std::string      save_path;
 
 
 
@@ -82,6 +86,16 @@ void interrupt_once(int32_t n) {
     }
     else if (n == INT_SQRT) {
         mem.ret = std::sqrt(mem.math.a);
+    }
+    else if (n == INT_SAVE || n == INT_LOAD) {
+        // one save slot per game: raw words in <game-dir>/save; ret = words written/read
+        int32_t addr = mem.save.addr, len = mem.save.len;
+        mem.ret = 0;
+        if (addr < 0 || len < 0 || addr > VM::MEM_SIZE - len) return;
+        if (FILE* f = fopen(save_path.c_str(), n == INT_SAVE ? "wb" : "rb")) {
+            mem.ret = n == INT_SAVE ? fwrite(&vm.mem[addr], 4, len, f) : fread(&vm.mem[addr], 4, len, f);
+            fclose(f);
+        }
     }
     else {
         printf("WARN: unknown interrupt %d\n", n);
@@ -148,6 +162,7 @@ int main(int argc, char** argv) {
     }
 
     if (!vm.load(dir + "/code")) return 1;
+    save_path = dir + "/save";
     if (once) {
         vm.run(interrupt_once);
         return 0;

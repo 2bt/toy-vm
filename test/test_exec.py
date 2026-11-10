@@ -1173,5 +1173,20 @@ class ExecTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_save_load(self):
+        self.assertEqual(self.run_toy("""
+            func save(addr: int* @ 20, len @ 21): asm "    int #6"
+            func load(addr: int* @ 20, len @ 21): asm "    int #7"
+            var data: int[3] = {7, 8, 9}
+            var back: int[5]
+            func tick():
+                print_n(load(back.ptr, 5))  # no save yet
+                print_n(save(data.ptr, 3))
+                print_n(load(back.ptr, 5))  # only 3 words stored
+                print_n(back[2])
+                print_n(back[3])
+                print_n(save(data.ptr, -1)) # rejected
+        """), "0\n3\n3\n9\n0\n0\n")
+
 if __name__ == "__main__":
     unittest.main()

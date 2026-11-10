@@ -1,0 +1,14 @@
+func box_intersect(ax, ay, aw, ah, bx, by, bw, bh):
+    return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
+func box_overlap_x(ax, ay, aw, ah, bx, by, bw, bh):
+    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh): return 0
+    var d1 = bx + bw - ax
+    var d2 = bx - (ax + aw)
+    if abs(d1) < abs(d2): return d1
+    return d2
+func box_overlap_y(ax, ay, aw, ah, bx, by, bw, bh):
+    if not box_intersect(ax, ay, aw, ah, bx, by, bw, bh): return 0
+    var d1 = by + bh - ay
+    var d2 = by - (ay + ah)
+    if abs(d1) < abs(d2): return d1
+    return d2

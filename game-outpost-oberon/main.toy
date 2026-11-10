@@ -1,6 +1,6 @@
-include "api.toy"
-include "util.toy"
-include "audio.toy"
+include "../lib/api.toy"
+include "../lib/util.toy"
+include "../lib/audio.toy"
 include "game.toy"
 
 

@@ -10,6 +10,12 @@ Games live in a folder with:
 * `code` → compiled VM bytecode
 * `sprite.png` → sprite sheet
 
+Shared code lives in `lib/` and is pulled in with `include "../lib/…"`:
+
+* `api.toy` → host ABI: input, interrupts, constants
+* `util.toy` → input helpers, math, strings, text drawing, boxes
+* `audio.toy` → music and sound-effect players
+
 Game Controls:
 
 * Arrows → movement
@@ -45,7 +51,7 @@ Native host: `build/toy [--once] <game-dir>`. Browser host: `web/index.html` (sa
 
 ### Host ABI (low memory)
 
-Pinned by games (see e.g. `game-breakout/prelude.toy`) via `var` / formals `@ addr`:
+Pinned in `lib/api.toy` via `var` / formals `@ addr`:
 
 | Addr | Role |
 |------|------|

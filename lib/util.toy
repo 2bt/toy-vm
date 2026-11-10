@@ -83,7 +83,7 @@ func draw_centered_text(x, y, msg: int*):
 
 
 
-# Vec
+# vec
 struct Vec:
     x
     y

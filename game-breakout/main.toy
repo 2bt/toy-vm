@@ -1,5 +1,6 @@
-include "prelude.toy"
-include "util.toy"
+include "../lib/api.toy"
+include "../lib/util.toy"
+include "box.toy"
 include "sound.toy"
 
 const Q = 256
@@ -269,8 +270,8 @@ func update_stage():
 
         # pad
         var dy = 0
-        if input & INPUT_UP:   dy -= 1
-        if input & INPUT_DOWN: dy += 1
+        if input & BTN_UP:   dy -= 1
+        if input & BTN_DOWN: dy += 1
         pad.vy = clamp(dy * (4 * Q), pad.vy - ACC, pad.vy + ACC)
 
         pad.y += pad.vy
@@ -281,7 +282,7 @@ func update_stage():
             pad.y = (SCREEN_H - BORDER - pad.h) * Q
             pad.vy = 0
 
-        if is_just_pressed(INPUT_A): unstick_balls()
+        if is_just_pressed(BTN_A): unstick_balls()
 
         # balls
         balls_alive = 0
@@ -307,10 +308,10 @@ func update_stage():
             game_state = GAME_STATE_CLEAR
 
     elif game_state == GAME_STATE_CLEAR:
-        if is_just_pressed(INPUT_A): init_stage()
+        if is_just_pressed(BTN_A): init_stage()
 
     elif game_state == GAME_STATE_DEAD:
-        if is_just_pressed(INPUT_A): init_game()
+        if is_just_pressed(BTN_A): init_game()
 
     # blocks
     for k in blocks:
@@ -344,15 +345,16 @@ func draw_stage():
         sprite(b.x / Q - 4, b.y / Q - 4, 16, 16, b.frame * 16, 320, 0)
 
     draw_text(5, 5, "LIVES")
-    int_to_str(lives)
-    draw_text(5 + 8*6, 5, format_str)
+    strnum(str, lives)
+    draw_text(5 + 8*6, 5, str)
 
     draw_text(5, 180 - 18 + 5, "SCORE")
-    var len = int_to_str(score)
+    strnum(str, score)
+    var len = strlen(str)
     for i = 0, 4 - len:
-        putchar(5 + 8*6 + i * 8, 180 - 18 + 5, '0')
+        draw_char(5 + 8*6 + i * 8, 180 - 18 + 5, '0')
 
-    draw_text(5 + 8*10 - len * 8, 180 - 18 + 5, format_str)
+    draw_text(5 + 8*10 - len * 8, 180 - 18 + 5, str)
 
     if game_state == GAME_STATE_CLEAR:  draw_text(116, 86, "STAGE CLEAR")
     elif game_state == GAME_STATE_DEAD: draw_text(124, 86, "GAME OVER")

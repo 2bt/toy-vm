@@ -203,8 +203,8 @@ int main(int argc, char** argv) {
     SDL_PauseAudio(0);
     if (!record_path.empty()) apu.begin_capture();
 
-    constexpr Uint32 FRAME_MS = 1000 / 60;
-    Uint32           last_tick = SDL_GetTicks();
+    Uint32           start_tick = SDL_GetTicks();
+    Uint32           frame = 0;       // frames since start_tick, for exact 60 fps pacing
     bool             running = true;
     bool             take_screenshot = false;
     std::string      recording_dir;   // non-empty while recording frames (toggle with R)
@@ -246,10 +246,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        Uint32 now = SDL_GetTicks();
-        Uint32 elapsed = now - last_tick;
-        if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
-        last_tick = SDL_GetTicks();
+        Uint32 due = ++frame * 1000 / 60;
+        Uint32 now = SDL_GetTicks() - start_tick;
+        if (now < due) SDL_Delay(due - now);
+        else if (now > due + 100) start_tick = SDL_GetTicks(), frame = 0; // fell behind: don't rush to catch up
 
         // input
         uint8_t const* ks = SDL_GetKeyboardState(nullptr);

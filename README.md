@@ -66,7 +66,7 @@ func tick():
     # A: count and beep
     if btnp(BTN_A):
         score += 1
-        audio_play_sfx("@0 v60 d6 W128 P=60,12")
+        audio_play_sfx("@0 d6 W128 P=72,=60,20")
 
     # draw: the fish is the 16x16 tile at (0, 24) in sprite.png
     sprite(x, y, 16, 16, 0, 24, 0)
@@ -75,14 +75,14 @@ func tick():
     draw_text(8, 20, str)
 
     audio_update_sfx()
-    not_prev_input = -1 - input  # remember input for btnp() next frame
+    input_update()
 ```
 
 * `tick()` runs 60 times a second; the screen is cleared before each frame.
-* `btn()` is "held", `btnp()` is "just pressed" (that's what `not_prev_input` at the end is for).
+* `btn()` is "held", `btnp()` is "just pressed" (`input_update()` at the end of `tick()` makes that work).
 * `sprite(x, y, w, h, s, t, flip)` copies the `w`×`h` rectangle at (`s`, `t`) of `sprite.png` to the screen.
 * `draw_text()` uses the font in the top 256×24 pixels of `sprite.png` (ASCII 32–127, 8×8 each).
-* `audio_play_sfx()` plays a sound effect string (`v` volume, `d` decay, `W` pulse width, `P` pulse wave, `=` pitch, `,12` hold 12 frames).
+* `audio_play_sfx()` plays a sound effect string (`d` decay, `W` pulse width, `P` pulse wave, `=72` pitch, `,` wait a frame, `,20` wait 20 frames).
 
 Run it with `./run.sh hello`. To start your own game, copy `games/hello` to `games/<name>`.
 

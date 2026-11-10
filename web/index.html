@@ -769,8 +769,8 @@ fetch("../games/index.json")
   .then((games) => {
     for (const g of games) {
       const btn = document.createElement("button");
-      btn.textContent = g.title;
-      btn.onclick = () => { ensureAudio(); startGame(g.id); };
+      btn.textContent = g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());  // outpost-oberon -> Outpost Oberon
+      btn.onclick = () => { ensureAudio(); startGame(g); };
       gamesEl.appendChild(btn);
     }
   })

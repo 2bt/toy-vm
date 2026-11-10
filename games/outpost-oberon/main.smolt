@@ -15,4 +15,4 @@ func tick():
     game_draw()
     audio_update()
 
-    not_prev_input = -1-input
+    input_update()

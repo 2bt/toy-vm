@@ -32,6 +32,7 @@ struct Game:
     level
     countdown
     tick
+    hiscore
 
 var game: Game
 
@@ -101,18 +102,26 @@ func camera_return_toward_spawn():
 # ---------------------------------------------------------------------------
 
 func game_init():
-    game = {}
-    game_set_state(GAME_STATE_TITLE)
-    game_init_level(LEVEL_TITLE_DATA)
     audio_music_volume = 48
-    audio_play_music(MUSIC_TITLE)
-    hero.state = HERO_STATE_NORMAL
-
+    game_set_state(GAME_STATE_TITLE)
 
 
 func game_set_state(s):
     game.state = s
-    if s == GAME_STATE_LEVEL:
+    if s == GAME_STATE_TITLE:
+        game.level     = 0
+        game.countdown = 0
+        game.tick      = 0
+        load(&game.hiscore, 1)
+        game_init_level(LEVEL_TITLE_DATA)
+        audio_play_music(MUSIC_TITLE)
+        hero.state = HERO_STATE_NORMAL
+
+    elif s == GAME_STATE_GAME_OVER or s == GAME_STATE_WIN:
+        if hero.score > game.hiscore:
+            game.hiscore = hero.score
+            save(&game.hiscore, 1)
+    elif s == GAME_STATE_LEVEL:
         game.countdown = LEVEL_CARD_FRAMES
         audio_stop_music()
     elif s == GAME_STATE_PLAY:
@@ -173,7 +182,7 @@ func game_update():
 
     elif game.state == GAME_STATE_GAME_OVER or game.state == GAME_STATE_WIN:
         if btnp(BTN_A) or btnp(BTN_B):
-            game_init()
+            game_set_state(GAME_STATE_TITLE)
 
     level_update()
 
@@ -211,6 +220,11 @@ func game_draw():
                 sprite(70, 44 + i, 112, 1, 256, 448 + i, 0)
 
         level_draw_walls()
+
+        if game.hiscore:
+            var p = strcpy(str, "HISCORE ")
+            strnum(p, game.hiscore)
+            draw_centered_text(SCREEN_W / 2, SCREEN_H - 10, str)
         return
 
     if game.state == GAME_STATE_LEVEL:

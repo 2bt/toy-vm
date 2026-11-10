@@ -1,6 +1,6 @@
-include "../lib/api.smolt"
-include "../lib/util.smolt"
-include "../lib/audio.smolt"
+include "lib/api.smolt"
+include "lib/util.smolt"
+include "lib/audio.smolt"
 include "game.smolt"
 
 

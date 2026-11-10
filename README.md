@@ -7,12 +7,24 @@ Write games in a C-like language (`.smolt`), compile to bytecode, and run them o
 
 **[Play in the browser!](https://2bt.github.io/smolt/)**
 
+| | |
+|---|---|
+| Display | 320×180, 60 fps, true colour (no palette) |
+| Graphics | one blit call: any rectangle of `sprite.png`, with H/V flip |
+| Sound | 8 voices: triangle, saw, pulse (width 0–1023), noise; pitch in ⅛ semitones (456 = A4), volume 0–256 |
+| Input | d-pad, A, B, menu (keyboard, gamepad, or touch in the browser) |
+| CPU | 32-bit words, memory-to-memory instructions, up to 1M instructions per frame |
+| Memory | 2²⁴ words of data; code in a separate instruction stream |
+| Storage | one save slot per game |
+| Language | Smolt: indentation-based, C-flavoured, compiled to assembly |
+| Hosts | native (C++/SDL2) and browser (JavaScript), same bytecode |
+
 Games live in a folder with:
 
 * `code` → compiled VM bytecode
 * `sprite.png` → sprite sheet
 
-Shared code lives in `lib/` and is pulled in with `include "../lib/…"`:
+Shared code lives in `lib/`. An include path starting with `lib/` always refers to it (e.g. `include "lib/api.smolt"`); any other path is relative to the including file.
 
 * `api.smolt` → host ABI: input, interrupts, constants
 * `util.smolt` → input helpers, math, strings, text drawing, boxes

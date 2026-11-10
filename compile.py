@@ -3,6 +3,8 @@ import sys, re
 import ast
 from pathlib import Path
 import argparse
+
+ROOT = Path(__file__).resolve().parent  # include "lib/…" resolves against this
 from collections import namedtuple
 from dataclasses import dataclass, field
 
@@ -457,7 +459,8 @@ class Parser:
         while any(self.peek(k) for k in ["include", "const", "var", "func", "struct"]):
             tok = self.eat()
             if tok.k == "include":
-                incl = path.parent / self.eat("string").v
+                name = self.eat("string").v
+                incl = ROOT / name if name.startswith("lib/") else path.parent / name
                 self.eat("eol")
                 if incl.resolve() in self.included: continue
                 self.stack.append(self.head)

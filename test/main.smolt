@@ -1,4 +1,4 @@
-include "../lib/api.smolt"
+include "lib/api.smolt"
 
 func abs(x):
     if x >= 0: return x

@@ -1,7 +1,7 @@
-include "../lib/api.smolt"
-include "../lib/util.smolt"
+include "lib/api.smolt"
+include "lib/util.smolt"
 include "box.smolt"
-include "../lib/audio.smolt"
+include "lib/audio.smolt"
 
 var SFX_BING    = "@0 v60 d2 N=100,=32,=10,2"
 var SFX_BLOCK   = "@1 v100 d5 N=40,12"

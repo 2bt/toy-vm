@@ -127,6 +127,15 @@ class ScopeTests(unittest.TestCase):
         )
         self.assertEqual(parser.funcs["tick"].frame_size, 2)
 
+    def test_include_lib_prefix_resolves_to_repo_lib(self):
+        _, asm = compile_smolt("""
+            include "lib/api.smolt"
+            var w = SCREEN_W
+            func tick():
+                w += 1
+        """)
+        self.assertIn("320", asm)
+
     def test_unreferenced_globals_dropped(self):
         _, asm = compile_smolt("""
             var unused_str = "never read"

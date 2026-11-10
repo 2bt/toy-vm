@@ -143,6 +143,14 @@ class ScopeTests(unittest.TestCase):
                 elif c == 1: c = 2
         """)
 
+    def test_var_named_like_const_errors(self):
+        msg = compile_fails("""
+            const K = 5
+            func tick():
+                var K = 9
+        """)
+        self.assertIn("is a constant", msg)
+
     def test_include_lib_prefix_resolves_to_repo_lib(self):
         _, asm = compile_smolt("""
             include "lib/api.smolt"

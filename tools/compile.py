@@ -386,6 +386,7 @@ class Parser:
 
     def declare_local(self, short, ty, *, bound=False):
         if short in self.scopes[-1]: self.error(f"variable '{short}' already exists")
+        if short in self.consts: self.error(f"'{short}' is a constant")
         n = self.mint_count.get(short, 0)
         self.mint_count[short] = n + 1
         unique = f"{self.current_func.name}.{short}" if n == 0 else f"{self.current_func.name}.{short}.{n}"
@@ -402,6 +403,7 @@ class Parser:
         name = name_tok.v
         if not local and name in self.vars:
             self.error(f"variable '{name}' already exists", name_tok)
+        if name in self.consts: self.error(f"'{name}' is a constant", name_tok)
         ty = self.type(auto_array_size=True) if self.peek(":") else None
 
         if self.peek("@"):
@@ -470,6 +472,7 @@ class Parser:
 
             elif tok.k == "const":
                 name = self.eat("id").v
+                if name in self.consts or name in self.vars: self.error(f"'{name}' already exists")
                 self.eat("=")
                 self.consts[name] = self.const_expr()
                 self.eat("eol")
@@ -506,6 +509,7 @@ class Parser:
                     name = self.eat("id").v
                     long = f"{func.name}.{name}"
                     if long in self.vars: self.error(f"variable '{name}' already exists")
+                    if name in self.consts: self.error(f"'{name}' is a constant")
                     t = self.type()
                     addr = None
                     if self.peek("@"):

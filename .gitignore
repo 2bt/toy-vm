@@ -13,3 +13,4 @@ game-*/save
 .cache/
 .superpowers/
 screenshot-*.png
+recording-*/

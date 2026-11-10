@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <ctime>
 #include <vector>
+#include <filesystem>
 
 
 enum {
@@ -66,6 +67,7 @@ APU::VoiceInputs voice_inputs{};
 APU              apu;
 SDL_Renderer*    renderer;
 SDL_Texture*     sprites;
+SDL_Texture*     canvas; // SCREEN_W x SCREEN_H render target, scaled to the window
 std::string      save_path;
 
 
@@ -118,6 +120,18 @@ void interrupt(int32_t n) {
     else interrupt_once(n);
 }
 
+
+
+// save the canvas (native resolution) as png; call while canvas is the render target
+static void save_canvas(char const* path) {
+    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, SCREEN_W, SCREEN_H, 32, SDL_PIXELFORMAT_RGBA32);
+    if (surf && SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, surf->pixels, surf->pitch) == 0) {
+        if (IMG_SavePNG(surf, path) != 0) printf("ERROR: cannot write '%s': %s\n", path, IMG_GetError());
+    } else {
+        printf("ERROR: screenshot failed: %s\n", SDL_GetError());
+    }
+    if (surf) SDL_FreeSurface(surf);
+}
 
 
 static bool write_wav_f32(char const* path, std::vector<float> const& samples, int rate) {
@@ -180,6 +194,9 @@ int main(int argc, char** argv) {
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderSetLogicalSize(renderer, SCREEN_W, SCREEN_H);
     sprites = load_texture(renderer, dir + "/sprite.png");
+    canvas  = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_W, SCREEN_H);
+    SDL_SetTextureBlendMode(canvas, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // opaque clear, so screenshots aren't transparent
 
     SDL_AudioSpec spec = { APU::MIXRATE, AUDIO_F32, 1, 0, 64, 0, 0, &APU::callback, &apu };
     SDL_OpenAudio(&spec, nullptr);
@@ -190,6 +207,8 @@ int main(int argc, char** argv) {
     Uint32           last_tick = SDL_GetTicks();
     bool             running = true;
     bool             take_screenshot = false;
+    std::string      recording_dir;   // non-empty while recording frames (toggle with R)
+    int              recording_frame = 0;
     std::vector<SDL_GameController*> pads;
     while (running) {
         SDL_Event event;
@@ -203,6 +222,17 @@ int main(int argc, char** argv) {
                 if (event.key.repeat) break;
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
                 else if (event.key.keysym.scancode == SDL_SCANCODE_RETURN) take_screenshot = true;
+                else if (event.key.keysym.scancode == SDL_SCANCODE_R) {
+                    if (recording_dir.empty()) {
+                        recording_dir   = "recording-" + std::to_string(time(nullptr));
+                        recording_frame = 0;
+                        std::filesystem::create_directory(recording_dir);
+                        printf("recording to %s/\n", recording_dir.c_str());
+                    } else {
+                        printf("recorded %d frames\n", recording_frame);
+                        recording_dir.clear();
+                    }
+                }
                 break;
             case SDL_CONTROLLERDEVICEADDED: // also fires for pads present at startup
                 if (SDL_GameController* gc = SDL_GameControllerOpen(event.cdevice.which)) pads.push_back(gc);
@@ -245,25 +275,26 @@ int main(int argc, char** argv) {
             mem.input |= btn(SDL_CONTROLLER_BUTTON_START) << BTN_MENU;
         }
 
+        SDL_SetRenderTarget(renderer, canvas);
         SDL_RenderClear(renderer);
         vm.run(interrupt);
         apu.next_frame(voice_inputs);
         voice_inputs = {};
         if (take_screenshot) {
             take_screenshot = false;
-            int w, h;
-            SDL_GetRendererOutputSize(renderer, &w, &h);
-            SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
-            if (surf && SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, surf->pixels, surf->pitch) == 0) {
-                char path[64];
-                snprintf(path, sizeof path, "screenshot-%ld.png", (long)time(nullptr));
-                if (IMG_SavePNG(surf, path) == 0) printf("wrote %s\n", path);
-                else printf("ERROR: cannot write '%s': %s\n", path, IMG_GetError());
-            } else {
-                printf("ERROR: screenshot failed: %s\n", SDL_GetError());
-            }
-            if (surf) SDL_FreeSurface(surf);
+            char path[64];
+            snprintf(path, sizeof path, "screenshot-%ld.png", (long)time(nullptr));
+            save_canvas(path);
+            printf("wrote %s\n", path);
         }
+        if (!recording_dir.empty()) {
+            char path[64];
+            snprintf(path, sizeof path, "/%05d.png", recording_frame++);
+            save_canvas((recording_dir + path).c_str());
+        }
+        SDL_SetRenderTarget(renderer, nullptr);
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, canvas, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
@@ -279,6 +310,7 @@ int main(int argc, char** argv) {
             printf("ERROR: cannot write '%s'\n", record_path.c_str());
     }
 
+    SDL_DestroyTexture(canvas);
     SDL_DestroyTexture(sprites);
     SDL_Quit();
 

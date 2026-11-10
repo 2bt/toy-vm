@@ -21,6 +21,8 @@ Game Controls:
 * Arrows → movement
 * Z / X / C → buttons
 * Esc → quit
+* Return → screenshot (`screenshot-<time>.png`, 320×180)
+* R → start/stop recording frames to `recording-<time>/`; `./gif.sh recording-<time>` turns them into a gif
 * Gamepad: d-pad / left stick, A or Y → A, B or X → B, Start → menu
 
 

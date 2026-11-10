@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 import argparse
 
-ROOT = Path(__file__).resolve().parent  # include "lib/…" resolves against this
+ROOT = Path(__file__).resolve().parent.parent  # repo root; include "lib/…" resolves against this
 from collections import namedtuple
 from dataclasses import dataclass, field
 
@@ -1565,10 +1565,15 @@ def main(args):
     asm = Codegen().compile(parser)
     path = Path(args.out) if args.out else Path(args.src).with_suffix(".asm")
     path.write_text(asm)
+    if not args.asm_only:
+        import assemble  # same directory; writes "code" next to the asm
+        assemble.asm(argparse.Namespace(src=path, out=None, print=args.print))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("src")
-    parser.add_argument("out", nargs="?")
+    parser.add_argument("out", nargs="?", help="asm output (default: SRC with .asm)")
+    parser.add_argument("--asm-only", action="store_true", help="don't assemble to code")
+    parser.add_argument("--print", action="store_true", help="print the assembled listing")
     args = parser.parse_args()
     main(args)

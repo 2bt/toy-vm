@@ -42,7 +42,7 @@ Game Controls:
 
 ## Build & Run
 
-Dependencies: C++17, SDL2, SDL2_image, CMake, Python 3
+Dependencies: C++20, SDL2, SDL2_image, CMake, Python 3
 
 ```bash
 ./run.sh game-breakout
@@ -94,7 +94,7 @@ Each game has one save slot: `<game-dir>/save` (raw words) natively, `localStora
 
 ## Assembler & bytecode
 
-`compile.py` emits text assembly; `assemble.py` writes the `code` blob.
+`tools/compile.py main.smolt` emits text assembly (`main.asm`) and assembles it into the `code` blob (`--asm-only` skips that step); `tools/assemble.py` can also be run on its own.
 
 **Assembly** (`;` comments):
 

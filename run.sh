@@ -3,6 +3,5 @@ app="${1:-./game-breakout}"
 once=; [ -f "$app/sprite.png" ] || once=--once
 
 cmake --build build && \
-./compile.py  $app/main.smolt && \
-./assemble.py $app/main.asm --print && \
+./tools/compile.py $app/main.smolt --print && \
 ./build/smolt $app $once "$@"

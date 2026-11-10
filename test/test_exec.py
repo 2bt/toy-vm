@@ -35,12 +35,12 @@ class ExecTests(unittest.TestCase):
             src = Path(directory) / "main.smolt"
             src.write_text(HEADER + textwrap.dedent(source))
             compiled = subprocess.run(
-                [sys.executable, ROOT / "compile.py", src],
+                [sys.executable, ROOT / "tools" / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             assembled = subprocess.run(
-                [sys.executable, ROOT / "assemble.py", src.with_suffix(".asm")],
+                [sys.executable, ROOT / "tools" / "assemble.py", src.with_suffix(".asm")],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
@@ -233,7 +233,7 @@ class ExecTests(unittest.TestCase):
                     print_n(f(0))
             """))
             compiled = subprocess.run(
-                [sys.executable, ROOT / "compile.py", src],
+                [sys.executable, ROOT / "tools" / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
@@ -460,7 +460,7 @@ class ExecTests(unittest.TestCase):
             src = Path(directory) / "main.smolt"
             src.write_text(textwrap.dedent(source))
             return subprocess.run(
-                [sys.executable, ROOT / "compile.py", src],
+                [sys.executable, ROOT / "tools" / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
 
@@ -528,12 +528,12 @@ class ExecTests(unittest.TestCase):
                 include "lib.smolt"
             """))
             compiled = subprocess.run(
-                [sys.executable, ROOT / "compile.py", src],
+                [sys.executable, ROOT / "tools" / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             assembled = subprocess.run(
-                [sys.executable, ROOT / "assemble.py", src.with_suffix(".asm")],
+                [sys.executable, ROOT / "tools" / "assemble.py", src.with_suffix(".asm")],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
@@ -579,13 +579,13 @@ class ExecTests(unittest.TestCase):
             code = d / "out.code"
             src.write_text("func tick():\n    return\n")
             compiled = subprocess.run(
-                [sys.executable, ROOT / "compile.py", src, asm],
+                [sys.executable, ROOT / "tools" / "compile.py", src, asm],
                 cwd=directory, capture_output=True, text=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             self.assertTrue(asm.is_file())
             assembled = subprocess.run(
-                [sys.executable, ROOT / "assemble.py", asm, code],
+                [sys.executable, ROOT / "tools" / "assemble.py", asm, code],
                 cwd=directory, capture_output=True, text=True,
             )
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
@@ -596,7 +596,7 @@ class ExecTests(unittest.TestCase):
             src = Path(directory) / "main.smolt"
             src.write_text(textwrap.dedent(source))
             compiled = subprocess.run(
-                [sys.executable, ROOT / "compile.py", src],
+                [sys.executable, ROOT / "tools" / "compile.py", src],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
@@ -1143,7 +1143,7 @@ class ExecTests(unittest.TestCase):
                     ret
             """))
             result = subprocess.run(
-                [sys.executable, ROOT / "assemble.py", src, out, "--print"],
+                [sys.executable, ROOT / "tools" / "assemble.py", src, out, "--print"],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -1165,7 +1165,7 @@ class ExecTests(unittest.TestCase):
                 out = Path(name + ".code")
                 src.write_text("_R = 0\\n.code\\n    ret\\n")
                 assemble.asm(Namespace(src=src, out=out, print=False))
-        """).format(root=str(ROOT))
+        """).format(root=str(ROOT / "tools"))
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
                 [sys.executable, "-c", script],

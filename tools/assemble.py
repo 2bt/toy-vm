@@ -7,7 +7,7 @@ from collections import namedtuple
 
 OPCODE_TABLE = []
 def load_opcode_table():
-    path = pathlib.Path(__file__).resolve().parent / "src" / "vm.cpp"
+    path = pathlib.Path(__file__).resolve().parent.parent / "src" / "vm.cpp"
     with path.open() as f:
         while l := f.readline():
             if "OPCODE_TABLE" in l: break

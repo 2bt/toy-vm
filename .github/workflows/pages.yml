@@ -1,0 +1,42 @@
+name: build, test, deploy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-image-dev
+      - run: cmake -S . -B build && cmake --build build
+      - run: python3 -m unittest discover -s test -t .
+      - run: ./build.sh
+      - name: assemble site
+        run: |
+          mkdir _site
+          cp -r index.html web games _site/
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,6 +1,3 @@
-## Compiler
-+ [x] better variable scopes
-
 ## Outpost Oberon
 
 + [ ] more enemies

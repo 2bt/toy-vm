@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>toy-vm</title>
+<title>Smolt</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -84,7 +84,7 @@
 </head>
 <body>
 <div id="ui">
-  <h1>toy-vm</h1>
+  <h1>Smolt</h1>
   <div id="games"></div>
   <div id="hint">arrows · X · Z/C · Esc = exit</div>
   <div id="play">
@@ -416,7 +416,7 @@ function noiseNibble(s) {
          (((s >>>  2) & 1) << 0);
 }
 
-class ToyAPU extends AudioWorkletProcessor {
+class SmoltAPU extends AudioWorkletProcessor {
   constructor() {
     super();
     this.voices = Array.from({ length: VOICES }, () => ({
@@ -492,7 +492,7 @@ class ToyAPU extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor("toy-apu", ToyAPU);
+registerProcessor("smolt-apu", SmoltAPU);
 `;
 
 const gamesEl = document.getElementById("games");
@@ -536,7 +536,7 @@ function ensureAudio() {
       const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
       await audioCtx.audioWorklet.addModule(url);
       URL.revokeObjectURL(url);
-      apuNode = new AudioWorkletNode(audioCtx, "toy-apu");
+      apuNode = new AudioWorkletNode(audioCtx, "smolt-apu");
       apuNode.connect(audioCtx.destination);
     } catch (e) {
       console.error(e);
@@ -744,7 +744,7 @@ async function startGame(gameId) {
   showError("");
   try {
     const base = "../" + gameId + "/";
-    saveKey = "toy-vm/" + gameId + "/save";
+    saveKey = "smolt/" + gameId + "/save";
     const [codeRes, spriteRes] = await Promise.all([
       fetch(base + "code"),
       fetch(base + "sprite.png"),

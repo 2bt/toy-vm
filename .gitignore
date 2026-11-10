@@ -1,5 +1,5 @@
 .vscode/*
-!.vscode/toy/
+!.vscode/smolt/
 build
 code
 !game-breakout/code

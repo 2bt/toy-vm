@@ -1,7 +1,7 @@
-include "../lib/api.toy"
-include "../lib/util.toy"
-include "../lib/audio.toy"
-include "game.toy"
+include "../lib/api.smolt"
+include "../lib/util.smolt"
+include "../lib/audio.smolt"
+include "game.smolt"
 
 
 var is_initialized

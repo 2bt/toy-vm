@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Toy",
-  "scopeName": "source.toy",
+  "name": "Smolt",
+  "scopeName": "source.smolt",
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
@@ -15,29 +15,29 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.number-sign.toy",
+          "name": "comment.line.number-sign.smolt",
           "match": "#.*$"
         }
       ]
     },
     "strings": {
-      "name": "string.quoted.double.toy",
+      "name": "string.quoted.double.smolt",
       "begin": "\"",
       "end": "\"",
       "patterns": [
         {
-          "name": "constant.character.escape.toy",
+          "name": "constant.character.escape.smolt",
           "match": "\\\\."
         }
       ]
     },
     "chars": {
-      "name": "string.quoted.single.toy",
+      "name": "string.quoted.single.smolt",
       "begin": "'",
       "end": "'",
       "patterns": [
         {
-          "name": "constant.character.escape.toy",
+          "name": "constant.character.escape.smolt",
           "match": "\\\\."
         }
       ]
@@ -45,11 +45,11 @@
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.hex.toy",
+          "name": "constant.numeric.hex.smolt",
           "match": "\\$[0-9A-Fa-f]+\\b"
         },
         {
-          "name": "constant.numeric.decimal.toy",
+          "name": "constant.numeric.decimal.smolt",
           "match": "\\b[0-9]+\\b"
         }
       ]
@@ -57,11 +57,11 @@
     "keywords": {
       "patterns": [
         {
-          "name": "keyword.control.toy",
+          "name": "keyword.control.smolt",
           "match": "\\b(if|elif|else|while|for|in|break|continue|return|and|or|not)\\b"
         },
         {
-          "name": "keyword.other.toy",
+          "name": "keyword.other.smolt",
           "match": "\\b(include|var|const|func|struct|asm|as)\\b"
         }
       ]
@@ -69,7 +69,7 @@
     "types": {
       "patterns": [
         {
-          "name": "storage.type.toy",
+          "name": "storage.type.smolt",
           "match": "\\bint\\b"
         }
       ]
@@ -77,11 +77,11 @@
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.assignment.toy",
+          "name": "keyword.operator.assignment.smolt",
           "match": "(\\|=|&=|\\+=|-=|\\*=|/=|%=|=)"
         },
         {
-          "name": "keyword.operator.comparison.toy",
+          "name": "keyword.operator.comparison.smolt",
           "match": "(==|!=|<=|>=|<|>)"
         }
       ]

@@ -1,9 +1,9 @@
 {
-  "name": "toy",
-  "displayName": "Toy Language",
-  "description": "Syntax highlighting for the toy-vm .toy language",
+  "name": "smolt",
+  "displayName": "Smolt Language",
+  "description": "Syntax highlighting for the Smolt language (.smolt)",
   "version": "0.0.2",
-  "publisher": "toy-vm",
+  "publisher": "smolt",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -13,22 +13,22 @@
   "contributes": {
     "languages": [
       {
-        "id": "toy",
+        "id": "smolt",
         "aliases": [
-          "Toy",
-          "toy"
+          "Smolt",
+          "smolt"
         ],
         "extensions": [
-          ".toy"
+          ".smolt"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "toy",
-        "scopeName": "source.toy",
-        "path": "./syntaxes/toy.tmLanguage.json"
+        "language": "smolt",
+        "scopeName": "source.smolt",
+        "path": "./syntaxes/smolt.tmLanguage.json"
       }
     ]
   }

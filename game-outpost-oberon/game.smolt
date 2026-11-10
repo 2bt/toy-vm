@@ -1,9 +1,9 @@
-include "level.toy"
-include "particle.toy"
-include "enemy.toy"
-include "hero.toy"
-include "audio_data.toy"
-include "level_data.toy"
+include "level.smolt"
+include "particle.smolt"
+include "enemy.smolt"
+include "hero.smolt"
+include "audio_data.smolt"
+include "level_data.smolt"
 
 # ---------------------------------------------------------------------------
 # constants

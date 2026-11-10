@@ -1,4 +1,4 @@
-include "../game-breakout/prelude.toy"
+include "../lib/api.smolt"
 
 func abs(x):
     if x >= 0: return x

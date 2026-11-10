@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
     SDL_Window* window = SDL_CreateWindow(
-        "toy-vm",
+        "Smolt",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         SCREEN_W * 3, SCREEN_H * 3,
         SDL_WINDOW_RESIZABLE

@@ -1,9 +1,9 @@
-# toy-vm
+# Smolt
 
 A tiny fantasy-console–style virtual machine.
-Write games in a C-like language (`.toy`), compile to bytecode, and run them on either the native SDL backend or the browser (JavaScript) backend.
+Write games in a C-like language (`.smolt`), compile to bytecode, and run them on either the native SDL backend or the browser (JavaScript) backend.
 
-**[Play in the browser!](https://2bt.github.io/toy-vm/)**
+**[Play in the browser!](https://2bt.github.io/smolt/)**
 
 Games live in a folder with:
 
@@ -12,9 +12,9 @@ Games live in a folder with:
 
 Shared code lives in `lib/` and is pulled in with `include "../lib/…"`:
 
-* `api.toy` → host ABI: input, interrupts, constants
-* `util.toy` → input helpers, math, strings, text drawing, boxes
-* `audio.toy` → music and sound-effect players
+* `api.smolt` → host ABI: input, interrupts, constants
+* `util.smolt` → input helpers, math, strings, text drawing, boxes
+* `audio.smolt` → music and sound-effect players
 
 Game Controls:
 
@@ -34,24 +34,24 @@ Dependencies: C++17, SDL2, SDL2_image, CMake, Python 3
 
 This will:
 
-1. Build the VM (`toy`)
-2. Compile `main.toy` → `main.asm`
+1. Build the VM (`smolt`)
+2. Compile `main.smolt` → `main.asm`
 3. Assemble `main.asm` → `code`
 4. Run the game in the VM
 
-Native host: `build/toy [--once] <game-dir>`. Browser host: `web/index.html` (same bytecode + ABI).
+Native host: `build/smolt [--once] <game-dir>`. Browser host: `web/index.html` (same bytecode + ABI).
 
 
 ## Machine model
 
 * **Word:** signed 32-bit integer. Pointers are word addresses into `mem`.
 * **Memory:** flat `mem[0 … 2²⁴)` (words). Code lives in a separate instruction stream (`pc` indexes that, not `mem`).
-* **Calls:** `jsr` / `ret` use a host-side return stack. No recursion in Toy (locals are not re-entrant).
+* **Calls:** `jsr` / `ret` use a host-side return stack. No recursion in Smolt (locals are not re-entrant).
 * **Entry:** each frame the host updates `input` and runs from `pc = 0`; the compiler’s entry is `func tick():`.
 
 ### Host ABI (low memory)
 
-Pinned in `lib/api.toy` via `var` / formals `@ addr`:
+Pinned in `lib/api.smolt` via `var` / formals `@ addr`:
 
 | Addr | Role |
 |------|------|
@@ -97,7 +97,7 @@ Each game has one save slot: `<game-dir>/save` (raw words) natively, `localStora
 Each instruction is an opcode index into `OPCODE_TABLE` (mnemonic + operand modes), followed by the absolute/indirect/index/immediate words that mode needs.
 
 
-## Toy language
+## Smolt language
 
 Indentation-based, C-flavored. Entry point is `func tick():` (called every frame).
 `#` starts a line comment.
@@ -114,8 +114,8 @@ A typed destination can coerce: arrays and lvalues decay (`&`) into pointers whe
 
 ### Declarations
 
-```toy
-include "other.toy"
+```smolt
+include "other.smolt"
 
 const N = 10
 
@@ -136,7 +136,7 @@ func add1(x) int:
 
 ### Control flow
 
-```toy
+```smolt
 if cond:
     ...
 elif other:
@@ -167,7 +167,7 @@ Operators (low → high binding): `or`, `and`, comparisons, `|`, `&` (bitwise), 
 
 ### Pointers and arrays
 
-```toy
+```smolt
 var p: Box* = boxes[4]   # auto-& when destination is a pointer
 p.x = 1                  # auto-deref on field access
 p.* = other              # whole-value assign through pointer

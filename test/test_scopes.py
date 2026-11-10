@@ -13,30 +13,30 @@ sys.path.insert(0, str(ROOT))
 import compile as C  # noqa: E402
 
 
-def write_toy(source: str) -> Path:
+def write_smolt(source: str) -> Path:
     d = Path(tempfile.mkdtemp(dir=ROOT / "test"))
     atexit.register(shutil.rmtree, d, True)
-    p = d / "main.toy"
+    p = d / "main.smolt"
     p.write_text(textwrap.dedent(source))
     return p
 
 
-def parse_toy(source: str) -> C.Parser:
-    path = write_toy(source)
+def parse_smolt(source: str) -> C.Parser:
+    path = write_smolt(source)
     parser = C.Parser()
     parser.program(path)
     return parser
 
 
-def compile_toy(source: str):
-    parser = parse_toy(source)
+def compile_smolt(source: str):
+    parser = parse_smolt(source)
     asm = C.Codegen().compile(parser)
     return parser, asm
 
 
 def compile_fails(source: str) -> str:
     """Return stderr/message text; fail the test if compile succeeds."""
-    path = write_toy(source)
+    path = write_smolt(source)
     try:
         parser = C.Parser()
         parser.program(path)
@@ -57,7 +57,7 @@ class ScopeTests(unittest.TestCase):
 
     def test_shadowing_allowed_and_outer_restored(self):
         # Behavioral: after inner block, outer x is used again.
-        parser, asm = compile_toy("""
+        parser, asm = compile_smolt("""
             func tick():
                 var x = 1
                 if 1:
@@ -86,7 +86,7 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("bound", msg)
 
     def test_for_index_reusable_in_later_for(self):
-        parser, _ = compile_toy("""
+        parser, _ = compile_smolt("""
             func tick():
                 for i = 0, 2:
                     var z = i
@@ -98,7 +98,7 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("tick.i.1", parser.vars)
 
     def test_sibling_blocks_reuse_offset_and_frame_size(self):
-        parser, asm = compile_toy("""
+        parser, asm = compile_smolt("""
             func tick():
                 if 1:
                     var a: int[4]
@@ -115,7 +115,7 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(ma.group(1), mb.group(1))
 
     def test_nested_shadow_does_not_reuse_with_outer(self):
-        parser, _ = compile_toy("""
+        parser, _ = compile_smolt("""
             func tick():
                 var x = 1
                 if 1:
@@ -128,7 +128,7 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(parser.funcs["tick"].frame_size, 2)
 
     def test_unreferenced_globals_dropped(self):
-        _, asm = compile_toy("""
+        _, asm = compile_smolt("""
             var unused_str = "never read"
             var unused_bss: int[50]
             var A = "reached only through TABLE"

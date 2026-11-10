@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOY = ROOT / "build" / "toy"
+SMOLT = ROOT / "build" / "smolt"
 
 HEADER = """
 func print(msg: int* @ 2):
@@ -30,9 +30,9 @@ class ExecTests(unittest.TestCase):
             cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
         )
 
-    def run_toy(self, source):
+    def run_smolt(self, source):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
-            src = Path(directory) / "main.toy"
+            src = Path(directory) / "main.smolt"
             src.write_text(HEADER + textwrap.dedent(source))
             compiled = subprocess.run(
                 [sys.executable, ROOT / "compile.py", src],
@@ -45,20 +45,20 @@ class ExecTests(unittest.TestCase):
             )
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
             result = subprocess.run(
-                [TOY, "--once", directory],
+                [SMOLT, "--once", directory],
                 cwd=ROOT, capture_output=True, text=True,
             )
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         return result.stdout
 
     def test_print_string(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 print("ok")
         """), "ok\n")
 
     def test_adjacent_string_literals(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var level: int[] = "ab\\n" "c"
             var x = (10 + 3) / 3
             func tick():
@@ -72,7 +72,7 @@ class ExecTests(unittest.TestCase):
         """), "ok\nab\nc\n4\nxy\n")
 
     def test_multiline_string_literal(self):
-        self.assertEqual(self.run_toy(
+        self.assertEqual(self.run_smolt(
             'func tick():\n'
             '    print("a\nb")\n'
             '    print_n("x\ny".len)\n'
@@ -88,7 +88,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("unterminated", compiled.stderr)
 
     def test_string_index_const(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             const C = "hello"[2]
             func tick():
                 digit[0] = C
@@ -102,7 +102,7 @@ class ExecTests(unittest.TestCase):
         """), "l\nh\n3\nb\n")
 
     def test_string_init_padded_array(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var g: int[8] = "hi"
             var inferred = "hey"
             func tick():
@@ -118,7 +118,7 @@ class ExecTests(unittest.TestCase):
         """), "hi\nhello\nhey\nab\n5\n0\n3\n")
 
     def test_auto_array_size_from_array(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var src: int[3] = {1, 2, 3}
             func tick():
                 var dst: int[] = src
@@ -131,7 +131,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n1\n3\n3\n2\n")
 
     def test_char_literal(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 print_n('5' - '0')
                 print_n('A' - 60)
@@ -139,7 +139,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n5\n5\n")
 
     def test_ternary(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var n = 0
             func inc():
                 n += 1
@@ -160,7 +160,7 @@ class ExecTests(unittest.TestCase):
 
     def test_elvis(self):
         # GNU ?: — omit middle; condition value reused, evaluated once.
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var n = 0
             func inc():
                 n += 1
@@ -182,7 +182,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n9\n4\n9\n1\n1\n7\n2\n")
 
     def test_call_and_add(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func add(a, b):
                 return a + b
             func tick():
@@ -192,7 +192,7 @@ class ExecTests(unittest.TestCase):
     def test_nested_calls_distinct(self):
         # Arg-position calls attribute to the callee being prepared so formals
         # don't overlap callees; LTR into formals is then safe.
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func add(a, b):
                 return a + b
             func mul(a, b):
@@ -204,7 +204,7 @@ class ExecTests(unittest.TestCase):
     def test_call_preserves_live_temps(self):
         # Left side leaves a live _T; call setup must not reuse it (tmp_i=0).
         # print_n is single-digit: (9-2) - f(1+1) == 5.
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var x = 9
             var y = 2
             var a = 1
@@ -220,7 +220,7 @@ class ExecTests(unittest.TestCase):
         # f(x-y) - f(a+b): after each call, setup temps are dead. Save/restore
         # of tmp_i should need only _T0 for the first call result (not _T1).
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
-            src = Path(directory) / "main.toy"
+            src = Path(directory) / "main.smolt"
             src.write_text(HEADER + textwrap.dedent("""
                 var x = 9
                 var y = 2
@@ -245,7 +245,7 @@ class ExecTests(unittest.TestCase):
         # Assembler PDA opt must not reuse `a` across jsr. Regression: a
         # conditional call before `e.hit_countdown -= 1` made the subtract
         # hit the wrong cell whenever the call ran (countdown stuck at 9).
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct E:
                 hit_countdown
             var enemies: E[2]
@@ -286,7 +286,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("recursive call", compiled.stderr)
 
     def test_pointer_deref(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var p = digit.ptr
                 p.* = 6
@@ -295,7 +295,7 @@ class ExecTests(unittest.TestCase):
 
     def test_struct_field_ptr_arith(self):
         # n*10 + v.pos.* must not clobber the pointer tmp used for [T]
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 pad
                 pos: int*
@@ -314,7 +314,7 @@ class ExecTests(unittest.TestCase):
         """), "7\n0\n")
 
     def test_pointer_index_and_postfix_paren(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var a: int[3] = {3, 5, 7}
             func tick():
                 var p = a.ptr
@@ -324,7 +324,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n7\n5\n")
 
     def test_pointer_cast(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -339,7 +339,7 @@ class ExecTests(unittest.TestCase):
 
     def test_pointer_array_global_size(self):
         # int*[N] must occupy N words so the next global is not overlapped
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var ptrs: int*[4]
             var marker = 7
             func tick():
@@ -370,7 +370,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("pointer", compiled.stderr)
 
     def test_while_sum(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var n = 0
                 var i = 0
@@ -381,7 +381,7 @@ class ExecTests(unittest.TestCase):
         """), "6\n")
 
     def test_for_sum(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var n = 0
                 for i = 1, 4:
@@ -390,7 +390,7 @@ class ExecTests(unittest.TestCase):
         """), "6\n")
 
     def test_for_continue(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var n = 0
                 for i = 0, 5:
@@ -402,7 +402,7 @@ class ExecTests(unittest.TestCase):
 
     def test_for_in_array_field_via_pointer(self):
         # AddrOf(Deref(ptr+off)) must not strip [reg]+off with [1:-1].
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct Cell:
                 v
             struct Row:
@@ -416,7 +416,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_while_update_is_conditional(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var i = 2
                 var k = 0
@@ -430,7 +430,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n0\n")
 
     def test_if_join_when_condition_is_true(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var x = 0
                 var y = 0
@@ -443,7 +443,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n9\n")
 
     def test_if_join_when_condition_is_false(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var x = 1
                 var y = 0
@@ -457,7 +457,7 @@ class ExecTests(unittest.TestCase):
 
     def compile_text(self, source):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
-            src = Path(directory) / "main.toy"
+            src = Path(directory) / "main.smolt"
             src.write_text(textwrap.dedent(source))
             return subprocess.run(
                 [sys.executable, ROOT / "compile.py", src],
@@ -473,7 +473,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("recursive call", compiled.stderr)
 
     def test_call_before_define(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 later()
             func later():
@@ -481,7 +481,7 @@ class ExecTests(unittest.TestCase):
         """), "ok\n")
 
     def test_call_before_define_oneline_body(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 later()
             func later(): print("ok")
@@ -489,7 +489,7 @@ class ExecTests(unittest.TestCase):
 
     def test_call_before_define_oneline_if_elif_else(self):
         # skip_block must not eat past elif/else arms into the next top-level decl
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 print_n(pick(1))
                 print_n(pick(2))
@@ -517,15 +517,15 @@ class ExecTests(unittest.TestCase):
     def test_call_before_define_across_include(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
             directory = Path(directory)
-            (directory / "lib.toy").write_text(textwrap.dedent("""
+            (directory / "lib.smolt").write_text(textwrap.dedent("""
                 func later():
                     print("ok")
             """))
-            src = directory / "main.toy"
+            src = directory / "main.smolt"
             src.write_text(HEADER + textwrap.dedent("""
                 func tick():
                     later()
-                include "lib.toy"
+                include "lib.smolt"
             """))
             compiled = subprocess.run(
                 [sys.executable, ROOT / "compile.py", src],
@@ -538,7 +538,7 @@ class ExecTests(unittest.TestCase):
             )
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
             result = subprocess.run(
-                [TOY, "--once", str(directory)],
+                [SMOLT, "--once", str(directory)],
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
@@ -559,7 +559,7 @@ class ExecTests(unittest.TestCase):
             self.assertIn("division by zero", compiled.stderr)
 
     def test_constant_math_matches_vm(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var a = -3
                 var b = 2
@@ -574,7 +574,7 @@ class ExecTests(unittest.TestCase):
     def test_explicit_output_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             d = Path(directory)
-            src = d / "main.toy"
+            src = d / "main.smolt"
             asm = d / "out.asm"
             code = d / "out.code"
             src.write_text("func tick():\n    return\n")
@@ -593,7 +593,7 @@ class ExecTests(unittest.TestCase):
 
     def compile_asm(self, source):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:
-            src = Path(directory) / "main.toy"
+            src = Path(directory) / "main.smolt"
             src.write_text(textwrap.dedent(source))
             compiled = subprocess.run(
                 [sys.executable, ROOT / "compile.py", src],
@@ -635,7 +635,7 @@ class ExecTests(unittest.TestCase):
         self.assertEqual(asm.count("add bump.n, #1"), 2)
 
     def test_inlined_branch_still_runs(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func add1(n):
                 if n < 0:
                     return 0
@@ -645,7 +645,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n")
 
     def test_struct_assign(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -660,7 +660,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_array_assign(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var a: int[3]
             var b: int[3]
             func tick():
@@ -674,7 +674,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n3\n")
 
     def test_struct_assign_via_pointer(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -690,7 +690,7 @@ class ExecTests(unittest.TestCase):
         """), "4\n5\n")
 
     def test_call_postfix_field_assign(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -705,7 +705,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n9\n")
 
     def test_auto_addr_of_int_arg(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func set(p: int*, v):
                 p.* = v
             var x = 0
@@ -715,7 +715,7 @@ class ExecTests(unittest.TestCase):
         """), "9\n")
 
     def test_auto_addr_of_struct_arg(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -730,7 +730,7 @@ class ExecTests(unittest.TestCase):
         """), "2\n3\n")
 
     def test_auto_addr_of_typed_assign(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var x = 7
             func tick():
                 var p: int* = x
@@ -738,14 +738,14 @@ class ExecTests(unittest.TestCase):
         """), "7\n")
 
     def test_null_pointer_assign_still_ok(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var p: int* = 0
                 print_n(not p)
         """), "1\n")
 
     def test_untyped_var_copies_struct(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -758,7 +758,7 @@ class ExecTests(unittest.TestCase):
         """), "4\n1\n")
 
     def test_struct_assign_indexed(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -772,7 +772,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n")
 
     def test_struct_assign_nested_field(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct Inner:
                 a
                 b
@@ -792,7 +792,7 @@ class ExecTests(unittest.TestCase):
         """), "8\n9\n0\n")
 
     def test_struct_assign_pointer_to_pointer(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -809,7 +809,7 @@ class ExecTests(unittest.TestCase):
         """), "6\n7\n")
 
     def test_struct_self_assign(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -838,7 +838,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("mov b+2, a+2", asm)
 
     def test_init_list_struct(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -850,7 +850,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_local_struct(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -861,7 +861,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_local_array(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 var a: int[3] = { 1, 2, 3 }
                 print_n(a[0])
@@ -870,7 +870,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n3\n")
 
     def test_local_struct_copy(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -896,7 +896,7 @@ class ExecTests(unittest.TestCase):
         self.assertIn("cannot return aggregate", compiled.stderr)
 
     def test_struct_arg(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -909,7 +909,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_struct_arg_init_list(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -921,7 +921,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_array_arg_init_list(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func show(a: int[3]):
                 print_n(a[0])
                 print_n(a[1])
@@ -931,7 +931,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n3\n")
 
     def test_init_list_trailing_comma(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -943,7 +943,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n7\n")
 
     def test_init_list_array(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var a: int[3]
             func tick():
                 a = { 1, 2, 3 }
@@ -953,7 +953,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n3\n")
 
     def test_untyped_array_literal_var(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var a = {1, 2, 3}
             const N = 4
             var b = {N, N + 1}
@@ -966,7 +966,7 @@ class ExecTests(unittest.TestCase):
         """), "3\n1\n3\n2\n5\n")
 
     def test_array_literal_pointer_decay(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             var p: int* = {9, 8, 7}
             func tick():
                 print_n(p[0])
@@ -977,7 +977,7 @@ class ExecTests(unittest.TestCase):
         """), "9\n7\n1\n2\n")
 
     def test_array_literal_in_struct_init(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct E:
                 voice
                 a: int*
@@ -993,7 +993,7 @@ class ExecTests(unittest.TestCase):
         """), "2\n9\n8\n1\n")
 
     def test_array_literal_pointer_arg(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func show(p: int*):
                 print_n(p[0])
                 print_n(p[1])
@@ -1002,14 +1002,14 @@ class ExecTests(unittest.TestCase):
         """), "4\n5\n")
 
     def test_array_literal_expr_len_index(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func tick():
                 print_n({1, 2, 3}.len)
                 print_n({9, 8, 7}[1])
         """), "3\n8\n")
 
     def test_init_list_expressions(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -1023,7 +1023,7 @@ class ExecTests(unittest.TestCase):
         """), "5\n6\n")
 
     def test_init_list_nested(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct Inner:
                 a
                 b
@@ -1039,7 +1039,7 @@ class ExecTests(unittest.TestCase):
         """), "8\n9\n1\n")
 
     def test_init_list_aggregate_slot(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct Inner:
                 a
                 b
@@ -1058,7 +1058,7 @@ class ExecTests(unittest.TestCase):
         """), "2\n3\n1\n")
 
     def test_init_list_via_pointer(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -1071,7 +1071,7 @@ class ExecTests(unittest.TestCase):
         """), "4\n5\n")
 
     def test_init_list_indexed(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -1083,7 +1083,7 @@ class ExecTests(unittest.TestCase):
         """), "1\n2\n")
 
     def test_init_list_pads_short(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             struct V:
                 x
                 y
@@ -1174,7 +1174,7 @@ class ExecTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_save_load(self):
-        self.assertEqual(self.run_toy("""
+        self.assertEqual(self.run_smolt("""
             func save(addr: int* @ 20, len @ 21): asm "    int #6"
             func load(addr: int* @ 20, len @ 21): asm "    int #7"
             var data: int[3] = {7, 8, 9}

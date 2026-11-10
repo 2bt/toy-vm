@@ -1233,8 +1233,8 @@ class ExecTests(unittest.TestCase):
 
     def test_save_load(self):
         self.assertEqual(self.run_smolt("""
-            func save(addr: int* @ 20, len @ 21): asm "    int #6"
-            func load(addr: int* @ 20, len @ 21): asm "    int #7"
+            func save(addr: int* @ 18, len @ 19): asm "    int #6"
+            func load(addr: int* @ 18, len @ 19): asm "    int #7"
             var data: int[3] = {7, 8, 9}
             var back: int[5]
             func tick():

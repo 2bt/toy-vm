@@ -149,8 +149,8 @@ Interrupts (`asm "int #N"`):
 | 3 | sound | `i pitch pw vol wave` @ 10–14 | voice `i` |
 | 4 | rand | `lo hi` @ 15–16 | result → `mem[0]` |
 | 5 | sqrt | `a` @ 17 | result → `mem[0]` |
-| 6 | save | `addr len` @ 20–21 | write `len` words from `addr` to the game's save slot; words written → `mem[0]` |
-| 7 | load | `addr len` @ 20–21 | read up to `len` words into `addr`; words read → `mem[0]` (0 = no save) |
+| 6 | save | `addr len` @ 18–19 | write `len` words from `addr` to the game's save slot; words written → `mem[0]` |
+| 7 | load | `addr len` @ 18–19 | read up to `len` words into `addr`; words read → `mem[0]` (0 = no save) |
 
 Screen is 320×180.
 

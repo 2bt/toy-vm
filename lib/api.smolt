@@ -24,8 +24,8 @@ func sprite(x @ 3, y @ 4, w @ 5, h @ 6, s @ 7, t @ 8, f @ 9): asm "    int #2"
 func sound(i @ 10, pitch @ 11, pw @ 12, vol @ 13, wave @ 14): asm "    int #3"
 func rand(lo @ 15, hi @ 16):                                  asm "    int #4"
 func sqrt(a @ 17):                                            asm "    int #5"
-func save(addr: int* @ 20, len @ 21):                         asm "    int #6"
-func load(addr: int* @ 20, len @ 21):                         asm "    int #7"
+func save(addr: int* @ 18, len @ 19):                         asm "    int #6"
+func load(addr: int* @ 18, len @ 19):                         asm "    int #7"
 
 const null  = 0
 const false = 0

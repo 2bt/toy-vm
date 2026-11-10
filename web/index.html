@@ -545,7 +545,7 @@ function ensureAudio() {
 }
 
 function interrupt(n) {
-  // Disjoint arg blocks (match MemMap in main.cpp): print@2 sprite@3 sound@10 rand@15 sqrt@17 save/load@20
+  // Disjoint arg blocks (match MemMap in main.cpp): print@2 sprite@3 sound@10 rand@15 sqrt@17 save/load@18
   if (n === INT_SPRITE) {
     const x = mem[3], y = mem[4], w = mem[5], h = mem[6];
     const s = mem[7], t = mem[8], f = mem[9];
@@ -570,7 +570,7 @@ function interrupt(n) {
     mem[0] = Math.sqrt(mem[17]) | 0;
   } else if (n === INT_SAVE || n === INT_LOAD) {
     // one save slot per game; ret = words written/read
-    const addr = mem[20], len = mem[21];
+    const addr = mem[18], len = mem[19];
     mem[0] = 0;
     if (addr < 0 || len < 0 || addr > MEM_SIZE - len) return;
     try {

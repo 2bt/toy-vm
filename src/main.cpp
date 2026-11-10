@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <random>
+#include <cstddef>
 #include <cstdio>
 #include <ctime>
 #include <vector>
@@ -40,9 +41,10 @@ struct MemMap {
     struct { int32_t x, y, w, h, s, t, flip; } sprite;                      // @3
     struct { int32_t i, pitch, pw, vol, wave; } sound;                      // @10
     struct { int32_t lo, hi; } rand;                                        // @15
-    struct { int32_t a, pad[2]; } sqrt;                                     // @17 (pad: save stays at @20)
-    struct { int32_t addr, len; } save;                                     // @20 save + load
+    struct { int32_t a; } sqrt;                                             // @17
+    struct { int32_t addr, len; } save;                                     // @18 save + load
 };
+static_assert(offsetof(MemMap, save) == 18 * 4, "MemMap must match lib/api.smolt");
 
 
 SDL_Texture* load_texture(SDL_Renderer* renderer, std::string file) {

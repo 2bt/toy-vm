@@ -47,7 +47,7 @@ Shared code lives in `lib/`. An include path starting with `lib/` always refers 
 
 Game Controls:
 
-* Arrows → movement
+* Arrows or WASD → movement
 * X → A, Z or C → B, Return → menu
 * Esc → quit
 * F12 → screenshot (`screenshot-<time>.png`, 320×180)
@@ -104,20 +104,21 @@ Run it with `./run.sh hello`. To start your own game, copy `games/hello` to `gam
 
 ## Build & Run
 
-Dependencies: C++20, SDL2, SDL2_image, CMake, Python 3
+Dependencies: C++20, SDL2, SDL2_image, CMake, Python 3 (and ffmpeg + gifsicle for `gif.sh`)
 
 ```bash
+./run.sh                 # Outpost Oberon
 ./run.sh breakout        # or a path: ./run.sh games/breakout
 ```
 
 This will:
 
-1. Build the VM (`smolt`)
+1. Build the VM (`smolt`), configuring `build/` on the first run
 2. Compile `main.smolt` → `main.asm`
 3. Assemble `main.asm` → `code`
 4. Run the game in the VM
 
-Native host: `build/smolt [--once] <game-dir>`.
+Native host: `build/smolt [--once] [--record out.wav] <game-dir>`. `--once` runs a single frame without a window (for tests and `print` output); `--record` writes the game's audio to a WAV file on exit.
 
 Browser host: `./build.sh` compiles every game and writes `games/index.json` (the game menu); then serve the repo root, e.g. `python3 -m http.server`, and open `/web/`.
 
@@ -136,7 +137,7 @@ Pinned in `lib/api.smolt` via `var` / formals `@ addr`:
 | Addr | Role |
 |------|------|
 | `0` | `ret` — host writes interrupt results (e.g. `rand`, `sqrt`) |
-| `1` | `input` — button bitfield (`1<<0` up … `1<<5` B) |
+| `1` | `input` — button bitfield (`1<<0` up, down, left, right, A, B, `1<<6` menu) |
 | `2…` | interrupt argument blocks (disjoint per interrupt) |
 
 Interrupts (`asm "int #N"`):

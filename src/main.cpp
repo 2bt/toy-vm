@@ -250,10 +250,10 @@ int main(int argc, char** argv) {
         // input
         uint8_t const* ks = SDL_GetKeyboardState(nullptr);
         mem.input = 0;
-        mem.input |= !!ks[SDL_SCANCODE_LEFT  ] << BTN_LEFT;
-        mem.input |= !!ks[SDL_SCANCODE_RIGHT ] << BTN_RIGHT;
-        mem.input |= !!ks[SDL_SCANCODE_UP    ] << BTN_UP;
-        mem.input |= !!ks[SDL_SCANCODE_DOWN  ] << BTN_DOWN;
+        mem.input |= !!(ks[SDL_SCANCODE_LEFT ] | ks[SDL_SCANCODE_A]) << BTN_LEFT;
+        mem.input |= !!(ks[SDL_SCANCODE_RIGHT] | ks[SDL_SCANCODE_D]) << BTN_RIGHT;
+        mem.input |= !!(ks[SDL_SCANCODE_UP   ] | ks[SDL_SCANCODE_W]) << BTN_UP;
+        mem.input |= !!(ks[SDL_SCANCODE_DOWN ] | ks[SDL_SCANCODE_S]) << BTN_DOWN;
         mem.input |= !!ks[SDL_SCANCODE_X     ] << BTN_A;
         mem.input |= !!ks[SDL_SCANCODE_Z     ] << BTN_B;
         mem.input |= !!ks[SDL_SCANCODE_C     ] << BTN_B;

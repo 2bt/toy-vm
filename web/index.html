@@ -564,7 +564,7 @@ function interrupt(n) {
     }
   } else if (n === INT_RAND) {
     const lo = mem[15], hi = mem[16];
-    mem[0] = lo + Math.floor(Math.random() * (hi - lo + 1));
+    mem[0] = hi < lo ? lo : lo + Math.floor(Math.random() * (hi - lo + 1));
   } else if (n === INT_SQRT) {
     mem[0] = Math.sqrt(mem[17]) | 0;
   } else if (n === INT_SAVE || n === INT_LOAD) {

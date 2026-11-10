@@ -72,8 +72,20 @@ std::string      save_path;
 
 
 
-void interrupt_once(int32_t n) {
-    if (n == INT_PRINT) {
+void interrupt(int32_t n) {
+    if (n == INT_SPRITE) {
+        if (!renderer) return; // --once
+        SDL_Rect src = { mem.sprite.s, mem.sprite.t, mem.sprite.w, mem.sprite.h };
+        SDL_Rect dst = { mem.sprite.x, mem.sprite.y, mem.sprite.w, mem.sprite.h };
+        SDL_RenderCopyEx(renderer, sprites, &src, &dst, 0, nullptr, SDL_RendererFlip(mem.sprite.flip));
+    }
+    else if (n == INT_SOUND) {
+        int32_t i = mem.sound.i;
+        if (i >= 0 && i < (int32_t)voice_inputs.size()) {
+            voice_inputs[i] = { mem.sound.pitch, mem.sound.pw, mem.sound.vol, mem.sound.wave };
+        }
+    }
+    else if (n == INT_PRINT) {
         for (int32_t addr = mem.print.msg; addr >= 0 && addr < VM::MEM_SIZE; ++addr) {
             int32_t c = vm.mem[addr];
             if (c == 0) break;
@@ -84,10 +96,10 @@ void interrupt_once(int32_t n) {
     else if (n == INT_RAND) {
         static std::random_device rd;
         static std::mt19937 gen(rd());
-        mem.ret = std::uniform_int_distribution<>(mem.rand.lo, mem.rand.hi)(gen);
+        mem.ret = mem.rand.hi < mem.rand.lo ? mem.rand.lo : std::uniform_int_distribution<>(mem.rand.lo, mem.rand.hi)(gen);
     }
     else if (n == INT_SQRT) {
-        mem.ret = std::sqrt(mem.math.a);
+        mem.ret = mem.math.a > 0 ? std::sqrt(mem.math.a) : 0;
     }
     else if (n == INT_SAVE || n == INT_LOAD) {
         // one save slot per game: raw words in <game-dir>/save; ret = words written/read
@@ -100,24 +112,9 @@ void interrupt_once(int32_t n) {
         }
     }
     else {
-        printf("WARN: unknown interrupt %d\n", n);
+        printf("ERROR: unknown interrupt %d\n", n);
+        exit(1);
     }
-}
-
-void interrupt(int32_t n) {
-    if (n == INT_SPRITE) {
-        if (!renderer) return;
-        SDL_Rect src = { mem.sprite.s, mem.sprite.t, mem.sprite.w, mem.sprite.h };
-        SDL_Rect dst = { mem.sprite.x, mem.sprite.y, mem.sprite.w, mem.sprite.h };
-        SDL_RenderCopyEx(renderer, sprites, &src, &dst, 0, nullptr, SDL_RendererFlip(mem.sprite.flip));
-    }
-    else if (n == INT_SOUND) {
-        int32_t i = mem.sound.i;
-        if (i >= 0 && i < (int32_t)voice_inputs.size()) {
-            voice_inputs[i] = { mem.sound.pitch, mem.sound.pw, mem.sound.vol, mem.sound.wave };
-        }
-    }
-    else interrupt_once(n);
 }
 
 
@@ -178,7 +175,7 @@ int main(int argc, char** argv) {
     if (!vm.load(dir + "/code")) return 1;
     save_path = dir + "/save";
     if (once) {
-        vm.run(interrupt_once);
+        vm.run(interrupt);
         return 0;
     }
 

@@ -294,8 +294,8 @@ void VM::run(std::function<void(int32_t)> interrupt) {
         case ADD: res = *a += b; break;
         case SUB: res = *a -= b; break;
         case MUL: res = *a *= b; break;
-        case DIV: res = *a /= b ?: 1; break;
-        case MOD: res = *a %= b ?: 1; break;
+        case DIV: res = *a = b == -1 ? -*a : *a / (b ?: 1); break; // -1: INT_MIN / -1 would trap
+        case MOD: res = *a = b == -1 ?   0 : *a % (b ?: 1); break;
         case AND: res = *a &= b; break;
         case ORE: res = *a |= b; break;
         case CMP: res = *a - b; break;

@@ -17,6 +17,7 @@ target_compile_options(
     -std=c++20
     -Wall
     -O3
+    -fwrapv # signed overflow wraps, like the web host
 )
 
 target_link_libraries(

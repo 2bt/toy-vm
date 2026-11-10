@@ -51,6 +51,33 @@ class ExecTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         return result.stdout
 
+    def test_for_in_literal(self):
+        self.assertEqual(self.run_smolt("""
+            func tick():
+                var n = 0
+                for c in "ab": n += 1  # includes the terminating 0
+                print_n(n)
+                n = 0
+                for x in {1, 2, 3}: n += x.*
+                print_n(n)
+        """), "3\n6\n")
+
+    def test_for_in_evaluates_array_once(self):
+        self.assertEqual(self.run_smolt("""
+            struct Bag:
+                items: int[4]
+            var bag: Bag
+            var calls
+            func get() Bag*:
+                calls += 1
+                return &bag
+            func tick():
+                var n = 0
+                for p in get().items: n += 1
+                print_n(n)
+                print_n(calls)
+        """), "4\n1\n")
+
     def test_loop_at_entry_does_not_assume_dest(self):
         # tick starts with the loop's cmp; the host enters with unknown VM state
         self.assertEqual(self.run_smolt("""

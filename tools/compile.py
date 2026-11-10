@@ -637,6 +637,7 @@ class Parser:
         if self.peek("for"):
             self.eat()
             name = self.eat("id").v
+            offset = None  # set for "for x in array"
             if self.peek("="):
                 self.eat()
                 start, t = self.expr()
@@ -647,6 +648,7 @@ class Parser:
                 self.eat("in")
                 a, t = self.expr()
                 if not is_array(t): self.error("invalid statement")
+                if isinstance(a, ArrLit): a = self.intern(a)
                 start = AddrOf(a)
                 offset = self.type_size(Type(t.base, t.ptr, None)) * t.array
                 limit = BinOp("+", start, Imm(offset))
@@ -655,6 +657,11 @@ class Parser:
             saved = self.push_scope()
             unique = self.declare_local(name, t, bound=True)
             init = Assign("=", VarRef(unique), start)
+            if offset is not None and not (isinstance(start, AddrOf) and isinstance(start.lv, VarRef)):
+                # evaluate a non-constant array expression once; "name.end" can't clash with source names
+                end = self.declare_local(name + ".end", t)
+                init = Block([init, Assign("=", VarRef(end), BinOp("+", VarRef(unique), Imm(offset)))])
+                limit = VarRef(end)
             cond = BinOp("<", VarRef(unique), limit)
             inc = Imm(self.type_size(Type(t.base, t.ptr - 1, None)))
             next = Assign("+=", VarRef(unique), inc)

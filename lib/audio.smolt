@@ -115,7 +115,9 @@ func audio_voice_start(v: AudioVoice*, p: int*):
     v.env       = AUDIO_ENV_ATTACK
     v.level     = 0
     v.attack    = AUDIO_ENV_PEAK
+    v.decay     = 0
     v.sustain   = 0
+    v.release   = 0
     v.vol       = 64
     v.pitch     = 0
     v.abs_pitch = false

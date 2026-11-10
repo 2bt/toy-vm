@@ -10,3 +10,6 @@ docs/
 
 .worktrees/
 game-*/save
+.cache/
+.superpowers/
+screenshot-*.png

@@ -1,7 +1,14 @@
 include "../lib/api.toy"
 include "../lib/util.toy"
 include "box.toy"
-include "sound.toy"
+include "../lib/audio.toy"
+
+var SFX_BING    = "@0 v60 d2 N=100,=32,=10,2"
+var SFX_BLOCK   = "@1 v100 d5 N=40,12"
+var SFX_UNSTICK = "@1 v60 d6 W128w7 P=44|,2+7,2+7,2+-14"
+var SFX_DIE     = "@1 v90 d8 w4 P=44|,f20,f20,f20,f20,f-20,f-20,f-20,f-20,f-25"
+var SFX_SPIN    = "@2 v40 d20s40 w1 P=38|,2+12,2+12,2+12,2+-36"
+var SFX_NOSPIN  = "@2,"
 
 const Q = 256
 
@@ -92,7 +99,7 @@ func unstick_balls():
     for b in balls:
         if b.state != BALL_STATE_STICKING: continue
         b.state = BALL_STATE_FLYING
-        sound_play(SOUND_UNSTICK)
+        audio_play_sfx(SFX_UNSTICK)
 
 
 func init_stage():
@@ -164,7 +171,7 @@ func block_collision(b: Ball*, axis):
                     n.y = b.y
                     if rand(0, 1) == 0: b.vx *= -1
     if overlap:
-        sound_play(SOUND_BLOCK)
+        audio_play_sfx(SFX_BLOCK)
         if axis == AXIS_X:
             b.vx *= -1
             b.x = ((b.x / Q) + overlap) * Q
@@ -181,7 +188,7 @@ func update_ball(b: Ball*):
     # pad y collision
     var overlap = box_overlap_y(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap:
-        sound_play(SOUND_BING)
+        audio_play_sfx(SFX_BING)
 
         b.y = ((b.y / Q) + overlap) * Q
         if   pad.vy > 0: b.vy = abs(pad.vy)
@@ -203,7 +210,7 @@ func update_ball(b: Ball*):
     # pad collision
     overlap = box_overlap_x(b.x / Q, b.y / Q, BALL_W, BALL_W, PAD_X, pad.y / Q, PAD_W, pad.h)
     if overlap:
-        sound_play(SOUND_BING)
+        audio_play_sfx(SFX_BING)
 
         b.x    = ((b.x / Q) + overlap) * Q
         b.spin = pad.vy
@@ -225,7 +232,7 @@ func update_ball(b: Ball*):
     if b.x > (SCREEN_W - BALL_W - BORDER) * Q:
         b.x = (SCREEN_W - BALL_W - BORDER) * Q
         b.vx = -abs(b.vx)
-        sound_play(SOUND_BING)
+        audio_play_sfx(SFX_BING)
 
     # move y
     if b.state != BALL_STATE_STICKING: b.y += b.vy
@@ -241,11 +248,11 @@ func update_ball(b: Ball*):
         if abs(b.vx) < 100:
             if b.vx > 0: b.vx += 10
             if b.vx < 0: b.vx -= 10
-        sound_play(SOUND_BING)
+        audio_play_sfx(SFX_BING)
     if b.y > (SCREEN_H - BALL_W - BORDER) * Q:
         b.y = (SCREEN_H - BALL_W - BORDER) * Q
         b.vy = -abs(b.vy)
-        sound_play(SOUND_BING)
+        audio_play_sfx(SFX_BING)
 
     # die
     if b.x < -BALL_W * Q: b.state = BALL_STATE_DEAD
@@ -290,15 +297,15 @@ func update_stage():
         balls_spinning = 0
         for b in balls: update_ball(b)
         if balls_alive == 0:
-            sound_play(SOUND_DIE)
+            audio_play_sfx(SFX_DIE)
             if lives > 0:
                 lives -= 1
                 new_ball()
             else:
                 game_state = GAME_STATE_DEAD
         if prev_spinning != balls_spinning:
-            if prev_spinning == 0: sound_play(SOUND_SPIN)
-            if balls_spinning == 0: sound_play(SOUND_NOSPIN)
+            if prev_spinning == 0: audio_play_sfx(SFX_SPIN)
+            if balls_spinning == 0: audio_play_sfx(SFX_NOSPIN)
 
         # stage clear
         if blocks_alive <= 0:
@@ -362,6 +369,6 @@ func draw_stage():
 
 func tick():
     update_stage()
-    update_sound()
+    audio_update_sfx()
     prev_input = input
     draw_stage()

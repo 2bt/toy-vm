@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
             case SDL_KEYDOWN:
                 if (event.key.repeat) break;
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
-                else if (event.key.keysym.scancode == SDL_SCANCODE_RETURN) take_screenshot = true;
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F12) take_screenshot = true;
                 else if (event.key.keysym.scancode == SDL_SCANCODE_R) {
                     if (recording_dir.empty()) {
                         recording_dir   = "recording-" + std::to_string(time(nullptr));

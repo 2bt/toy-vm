@@ -48,9 +48,9 @@ Shared code lives in `lib/`. An include path starting with `lib/` always refers 
 Game Controls:
 
 * Arrows → movement
-* Z / X / C → buttons
+* X → A, Z or C → B, Return → menu
 * Esc → quit
-* Return → screenshot (`screenshot-<time>.png`, 320×180)
+* F12 → screenshot (`screenshot-<time>.png`, 320×180)
 * R → start/stop recording frames to `recording-<time>/`; `./gif.sh recording-<time>` turns them into a gif
 * Gamepad: d-pad / left stick, A or Y → A, B or X → B, Start → menu
 

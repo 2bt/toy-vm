@@ -21,7 +21,7 @@ struct AudioVoice:
     vib_rate
     vib_depth
 
-struct MusicTrack:
+struct AudioTrack:
     index
     pos: int*
     loop: int*
@@ -45,12 +45,9 @@ struct MusicTrack:
     wait
     voice: AudioVoice
 
-struct Audio:
-    instruments: int*[100]
-    tracks: MusicTrack[4]
-    sfx: AudioVoice[4]
-
-var audio: Audio
+var audio_instruments: int*[100]
+var audio_tracks: AudioTrack[4]
+var audio_sfx: AudioVoice[4]
 var audio_music_volume = 64
 var audio_sfx_volume   = 64
 
@@ -76,8 +73,8 @@ func audio_read_num(p: int**) int:
 
 
 func audio_stop_music():
-    for n in audio.instruments: n.* = null
-    for t in audio.tracks: t.* = {}
+    for n in audio_instruments: n.* = null
+    for t in audio_tracks: t.* = {}
 
 func audio_play_music(p: int*):
     audio_stop_music()
@@ -87,11 +84,11 @@ func audio_play_music(p: int*):
         if c == '#': audio_skip_line(p)
         elif c == '$':
             var i = audio_read_num(p)
-            if i < audio.instruments.len: audio.instruments[i] = p
+            if i < audio_instruments.len: audio_instruments[i] = p
         elif c == '@':
             var i = audio_read_num(p)
-            if i < audio.tracks.len:
-                var s = &audio.tracks[i]
+            if i < audio_tracks.len:
+                var s = &audio_tracks[i]
                 if s.pos: continue
                 s.pos         = p
                 s.index       = i
@@ -183,7 +180,7 @@ func audio_voice_vibrato(v: AudioVoice*) int:
     var x = abs(((v.vib_pos + 64) & 255) - 128)
     return (x * v.vib_depth + 32) / 64 - v.vib_depth
 
-func audio_read_music_row(v: MusicTrack*) int:
+func audio_track_next_row(v: AudioTrack*) int:
     if not v.pos: return false
     v.next_note        = AUDIO_NOTE_EMPTY
     v.next_porta_start = AUDIO_NOTE_EMPTY
@@ -227,7 +224,7 @@ func audio_read_music_row(v: MusicTrack*) int:
 
 
 func audio_update_music():
-    for v in audio.tracks:
+    for v in audio_tracks:
         if not v.pos: continue
 
         if v.wait == v.quant and v.next_note != AUDIO_NOTE_EMPTY and v.next_porta_speed == 0: v.voice.env = AUDIO_ENV_RELEASE
@@ -237,11 +234,11 @@ func audio_update_music():
                 v.pitch_target = v.next_note * 64
                 if v.next_porta_start >= 0 or v.next_porta_speed == 0:
                     v.pitch = v.next_porta_start >= 0 ? v.next_porta_start * 64 : v.pitch_target
-                    audio_voice_start(&v.voice, audio.instruments[v.next_instr])
+                    audio_voice_start(&v.voice, audio_instruments[v.next_instr])
             if v.next_note != AUDIO_NOTE_EMPTY: v.porta_speed = v.next_porta_speed
             v.quant  = v.next_quant
             v.volume = v.next_volume
-            if not audio_read_music_row(v): continue
+            if not audio_track_next_row(v): continue
         v.wait -= 1
 
         var vc = &v.voice
@@ -264,13 +261,13 @@ func audio_play_sfx(p: int*):
         if c == '#': audio_skip_line(p)
         elif c == '@':
             var i = audio_read_num(p)
-            if i < audio.sfx.len:
-                audio.sfx[i] = {}
-                audio_voice_start(&audio.sfx[i], p)
+            if i < audio_sfx.len:
+                audio_sfx[i] = {}
+                audio_voice_start(&audio_sfx[i], p)
 
 func audio_update_sfx():
-    for i = 0, audio.sfx.len:
-        var v = &audio.sfx[i]
+    for i = 0, audio_sfx.len:
+        var v = &audio_sfx[i]
         if not v.pos: continue
         audio_voice_update(v)
         sound(i, v.pitch + audio_voice_vibrato(v), v.pw, v.vol * v.level / AUDIO_ENV_PEAK * audio_sfx_volume / 64, v.wave)

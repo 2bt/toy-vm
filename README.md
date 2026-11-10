@@ -3,6 +3,8 @@
 A tiny fantasy-console–style virtual machine.
 Write games in a C-like language (`.smolt`), compile to bytecode, and run them on either the native SDL backend or the browser (JavaScript) backend.
 
+![Outpost Oberon](media/outpost-oberon.gif)
+
 **[Play in the browser!](https://2bt.github.io/smolt/)**
 
 Games live in a folder with:

@@ -319,6 +319,7 @@ function decodeVarint(bytes, pos) {
   let u = 0, shift = 0;
   for (;;) {
     const b = bytes[pos.i++];
+    if (b === undefined) throw new Error("truncated code file");
     u = (u | ((b & 0x7f) << shift)) >>> 0;
     if (b < 0x80) break;
     shift += 7;
@@ -744,8 +745,8 @@ async function startGame(gameId) {
       fetch(base + "code"),
       fetch(base + "sprite.png"),
     ]);
-    if (!codeRes.ok) throw new Error("failed to load " + gameId + "/code");
-    if (!spriteRes.ok) throw new Error("failed to load " + gameId + "/sprite.png");
+    if (!codeRes.ok) throw new Error("failed to load " + gameId + "/code — run ./build.sh and serve the repo root");
+    if (!spriteRes.ok) throw new Error("failed to load " + gameId + "/sprite.png — serve the repo root");
     const codeBuf = await codeRes.arrayBuffer();
     sprites = await createImageBitmap(await spriteRes.blob());
     ({ mem, code } = loadProgram(new Uint8Array(codeBuf)));
@@ -759,7 +760,7 @@ async function startGame(gameId) {
     running = true;
     raf = requestAnimationFrame(frame);
   } catch (e) {
-    showError(String(e.message || e) + " — serve from repo root: python -m http.server");
+    showError(String(e.message || e));
   }
 }
 

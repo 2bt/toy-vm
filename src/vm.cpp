@@ -221,7 +221,11 @@ constexpr Opcode OPCODE_TABLE[] = {
 int32_t decode(std::istream& f) {
     uint32_t u = 0;
     for (int shift = 0;; shift += 7) {
-        uint8_t b = f.get();
+        int b = f.get();
+        if (b == EOF) {
+            printf("ERROR: truncated code file\n");
+            exit(1);
+        }
         u |= (b & 0x7f) << shift;
         if (b < 0x80) break;
     }

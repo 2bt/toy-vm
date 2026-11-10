@@ -1,7 +1,7 @@
 # input
 var not_prev_input
 func btn(b): return b & input > 0
-func btnp(b): return input & b & not_prev_input
+func btnp(b): return input & b & not_prev_input > 0
 func input_update(): not_prev_input = -1 - input  # call at the end of tick() for btnp()
 
 
@@ -14,8 +14,6 @@ func sgn(x): return (x > 0) - (x < 0)
 
 
 # string
-var str: int[20]
-
 func strlen(s: int*) int:
     var l = 0
     while s.*:

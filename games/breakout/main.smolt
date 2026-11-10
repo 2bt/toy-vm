@@ -347,17 +347,18 @@ func draw_stage():
         if b.state == BALL_STATE_DEAD: continue
         sprite(b.x / Q - 4, b.y / Q - 4, 16, 16, b.frame * 16, 320, 0)
 
+    var buf: int[12]
     draw_text(5, 5, "LIVES")
-    strnum(str, lives)
-    draw_text(5 + 8*6, 5, str)
+    strnum(buf, lives)
+    draw_text(5 + 8*6, 5, buf)
 
     draw_text(5, 180 - 18 + 5, "SCORE")
-    strnum(str, score)
-    var len = strlen(str)
+    strnum(buf, score)
+    var len = strlen(buf)
     for i = 0, 4 - len:
         draw_char(5 + 8*6 + i * 8, 180 - 18 + 5, '0')
 
-    draw_text(5 + 8*10 - len * 8, 180 - 18 + 5, str)
+    draw_text(5 + 8*10 - len * 8, 180 - 18 + 5, buf)
 
     if game_state == GAME_STATE_CLEAR:  draw_text(116, 86, "STAGE CLEAR")
     elif game_state == GAME_STATE_DEAD: draw_text(124, 86, "GAME OVER")

@@ -196,11 +196,12 @@ func game_update():
 
 
 func draw_hud():
-    strnum(str, hero.lives)
+    var buf: int[12]
+    strnum(buf, hero.lives)
     draw_text(2, SCREEN_H - 10, "x")
-    draw_text(10, SCREEN_H - 10, str)
-    strnum(str, hero.score)
-    draw_text(SCREEN_W - strlen(str) * 8 - 2, SCREEN_H - 10, str)
+    draw_text(10, SCREEN_H - 10, buf)
+    strnum(buf, hero.score)
+    draw_text(SCREEN_W - strlen(buf) * 8 - 2, SCREEN_H - 10, buf)
 
 
 func game_draw():
@@ -222,15 +223,17 @@ func game_draw():
         level_draw_walls()
 
         if game.hiscore:
-            var p = strcpy(str, "HISCORE ")
+            var buf: int[20]
+            var p = strcpy(buf, "HISCORE ")
             strnum(p, game.hiscore)
-            draw_centered_text(SCREEN_W / 2, SCREEN_H - 10, str)
+            draw_centered_text(SCREEN_W / 2, SCREEN_H - 10, buf)
         return
 
     if game.state == GAME_STATE_LEVEL:
-        var p = strcpy(str, "LEVEL ")
+        var buf: int[20]
+        var p = strcpy(buf, "LEVEL ")
         strnum(p, game.level + 1)
-        draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, str)
+        draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, buf)
         return
 
     level_draw_background()

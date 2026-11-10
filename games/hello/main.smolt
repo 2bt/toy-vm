@@ -23,8 +23,9 @@ func tick():
     # draw: the fish is the 16x16 tile at (0, 24) in sprite.png
     sprite(x, y, 16, 16, 0, 24, 0)
     draw_text(8, 8, "Hello, Smolt! Press X.")
-    strnum(str, score)
-    draw_text(8, 20, str)
+    var buf: int[12]
+    strnum(buf, score)
+    draw_text(8, 20, buf)
 
     audio_update_sfx()
     input_update()

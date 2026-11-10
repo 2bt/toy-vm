@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-import sys, re
-import ast
-from pathlib import Path
 import argparse
-
-ROOT = Path(__file__).resolve().parent.parent  # repo root; include "lib/…" resolves against this
+import ast
+import re
+import sys
 from collections import namedtuple
 from dataclasses import dataclass, field
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent  # repo root; include "lib/…" resolves against this
 
 ##############################
 # tokenization
@@ -275,7 +276,8 @@ class Parser:
         tok = tok or self.last_tok
         file, nr = tok.loc
         line = file.read_text().split("\n")[nr - 1]
-        sys.exit(f"{file.name}:{nr}: {msg} (token: {tok.k})\n{line}")
+        at = f"'{tok.v.strip()}'" if tok.v.strip() else "end of line" if tok.k == "eol" else tok.k
+        sys.exit(f"{file.name}:{nr}: {msg} (at {at})\n{line}")
 
     def peek(self, k=None):
         tok = self.head.toks[self.head.i]
@@ -1183,10 +1185,10 @@ class Codegen:
     def emit_label(self, l):
         # remove useless jump
         i = len(self.lines) - 1
-        while i > 0 and (m := re.match(f"    jmp {l}", self.lines[i])):
+        while i > 0 and self.lines[i] == f"    jmp {l}":
             self.lines.pop(i)
             i -= 1
-        while i > 0 and (m := re.match(r"    j[^m]. ([^ ]+)", self.lines[i])):
+        while i > 0 and (m := re.fullmatch(r"    j(?:lt|le|gt|ge|eq|ne) (\S+)", self.lines[i])):
             if m[1] == l: self.lines.pop(i)
             i -= 1
         self.lines.append(f"{l}:")
@@ -1462,11 +1464,10 @@ class Codegen:
             assert False, f"unsupported statement {node}"
 
 
-    def compile(self, ast):
+    def compile(self, parser):
         self.lines        = []
         self.label_i      = 0
-        self.funcs        = ast.funcs
-        self.structs      = ast.structs
+        self.funcs        = parser.funcs
         self.loop_stack   = []
         self.inline_exits = []
 
@@ -1501,8 +1502,8 @@ class Codegen:
             lines += peephole(self.lines, self.tmp_vars)
             # add temporary variables to locals
             for t, ty in self.tmp_vars.items():
-                ast.vars[t] = Var(type=ty, offset=self.current_func.frame_size, func=name)
-                self.current_func.frame_size += ast.type_size(ty)
+                parser.vars[t] = Var(type=ty, offset=self.current_func.frame_size, func=name)
+                self.current_func.frame_size += parser.type_size(ty)
 
         # keep only globals referenced by compiled code, or by data of kept globals.
         # Scan operands of the final asm: it includes inline asm and reflects peephole removals.
@@ -1512,22 +1513,22 @@ class Codegen:
             l = l.split(";")[0].strip()
             if not l or l.endswith(":"): continue  # label
             ops = l.split(None, 1)[1:]             # drop mnemonic
-            todo += [w for w in re.findall(r"(?<![\w$])[A-Za-z_][\w.]*", "".join(ops)) if w in ast.vars]
+            todo += [w for w in re.findall(r"(?<![\w$])[A-Za-z_][\w.]*", "".join(ops)) if w in parser.vars]
         while todo:
             n = todo.pop()
             if n in used: continue
             used.add(n)
             # data words are ints or "sym" / "sym+off"
-            todo += [d.split("+")[0] for d in ast.vars[n].data or [] if isinstance(d, str)]
+            todo += [d.split("+")[0] for d in parser.vars[n].data or [] if isinstance(d, str)]
 
         # variables with fixed addresses
         self.lines = ["_R = 0"]
         addr = 1
-        for name, v in ast.vars.items():
+        for name, v in parser.vars.items():
             if v.addr is None: continue
             assert v.data is None
             self.emit(f"{name} = {v.addr}")
-            addr = max(addr, v.addr + ast.type_size(v.type))
+            addr = max(addr, v.addr + parser.type_size(v.type))
 
         cache = {}
         def alloc_vars(name):
@@ -1536,7 +1537,7 @@ class Codegen:
             a = addr
             for f in func.calls: a = max(a, alloc_vars(f))
             for n, v in sorted(
-                ((n, v) for n, v in ast.vars.items() if v.func == name and v.offset is not None),
+                ((n, v) for n, v in parser.vars.items() if v.func == name and v.offset is not None),
                 key=lambda x: (x[1].offset, x[0]),
             ):
                 assert v.data is None
@@ -1546,15 +1547,15 @@ class Codegen:
         addr = max(alloc_vars(name) for name in func_order)
 
         # global variables
-        for name, v in ast.vars.items():
+        for name, v in parser.vars.items():
             if v.addr is None and v.data is None and "." not in name and name in used:
                 self.emit(f"{name} = {addr}")
-                addr += ast.type_size(v.type)
+                addr += parser.type_size(v.type)
 
         # data
         self.emit("")
         self.emit(f"    .data {addr}")
-        for name, v in ast.vars.items():
+        for name, v in parser.vars.items():
             if v.data is None or name not in used: continue
             self.emit(f"{name}:")
             ln = "   "

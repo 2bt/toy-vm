@@ -1,0 +1,280 @@
+# a voice plays an instrument (music) or a sound effect: envelope, wave, pitch, pw and vibrato,
+# driven by a command string like "v50 d8 P=60|,+3,"
+struct AudioVoice:
+    pos: int*
+    loop: int*
+    wait
+    length
+    env
+    level
+    attack
+    decay
+    sustain
+    release
+    vol
+    wave
+    pitch       # 1/8 semitones
+    abs_pitch   # music only: ignore the note pitch
+    pw
+    pw_rate
+    vib_pos
+    vib_rate
+    vib_depth
+
+struct MusicTrack:
+    index
+    pos: int*
+    loop: int*
+
+    octave
+    next_note
+    next_porta_start
+    next_porta_speed
+
+    next_wait
+    next_instr
+    next_quant
+    next_volume
+
+    quant
+    volume
+    porta_speed
+    pitch
+    pitch_target
+
+    wait
+    voice: AudioVoice
+
+struct Audio:
+    instruments: int*[100]
+    tracks: MusicTrack[4]
+    sfx: AudioVoice[4]
+
+var audio: Audio
+var audio_music_volume = 64
+var audio_sfx_volume   = 64
+
+
+func audio_skip_space(p: int**):
+    while p.*.* == ' ' or p.*.* == '\n': p.* += 1
+
+func audio_skip_line(p: int**):
+    while p.*.* and p.*.* != '\n': p.* += 1
+    if p.*.*: p.* += 1
+
+func audio_read_num(p: int**) int:
+    var n = 0
+    var minus = false
+    while p.*.* == '-':
+        minus = not minus
+        p.* += 1
+    while p.*.* >= '0' and p.*.* <= '9':
+        n = n * 10 + p.*.* - '0'
+        p.* += 1
+    audio_skip_space(p)
+    return minus ? -n : n
+
+
+func audio_stop_music():
+    for n in audio.instruments: n.* = null
+    for t in audio.tracks: t.* = {}
+
+func audio_play_music(p: int*):
+    audio_stop_music()
+    while p.*:
+        var c = p.*
+        p += 1
+        if c == '#': audio_skip_line(p)
+        elif c == '$':
+            var i = audio_read_num(p)
+            if i < audio.instruments.len: audio.instruments[i] = p
+        elif c == '@':
+            var i = audio_read_num(p)
+            if i < audio.tracks.len:
+                var s = &audio.tracks[i]
+                if s.pos: continue
+                s.pos         = p
+                s.index       = i
+                s.next_note   = AUDIO_NOTE_OFF
+                s.next_volume = 64
+                s.octave      = 4
+
+
+const AUDIO_NOTE_EMPTY = -1
+const AUDIO_NOTE_OFF   = -2
+
+const AUDIO_ENV_RELEASE = 0
+const AUDIO_ENV_ATTACK  = 1
+const AUDIO_ENV_DECAY   = 2
+const AUDIO_ENV_PEAK    = 256 * 64
+
+func audio_env_step(rate) int: return AUDIO_ENV_PEAK / (1 + (rate + 8) * rate * 15 / 128)
+
+func audio_voice_start(v: AudioVoice*, p: int*):
+    v.pos       = p
+    v.loop      = null
+    v.wait      = 0
+    v.length    = 0
+    v.env       = AUDIO_ENV_ATTACK
+    v.level     = 0
+    v.attack    = AUDIO_ENV_PEAK
+    v.sustain   = 0
+    v.vol       = 64
+    v.pitch     = 0
+    v.abs_pitch = false
+    v.vib_pos   = 0
+    v.vib_rate  = 0
+    v.vib_depth = 0
+
+func audio_voice_update(v: AudioVoice*):
+    v.pw += v.pw_rate
+    v.pw %= 1024
+    v.vib_pos += v.vib_rate
+    v.vib_pos %= 256
+
+    if v.pos:
+        if v.wait <= 0:
+            while true:
+                var c = v.pos.*
+                v.pos += 1
+                if   c == ' ':
+                elif c == 'v': v.vol       = audio_read_num(v.pos)
+                elif c == 'l': v.length    = audio_read_num(v.pos)
+                elif c == 'a': v.attack    = audio_env_step(audio_read_num(v.pos))
+                elif c == 'd': v.decay     = AUDIO_ENV_PEAK - audio_env_step(audio_read_num(v.pos))
+                elif c == 'r': v.release   = AUDIO_ENV_PEAK - audio_env_step(audio_read_num(v.pos))
+                elif c == 's': v.sustain   = audio_read_num(v.pos) * AUDIO_ENV_PEAK / 64
+                elif c == 'W': v.pw        = audio_read_num(v.pos) * 4
+                elif c == 'w': v.pw_rate   = audio_read_num(v.pos)
+                elif c == 'Y': v.vib_depth = audio_read_num(v.pos)
+                elif c == 'y': v.vib_rate  = audio_read_num(v.pos)
+                elif c == 'T': v.wave      = WAVE_TRI
+                elif c == 'S': v.wave      = WAVE_SAW
+                elif c == 'P': v.wave      = WAVE_PULSE
+                elif c == 'N': v.wave      = WAVE_NOISE
+                elif c == '=' or c == '~':
+                    v.pitch     = audio_read_num(v.pos) * 8
+                    v.abs_pitch = c == '='
+                elif c == '+': v.pitch += audio_read_num(v.pos) * 8
+                elif c == 'f': v.pitch += audio_read_num(v.pos)
+                elif c == '|': v.loop = v.pos
+                elif c == ',':
+                    v.wait = audio_read_num(v.pos) ?: 1
+                    break
+                else:
+                    v.pos = v.loop
+                    if not v.pos:
+                        break
+        v.wait -= 1
+
+    # adsr
+    if v.env == AUDIO_ENV_ATTACK:
+        v.level = min(v.level + v.attack, AUDIO_ENV_PEAK)
+        if v.level == AUDIO_ENV_PEAK: v.env = AUDIO_ENV_DECAY
+    if v.env == AUDIO_ENV_DECAY: v.level = v.sustain + (v.level - v.sustain) * v.decay / AUDIO_ENV_PEAK
+    if v.env == AUDIO_ENV_RELEASE: v.level = v.level * v.release / AUDIO_ENV_PEAK
+
+    if v.length:
+        v.length -= 1
+        if not v.length: v.env = AUDIO_ENV_RELEASE
+
+func audio_voice_vibrato(v: AudioVoice*) int:
+    if not v.vib_depth: return 0
+    var x = abs(((v.vib_pos + 64) & 255) - 128)
+    return (x * v.vib_depth + 32) / 64 - v.vib_depth
+
+func audio_read_music_row(v: MusicTrack*) int:
+    if not v.pos: return false
+    v.next_note        = AUDIO_NOTE_EMPTY
+    v.next_porta_start = AUDIO_NOTE_EMPTY
+    v.next_porta_speed = 0
+
+    while true:
+        var c = v.pos.*
+        v.pos += 1
+        if   c == ' ' or c == '\n':
+        elif c == '#': audio_skip_line(v.pos)
+        elif c == '|': v.loop = v.pos
+        elif c == 'v': v.next_volume = audio_read_num(v.pos)
+        elif c == 'i': v.next_instr  = audio_read_num(v.pos)
+        elif c == 'q': v.next_quant  = audio_read_num(v.pos)
+        elif c == '*':
+            v.next_porta_speed = audio_read_num(v.pos) ?: 9999
+            v.next_porta_start = v.next_note
+        elif c == 'o': v.octave = audio_read_num(v.pos)
+        elif c == '<': v.octave -= 1
+        elif c == '>': v.octave += 1
+        elif c == '\'': v.next_note += 12
+        elif c == '+': v.next_note += 1
+        elif c == '-': v.next_note -= 1
+        elif c == '=': v.next_note = AUDIO_NOTE_OFF
+        elif c >= 'a' and c <= 'g': v.next_note = stridx("c d ef g a b", c) + 12 * v.octave
+        elif c == 't': v.next_wait = audio_read_num(v.pos)
+        elif c == ',':
+            v.next_wait = audio_read_num(v.pos) ?: v.next_wait
+            return true
+        else:
+            # skip
+            while true:
+                if c == '\0':
+                    v.pos = v.loop
+                    if not v.pos: return false
+                    break
+                if c == '@' and audio_read_num(v.pos) == v.index: break
+                if c == '#': audio_skip_line(v.pos)
+                c = v.pos.*
+                v.pos += 1
+
+
+func audio_update_music():
+    for v in audio.tracks:
+        if not v.pos: continue
+
+        if v.wait == v.quant and v.next_note != AUDIO_NOTE_EMPTY and v.next_porta_speed == 0: v.voice.env = AUDIO_ENV_RELEASE
+        if v.wait <= 0:
+            v.wait = v.next_wait
+            if v.next_note >= 0:
+                v.pitch_target = v.next_note * 64
+                if v.next_porta_start >= 0 or v.next_porta_speed == 0:
+                    v.pitch = v.next_porta_start >= 0 ? v.next_porta_start * 64 : v.pitch_target
+                    audio_voice_start(&v.voice, audio.instruments[v.next_instr])
+            if v.next_note != AUDIO_NOTE_EMPTY: v.porta_speed = v.next_porta_speed
+            v.quant  = v.next_quant
+            v.volume = v.next_volume
+            if not audio_read_music_row(v): continue
+        v.wait -= 1
+
+        var vc = &v.voice
+        audio_voice_update(vc)
+
+        # pitch
+        if v.pitch != v.pitch_target:
+            v.pitch = clamp(v.pitch_target, v.pitch - v.porta_speed, v.pitch + v.porta_speed)
+        var pitch = vc.pitch + (vc.abs_pitch ? 0 : v.pitch / 8) + audio_voice_vibrato(vc)
+
+        # set APU registers
+        var vol = v.volume * vc.vol * vc.level / (AUDIO_ENV_PEAK * 64)
+        sound(v.index + 4, pitch, vc.pw, vol * audio_music_volume / 64, vc.wave)
+
+
+func audio_play_sfx(p: int*):
+    while p.*:
+        var c = p.*
+        p += 1
+        if c == '#': audio_skip_line(p)
+        elif c == '@':
+            var i = audio_read_num(p)
+            if i < audio.sfx.len:
+                audio.sfx[i] = {}
+                audio_voice_start(&audio.sfx[i], p)
+
+func audio_update_sfx():
+    for i = 0, audio.sfx.len:
+        var v = &audio.sfx[i]
+        if not v.pos: continue
+        audio_voice_update(v)
+        sound(i, v.pitch + audio_voice_vibrato(v), v.pw, v.vol * v.level / AUDIO_ENV_PEAK * audio_sfx_volume / 64, v.wave)
+
+func audio_update():
+    audio_update_sfx()
+    audio_update_music()

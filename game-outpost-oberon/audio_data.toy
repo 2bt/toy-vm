@@ -1,3 +1,25 @@
+var SFX_SPAWN = "
+@3 d8 T=53,,=60|,+7,,+7,,+8,,+-21,
+@2 v50 l15a9r9 N=30|f22,
+"
+var SFX_NOSPAWN = "@3, @2,"
+var SFX_EXIT = "
+@3 d8 T=82,+-8,,,+-8,,,+-6,,,|+22,,+-8,,+-8,,+-6,,
+@2 v50 l15a9r9 N=90|f-14,
+"
+var SFX_LAND         = "@1 v45 d1 N=38,=33,9"
+var SFX_HERO_JUMP    = "@1 v50 l3 s64r2 S=45,|f6,"
+var SFX_HERO_SHOOT   = "@0 d5 W128w4 P=76,=70,|f-18,,f16,"
+var SFX_BULLET_WALL  = "@2 d1 N=100,=70,10"
+var SFX_CHARGE       = "@3 l10a4s64 N=40|,+4"
+var SFX_PATROL_SHOOT = "@0 d5 W20w2 P=80|,+3,+3,+-3,+-3,"
+var SFX_CANNON_SHOOT = "@0 d6 W10w8 P=50|,+-3,+-3,+-3,+-3,+10,"
+var SFX_BUGGER_JUMP  = "@3 d3 W32 P=44,+4,+4|f4,"
+var SFX_ENEMY_HIT    = "@2 d3 N=66,T=60,=54,=50,"
+var SFX_EXPLOSION    = "@3 d8 N|=60,+-10,+-10,+-8,,"
+var SFX_CHECKPOINT   = "@3 v72 l99 a5d10 T=44|,,+7,,+8,,+-14"
+
+
 var MUSIC_TITLE = "
 $0 s64 r3 N=77,PW100w2~0,180w-2
 $1 s64 r1 N=77,PW30w10~0

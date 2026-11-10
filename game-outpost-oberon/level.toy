@@ -191,7 +191,7 @@ func level_update():
                 level.checkpoint_tick = 0
                 level.spawn_x = cp.x + 8
                 level.spawn_y = cp.y + 16
-                sfx_play(SFX_CHECKPOINT)
+                audio_play_sfx(SFX_CHECKPOINT)
 
     level.tick += 1
     level.checkpoint_tick += 1

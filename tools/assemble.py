@@ -18,14 +18,13 @@ def load_opcode_table():
             m = list(map(str.lower, re.findall(r'[A-Z]+', l)))
             m += ["nil"] * (3 - len(m))
             OPCODE_TABLE.append(tuple(m))
-            o, a, b = m
         if not OPCODE_TABLE:
             sys.exit("no opcode table")
 
 load_opcode_table()
 
 Operand = namedtuple("Operand", "mode value offset", defaults=(0, 0))
-Inst = namedtuple("Inst", "op target a b")
+Inst = namedtuple("Inst", "op target a b nr")  # nr: source line, for errors
 NIL  = Operand("nil")
 
 
@@ -53,10 +52,14 @@ def tokenize(line):
 variables = {}
 line      = None
 line_nr   = 0
+src_name  = "?"
 
+
+def error(msg, nr=None):
+    sys.exit(f"{src_name}:{nr or line_nr}: {msg}" + ("" if nr else f"\n{line}"))
 
 def bad_line():
-    sys.exit(f"{line_nr}: bad line:\n{line}")
+    error("bad line")
 
 def expect(ts, t, v):
     match ts:
@@ -106,21 +109,12 @@ def eval_expression(ts, min_p=1):
 def encode(out: bytearray, v: int):
     # encode int28 into up to 4 bytes
     # negative numbers take up 4 bytes
-    assert -2**27 <= v < 2**27
+    if not -2**27 <= v < 2**27: sys.exit(f"{src_name}: constant {v} doesn't fit in 28 bits")
     v &= 0xfffffff
     while v >= 0x80:
         out.append((v & 0x7f) | 0x80)
         v >>= 7
     out.append(v)
-
-# def encode(out: bytearray, x: int) -> bytes:
-#     # ZigZag encode signed -> unsigned
-#     u = (x << 1) ^ (x >> 31)
-#     # Varint (LEB128) encode
-#     while u >= 0x80:
-#         out.append((u & 0x7F) | 0x80)
-#         u >>= 7
-#     out.append(u)
 
 
 def optimize(insts, labels):
@@ -132,7 +126,7 @@ def optimize(insts, labels):
         dest = None
         if inst.target:
             if inst.target not in labels:
-                sys.exit(f"undefined label '{inst.target}'")
+                error(f"undefined label '{inst.target}'", inst.nr)
             dest = labels[inst.target]
         if op == "ret":
             continue
@@ -188,8 +182,8 @@ def optimize(insts, labels):
 
     optimized = []
     for i, inst in enumerate(insts):
-        have_a = None if incoming_a[i] is None else incoming_a[i]
-        have_c = None if incoming_c[i] is None else incoming_c[i]
+        have_a = incoming_a[i]
+        have_c = incoming_c[i]
         a, b = inst.a, inst.b
         if have_a:
             if inst.op == "mov" and is_nxt(have_a, a):
@@ -208,7 +202,8 @@ def optimize(insts, labels):
 
 
 def asm(args):
-    global variables, line_nr, line
+    global variables, line_nr, line, src_name
+    src_name  = args.src.name
     variables = {}
     line_nr   = 0
     line      = None
@@ -285,7 +280,7 @@ def asm(args):
 
             # immediate
             case [("sym", "#"), *rest]:
-                # XXX: only INT uses immediate
+                # immediate as operand a: only "int #n"
                 value, ts = eval_expression(rest)
                 b = Operand("imm", value)
 
@@ -327,19 +322,18 @@ def asm(args):
                 b = Operand("abs", value)
 
         if ts: bad_line()
-        insts.append(Inst(op, target, a, b))
+        insts.append(Inst(op, target, a, b, line_nr))
 
     insts = optimize(insts, labels)
     bin_cmds = []
     jumps = []
     for i, inst in enumerate(insts):
-        op, target, a, b = inst
+        op, target, a, b, nr = inst
         if target: jumps.append((i, target))
         try:
             opc = OPCODE_TABLE.index((op, a.mode, b.mode))
         except ValueError:
-            print(op, a.mode, b.mode)
-            bad_line()
+            error(f"no '{op}' instruction with operands {a.mode}, {b.mode}", nr)
         bin_cmd = [opc]
         if a.mode in ("abs", "ind", "idx"): bin_cmd.append(a.value)
         if a.mode == "idx": bin_cmd.append(a.offset)
@@ -351,8 +345,6 @@ def asm(args):
     def get_label_addr(label):
         return sum(len(cmd) for cmd in bin_cmds[:labels[label]])
     for pos, label in jumps:
-        if label not in labels:
-            sys.exit(f"undefined label '{label}'")
         bin_cmd = bin_cmds[pos]
         bin_cmd[1] = get_label_addr(label)
 

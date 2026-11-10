@@ -51,6 +51,18 @@ class ExecTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         return result.stdout
 
+    def test_loop_at_entry_does_not_assume_dest(self):
+        # tick starts with the loop's cmp; the host enters with unknown VM state
+        self.assertEqual(self.run_smolt("""
+            var i = 20
+            var n
+            func tick():
+                while i < 10:
+                    n += 1
+                    i += 1
+                print_n(n)
+        """), "0\n")
+
     def test_print_string(self):
         self.assertEqual(self.run_smolt("""
             func tick():

@@ -126,6 +126,7 @@ def encode(out: bytearray, v: int):
 def optimize(insts, labels):
     n = len(insts)
     preds = [[] for _ in range(n + 1)]  # n is the exit
+    preds[0].append(-1)  # the host enters at 0 with unknown VM state
     for i, inst in enumerate(insts):
         op = inst.op
         dest = None
@@ -154,7 +155,7 @@ def optimize(insts, labels):
             for i in range(n):
                 incoming = None
                 for p in preds[i]:
-                    other = outgoing(p, slots)
+                    other = () if p < 0 else outgoing(p, slots)
                     if incoming is None: incoming = other
                     elif other is None: continue
                     elif incoming != other: incoming = ()

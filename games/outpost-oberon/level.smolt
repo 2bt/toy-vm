@@ -210,12 +210,12 @@ func level_draw_background():
     var oy = camera.box.y /3
     for i = 0, STAR_N:
         # quadratic mixes — linear LCG makes a visible lattice mod PERIOD
-        var px = posmod(i * (i * 7919 + 104729) + 12345, PERIOD_W)
-        var py = posmod(i * (i * 6971 + 224737) + 67890, PERIOD_H)
-        var sx = posmod(px - ox, PERIOD_W)
-        var sy = posmod(py - oy, PERIOD_H)
+        var px = (i * (i * 7919 + 104729) + 12345) % PERIOD_W
+        var py = (i * (i * 6971 + 224737) + 67890) % PERIOD_H
+        var sx = (px - ox) % PERIOD_W
+        var sy = (py - oy) % PERIOD_H
         if sx < SCREEN_W and sy < SCREEN_H:
-            var g = posmod(i * (i + 19), 3)
+            var g = (i * (i + 19)) % 3
             var grey = g == 0 ? 43 : g == 1 ? 44 : 47
             sprite(sx, sy, 1, 1, 0, grey, 0)
 
@@ -254,12 +254,9 @@ func level_draw_background():
             if color: camera_sprite(x, y + i - 16, TS, 1, 0, 32 + color, 0)
 
 
-func floordiv(a, b): return (a < 0 ? a - (b - 1) : a) / b
-func posmod(a, m): return (a % m + m) % m
-
 func level_draw_walls():
-    var c0 = floordiv(camera.box.x, TS)
-    var r0 = floordiv(camera.box.y, TS)
+    var c0 = camera.box.x / TS
+    var r0 = camera.box.y / TS
     for r = r0, r0 + SCREEN_H / TS + 2:
         for c = c0, c0 + SCREEN_W / TS + 1:
             var t = level_get_tile_at_cr(c, r)

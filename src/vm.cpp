@@ -8,6 +8,13 @@
 
 namespace {
 
+// floor division like Python: rounds down, so x % m has the sign of m.
+// 64-bit so INT_MIN / -1 doesn't trap; the result wraps back to 32 bits.
+int64_t floordiv(int64_t x, int64_t y) {
+    int64_t q = x / y;
+    return q - (q * y != x && (x < 0) != (y < 0));
+}
+
 enum Operation {
     RET, JLT, JLE, JGT, JGE, JEQ, JNE, JMP, JSR,
     MOV, ADD, SUB, MUL, DIV, MOD, AND, ORE, CMP,
@@ -298,8 +305,8 @@ void VM::run(std::function<void(int32_t)> interrupt) {
         case ADD: res = *a += b; break;
         case SUB: res = *a -= b; break;
         case MUL: res = *a *= b; break;
-        case DIV: res = *a = b == -1 ? -*a : *a / (b ?: 1); break; // -1: INT_MIN / -1 would trap
-        case MOD: res = *a = b == -1 ?   0 : *a % (b ?: 1); break;
+        case DIV: b = b ?: 1; res = *a = int32_t(floordiv(*a, b)); break;
+        case MOD: b = b ?: 1; res = *a = int32_t(*a - floordiv(*a, b) * b); break;
         case AND: res = *a &= b; break;
         case ORE: res = *a |= b; break;
         case CMP: res = *a - b; break;

@@ -78,6 +78,25 @@ class ExecTests(unittest.TestCase):
                 print_n(calls)
         """), "4\n1\n")
 
+    def test_floor_division(self):
+        # runtime and constant-folded results agree, both rounding down like Python
+        self.assertEqual(self.run_smolt("""
+            func tick():
+                var a = -7
+                var b = 2
+                var c = 3
+                var q = a / b
+                var r = a % c
+                print_n(q + 4)
+                print_n(r)
+                print_n(-7 / 2 + 4)
+                print_n(-7 % 3)
+                var m = 7
+                var n = -3
+                m %= n
+                print_n(m + 2)
+        """), "0\n2\n0\n2\n0\n")
+
     def test_loop_at_entry_does_not_assume_dest(self):
         # tick starts with the loop's cmp; the host enters with unknown VM state
         self.assertEqual(self.run_smolt("""
@@ -603,7 +622,7 @@ class ExecTests(unittest.TestCase):
                 var a = -3
                 var b = 2
                 print_n((-3 % 2) == (a % b))
-                print_n((-3 % 2) == -1)
+                print_n((-3 % 2) == 1)
                 print_n((-3 / 2) == (a / b))
                 print_n((0 or 4) == 1)
                 print_n((5 and 3) == 1)

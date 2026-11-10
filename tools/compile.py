@@ -247,8 +247,8 @@ def fold_imm(op, a, b):
     if op == "+": return a + b
     if op == "-": return a - b
     if op == "*": return a * b
-    if op == "/": return int(a / b)
-    if op == "%": return a - int(a / b) * b
+    if op == "/": return a // b  # floor, like the VM
+    if op == "%": return a % b
     raise AssertionError(op)
 
 ##############################

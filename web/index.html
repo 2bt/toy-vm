@@ -373,8 +373,8 @@ function runVM(mem, code) {
       case ADD: res = mem[ai] = (mem[ai] + b) | 0; break;
       case SUB: res = mem[ai] = (mem[ai] - b) | 0; break;
       case MUL: res = mem[ai] = Math.imul(mem[ai], b); break;
-      case DIV: { const d = b || 1; res = mem[ai] = (mem[ai] / d) | 0; break; }
-      case MOD: { const d = b || 1; res = mem[ai] = (mem[ai] % d) | 0; break; }
+      case DIV: { const d = b || 1; res = mem[ai] = Math.floor(mem[ai] / d) | 0; break; } // floor, like Python
+      case MOD: { const d = b || 1; let r = mem[ai] % d; if (r && (r < 0) !== (d < 0)) r += d; res = mem[ai] = r | 0; break; }
       case AND: res = mem[ai] = mem[ai] & b; break;
       case ORE: res = mem[ai] = mem[ai] | b; break;
       case CMP: res = (mem[ai] - b) | 0; break;

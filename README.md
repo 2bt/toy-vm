@@ -239,6 +239,7 @@ Ternary: `cond ? a : b`. GNU form `cond ?: b` reuses `cond`'s value (evaluated o
 ### Expressions
 
 Operators (low → high binding): `or`, `and`, comparisons, `|`, `&` (bitwise), `+` `-`, `*` `/` `%`, then postfix / unary.
+`/` rounds down and `%` takes the divisor's sign, like Python (`-7 / 2 == -4`, `-7 % 3 == 2`); dividing by 0 divides by 1.
 
 * Unary: `-`, `not`, `&` (address of lvalue)
 * Assignments: `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`

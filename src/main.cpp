@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
     SDL_Window* window = SDL_CreateWindow(
         "toy-vm",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -175,6 +175,7 @@ int main(int argc, char** argv) {
     Uint32           last_tick = SDL_GetTicks();
     bool             running = true;
     bool             take_screenshot = false;
+    std::vector<SDL_GameController*> pads;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -187,6 +188,15 @@ int main(int argc, char** argv) {
                 if (event.key.repeat) break;
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
                 else if (event.key.keysym.scancode == SDL_SCANCODE_RETURN) take_screenshot = true;
+                break;
+            case SDL_CONTROLLERDEVICEADDED: // also fires for pads present at startup
+                if (SDL_GameController* gc = SDL_GameControllerOpen(event.cdevice.which)) pads.push_back(gc);
+                break;
+            case SDL_CONTROLLERDEVICEREMOVED:
+                if (SDL_GameController* gc = SDL_GameControllerFromInstanceID(event.cdevice.which)) {
+                    std::erase(pads, gc);
+                    SDL_GameControllerClose(gc);
+                }
                 break;
             }
         }
@@ -207,6 +217,18 @@ int main(int argc, char** argv) {
         mem.input |= !!ks[SDL_SCANCODE_Z     ] << BTN_B;
         mem.input |= !!ks[SDL_SCANCODE_C     ] << BTN_B;
         mem.input |= !!ks[SDL_SCANCODE_RETURN] << BTN_MENU;
+        for (SDL_GameController* gc : pads) {
+            auto btn = [&](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(gc, b); };
+            auto axis = [&](SDL_GameControllerAxis a) { return SDL_GameControllerGetAxis(gc, a); };
+            constexpr int DEAD = 16000;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT ) || axis(SDL_CONTROLLER_AXIS_LEFTX) < -DEAD) << BTN_LEFT;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || axis(SDL_CONTROLLER_AXIS_LEFTX) >  DEAD) << BTN_RIGHT;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_DPAD_UP   ) || axis(SDL_CONTROLLER_AXIS_LEFTY) < -DEAD) << BTN_UP;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_DPAD_DOWN ) || axis(SDL_CONTROLLER_AXIS_LEFTY) >  DEAD) << BTN_DOWN;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_A) || btn(SDL_CONTROLLER_BUTTON_Y)) << BTN_A;
+            mem.input |= (btn(SDL_CONTROLLER_BUTTON_B) || btn(SDL_CONTROLLER_BUTTON_X)) << BTN_B;
+            mem.input |= btn(SDL_CONTROLLER_BUTTON_START) << BTN_MENU;
+        }
 
         SDL_RenderClear(renderer);
         vm.run(interrupt);

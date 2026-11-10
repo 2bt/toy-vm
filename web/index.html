@@ -591,6 +591,19 @@ function pollInput() {
   if (keys.has("x") || touch.has("a")) b |= 1 << BTN_A;
   if (keys.has("z") || keys.has("c") || touch.has("b")) b |= 1 << BTN_B;
   if (keys.has("Enter")) b |= 1 << BTN_MENU;
+  // standard mapping: 0 A, 1 B, 2 X, 3 Y, 9 start, 12-15 dpad up/down/left/right
+  for (const gp of navigator.getGamepads?.() ?? []) {
+    if (!gp) continue;
+    const p = (i) => gp.buttons[i]?.pressed;
+    const [ax, ay] = gp.axes;
+    if (p(14) || ax < -0.5) b |= 1 << BTN_LEFT;
+    if (p(15) || ax > 0.5) b |= 1 << BTN_RIGHT;
+    if (p(12) || ay < -0.5) b |= 1 << BTN_UP;
+    if (p(13) || ay > 0.5) b |= 1 << BTN_DOWN;
+    if (p(0) || p(3)) b |= 1 << BTN_A;
+    if (p(1) || p(2)) b |= 1 << BTN_B;
+    if (p(9)) b |= 1 << BTN_MENU;
+  }
   mem[1] = b;
 }
 

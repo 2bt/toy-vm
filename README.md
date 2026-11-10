@@ -15,6 +15,7 @@ Game Controls:
 * Arrows → movement
 * Z / X / C → buttons
 * Esc → quit
+* Gamepad: d-pad / left stick, A or Y → A, B or X → B, Start → menu
 
 
 ## Build & Run

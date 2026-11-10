@@ -451,7 +451,7 @@ class Parser:
 
 
     def program(self, path, root=True):
-        self.included.add(path)
+        self.included.add(path.resolve())
         self.head = Head(tokenize(path))
 
         while any(self.peek(k) for k in ["include", "const", "var", "func", "struct"]):
@@ -459,7 +459,7 @@ class Parser:
             if tok.k == "include":
                 incl = path.parent / self.eat("string").v
                 self.eat("eol")
-                if incl in self.included: continue
+                if incl.resolve() in self.included: continue
                 self.stack.append(self.head)
                 try: self.program(incl, root=False)
                 except FileNotFoundError: self.error("file not found")

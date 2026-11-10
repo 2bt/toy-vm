@@ -19,6 +19,20 @@ Write games in a C-like language (`.smolt`), compile to bytecode, and run them o
 | Language | Smolt: indentation-based, C-flavoured, compiled to assembly |
 | Hosts | native (C++/SDL2) and browser (JavaScript), same bytecode |
 
+### Small enough to read in an afternoon
+
+Simplicity is the point, of the spec *and* of the implementation. There's no palette and no built-in font, envelope or music routines; games bring their own, written in Smolt. The complete toolchain is about 3600 lines (not counting blank ones):
+
+| Part | Lines | What you get |
+|---|---|---|
+| Native host (`src/`, C++/SDL2) | 736 | VM, APU (8 voices, 4 waveforms), window, keyboard and gamepad, saves; plus screenshots, frame recording and WAV capture |
+| Web host (`web/index.html`) | 756 | a second VM and APU, plus game menu, touch controls and saves, in one file |
+| Assembler (`tools/assemble.py`) | 359 | labels, data, constant expressions; reads its opcodes straight from `vm.cpp` |
+| Compiler (`tools/compile.py`) | 1413 | structs, pointers, arrays, block scopes, includes, a peephole optimizer, dead-code and dead-data removal |
+| Standard library (`lib/`) | 360 | input, math, strings, text, boxes, and a music and SFX player with ADSR envelopes and its own sequencing language |
+
+Recount with `grep -cv '^\s*$' src/* web/* tools/*.py lib/*`.
+
 Each game is a folder in `games/` with:
 
 * `main.smolt` → entry point (`func tick():` runs every frame)

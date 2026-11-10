@@ -166,3 +166,8 @@ a.ptr / a.len / a.limit  # array address, length, one-past-end pointer
 ```
 
 No recursion (direct or mutual). Locals are not re-entrant.
+
+
+## License
+
+MIT, see [LICENSE](LICENSE).

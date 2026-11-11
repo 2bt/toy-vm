@@ -18,6 +18,10 @@ var SFX_BUGGER_JUMP  = "@3 d3 W32 P=44,+4,+4|f4,"
 var SFX_ENEMY_HIT    = "@2 d3 N=66,T=60,=54,=50,"
 var SFX_EXPLOSION    = "@3 d8 N|=60,+-10,+-10,+-8,,"
 var SFX_CHECKPOINT   = "@3 v72 l99 a5d10 T=44|,,+7,,+8,,+-14"
+var SFX_GAME_OVER = "
+@1 d12 s64 r10 l4 T|=48,4=40,4=32,4=24,4
+@2 v48 a3 d12 N|=12,,=28,,
+"
 
 
 var MUSIC_TITLE = "
@@ -271,10 +275,3 @@ i6c,14,,,= ,,,, i7c--,,,,= ,,,,
 i8c,,,,= ,,,, ,,,, ,,,,
 "
 
-var MUSIC_GAME_OVER = "
-$0 d12 s64 r10 T |~0,4~-8,4~-16,4~-24,4
-@0 i0 o4 c,4=,100,,,
-
-$1 v48a3d12 s0 N|~0,,~16,,
-@1 i1 o1 c,100,,,,
-"

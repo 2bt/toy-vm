@@ -102,7 +102,6 @@ func camera_return_toward_spawn():
 # ---------------------------------------------------------------------------
 
 func game_init():
-    audio_music_volume = 48
     game_set_state(GAME_STATE_TITLE)
 
 
@@ -114,6 +113,7 @@ func game_set_state(s):
         game.tick      = 0
         load(&game.hiscore, 1)
         game_init_level(LEVEL_TITLE_DATA)
+        audio_music_volume = 48
         audio_play_music(MUSIC_TITLE)
         hero.state = HERO_STATE_NORMAL
 
@@ -122,8 +122,8 @@ func game_set_state(s):
             game.hiscore = hero.score
             save(&game.hiscore, 1)
         if s == GAME_STATE_GAME_OVER:
-            audio_music_volume = 64
-            audio_play_music(MUSIC_GAME_OVER)
+            audio_stop_music()
+            audio_play_sfx(SFX_GAME_OVER)
     elif s == GAME_STATE_LEVEL:
         game.countdown = LEVEL_CARD_FRAMES
         audio_stop_music()

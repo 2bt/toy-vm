@@ -341,7 +341,7 @@ class ExecTests(unittest.TestCase):
                 add(add(5, 1), add(1, 1))
         """)
         self.assertNotEqual(compiled.returncode, 0)
-        self.assertIn("recursive call", compiled.stderr)
+        self.assertIn("inside its own arguments", compiled.stderr)
 
     def test_quasi_recursion_forbidden(self):
         compiled = self.compile_text("""
@@ -353,7 +353,7 @@ class ExecTests(unittest.TestCase):
                 a(b(a(1)))
         """)
         self.assertNotEqual(compiled.returncode, 0)
-        self.assertIn("recursive call", compiled.stderr)
+        self.assertIn("inside its own arguments", compiled.stderr)
 
     def test_pointer_deref(self):
         self.assertEqual(self.run_smolt("""

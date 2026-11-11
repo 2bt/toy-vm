@@ -1001,7 +1001,9 @@ class Parser:
                 func = self.funcs.get(name)
                 if not func: self.error(f"unknown function '{name}'")
                 self.eat()
-                if any(f.name == name for f in self.call_stack): self.error("recursive call")
+                if name == self.current_func.name: self.error("recursive call")
+                if any(f.name == name for f in self.call_stack):
+                    self.error(f"can't call '{name}' inside its own arguments (parameters are static)")
                 for f in self.call_stack: f.calls[name] = None
                 self.call_stack.append(func)
                 setup = []

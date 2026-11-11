@@ -758,6 +758,7 @@ async function startGame(gameId) {
     setGameQuery(gameId);
     nextFrameTime = 0;
     running = true;
+    cancelAnimationFrame(raf); // a second start (menu click while ?game= loads) must not add a loop
     raf = requestAnimationFrame(frame);
   } catch (e) {
     showError(String(e.message || e));

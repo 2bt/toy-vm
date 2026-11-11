@@ -107,7 +107,7 @@ struct Enemy:
     mode
     vx
     vy
-    on_ground
+    on_ground   # standing on something; moving platforms carry it
     ground_frames
     no_turn_countdown
 
@@ -153,6 +153,7 @@ func enemy_spawn(type, x, y):
             e.hp              = 2
             e.pace_countdown  = rand(30, 80)
             e.shoot_countdown = rand(0, 100)
+            e.on_ground       = true  # spawns standing; platforms carry it before it first updates
 
         elif type == ENEMY_TYPE_BUGGER:
             e.box.w     = 12
@@ -341,6 +342,11 @@ func enemy_patrol_update(e: Enemy*):
             e.wait_countdown = rand(50, 90)
             e.wait_turn = turn > 0
             e.frame = 0
+
+    # gravity: keeps the feet on whatever is below (e.g. a platform a pixel off)
+    e.vy = min(e.vy + GRAVITY, SP * 4)
+    e.on_ground = level_move_box_y(e.sy, e.box, e.vy, false) == DIR_DOWN
+    if e.on_ground: e.vy = 0
 
     e.box.x = e.sx / SP
     e.box.y = e.sy / SP

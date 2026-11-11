@@ -1,3 +1,18 @@
+# moving platform: a row of 'V' tiles in the level data; moves up and down
+# through free tiles and turns around at a solid tile or on the row of a '.'
+struct Platform:
+    x       # pixels
+    w
+    y       # top surface, pixels
+    sy      # top surface, subpixels
+    vy
+    top     # sy range
+    bottom
+    wait    # frames to pause before moving on
+
+const PLATFORM_SPEED = 8   # subpixels per frame: half a pixel
+const PLATFORM_WAIT  = 60  # pause at each end, in frames
+
 struct Level:
     data: int*
     w
@@ -9,6 +24,8 @@ struct Level:
     checkpoint_count
     active_checkpoint: Vec*
     checkpoint_tick
+    platforms: Platform[8]
+    platform_count
 
 var level: Level
 
@@ -43,6 +60,43 @@ func level_init(data: int*):
                 if level.checkpoint_count >= level.checkpoints.len: print("error: not enough checkpoints")
                 level.checkpoints[level.checkpoint_count] = { c * TS, r * TS }
                 level.checkpoint_count += 1
+
+    # set up platforms
+    level.platform_count = 0
+    for r = 0, level.h:
+        for c = 0, level.w:
+            if level_get_tile_at_cr(c, r) != 'V' or level_get_tile_at_cr(c - 1, r) == 'V': continue
+            if level.platform_count >= level.platforms.len:
+                print("error: not enough platforms")
+                continue
+            var n = 1
+            while level_get_tile_at_cr(c + n, r) == 'V': n += 1
+            var p = &level.platforms[level.platform_count]
+            level.platform_count += 1
+            p.*  = {}
+            p.x  = c * TS
+            p.w  = n * TS
+            p.y  = r * TS
+            p.sy = p.y * SP
+            p.vy = -PLATFORM_SPEED
+            p.top    = level_platform_end(c, n, r, -1) * TS * SP
+            p.bottom = level_platform_end(c, n, r, 1) * TS * SP
+
+
+# last row a platform at row r, columns c to c + n - 1, can reach going in direction dr
+func level_platform_end(c, n, r, dr) int:
+    while true:
+        var stop = false
+        for i = c, c + n:
+            var t = level_get_tile_at_cr(i, r + dr)
+            if level_is_solid(t): return r
+            if t == '.': stop = true
+        r += dr
+        if stop: return r
+
+
+func level_platform_supports(p: Platform*, b: Box*) int:
+    return b.y + b.h == p.y and b.x < p.x + p.w and b.x + b.w > p.x
 
 
 func level_get_tile_at_cr(c, r):
@@ -118,11 +172,19 @@ func level_test(x, y, dir) int:
 
 func level_test_down(x, y, py) int:
     level_dot(x, y)
+    var o = 0
     var t = level_get_tile(x, y)
     if (t == '0' or
         t == '^' and (y / TS) > (py / TS)):
-        return -1 - (y % TS)
-    return 0
+        o = -1 - (y % TS)
+    # platforms are jump-through: only land when moving down from above.
+    # py <= p.y, not <: a rising platform (1 px per frame at most) may have just moved into py
+    for i = 0, level.platform_count:
+        var p = &level.platforms[i]
+        # no min() here: callers use min(level_test_down(…), level_test_down(…))
+        if x >= p.x and x < p.x + p.w and py < y and py <= p.y and y >= p.y and p.y - 1 - y < o:
+            o = p.y - 1 - y
+    return o
 
 # Resolve axis motion for enemy boxes. Mutates sx/sy and box.x/box.y.
 # Probes: two points on the leading face (simple; not hero-grade).
@@ -181,6 +243,34 @@ func level_move_box_y(sy: int*, box: Box*, dy, pass_platforms) int:
 
 
 func level_update():
+    # moving platforms
+    for i = 0, level.platform_count:
+        var p = &level.platforms[i]
+        if p.wait > 0:
+            p.wait -= 1
+            continue
+        p.sy += p.vy
+        if p.sy <= p.top:
+            p.sy = p.top
+            p.vy = PLATFORM_SPEED
+            p.wait = PLATFORM_WAIT
+        elif p.sy >= p.bottom:
+            p.sy = p.bottom
+            p.vy = -PLATFORM_SPEED
+            p.wait = PLATFORM_WAIT
+        var dy = p.sy / SP - p.y
+        if not dy: continue
+
+        # carry whatever stands on it
+        if hero.state == HERO_STATE_NORMAL and hero.on_ground and level_platform_supports(p, hero.box):
+            hero.sy += dy * SP
+            hero.box.y += dy
+        for e in enemies:
+            if e.state == ENEMY_STATE_NORMAL and e.on_ground and level_platform_supports(p, e.box):
+                e.sy += dy * SP
+                e.box.y += dy
+        p.y += dy
+
     if hero.state == HERO_STATE_NORMAL:
         for i = 0, level.checkpoint_count:
             var cp = &level.checkpoints[i]
@@ -243,6 +333,11 @@ func level_draw_background():
                     q = (q + 5) % 31
                     var color = q >= i ? 0 : q > 10 ? 3 : 6
                     if color: sprite(x, y + 31 - i, TS, 1, 0, 32 + color, 0)
+
+    for i = 0, level.platform_count:
+        var p = &level.platforms[i]
+        for x = 0, p.w / TS:
+            camera_sprite(p.x + x * TS, p.y, TS, TS, 4 * TS, 48, 0)
 
     if level.active_checkpoint:
         var x = level.active_checkpoint.x

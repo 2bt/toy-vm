@@ -42,6 +42,7 @@ struct Camera:
     sx        # subpixel pos, only during RETURNING
     sy
     speed     # subpixel/frame along path, -1 = not started
+    shake     # frames left of screen shake
 
 var camera: Camera = { { 0, 0, SCREEN_W, SCREEN_H }, 0 }
 
@@ -143,6 +144,7 @@ func game_init_level(data: int*):
     level_init(data)
     hero_set_state(HERO_STATE_RETURNING)
     camera_center_on_hero()
+    camera.shake = 0
     enemy_init_all()
     for b in hero_bullets: b.* = {}
     for b in enemy_bullets: b.* = {}
@@ -151,6 +153,7 @@ func game_init_level(data: int*):
 
 func game_update():
     game.tick += 1
+    if camera.shake > 0: camera.shake -= 1
 
     if game.state == GAME_STATE_TITLE:
         level_update()
@@ -236,6 +239,16 @@ func game_draw():
         draw_centered_text(SCREEN_W / 2, SCREEN_H / 2 - 4, buf)
         return
 
+    # screen shake: offset the camera for drawing only
+    var dx = 0
+    var dy = 0
+    if camera.shake > 0:
+        var s = camera.shake < 10 ? 1 : 2
+        dx = rand(-s, s)
+        dy = rand(-s, s)
+    camera.box.x += dx
+    camera.box.y += dy
+
     level_draw_background()
     enemy_draw_all()
 
@@ -247,6 +260,9 @@ func game_draw():
     level_draw_walls()
 
     level_draw_dots()
+
+    camera.box.x -= dx
+    camera.box.y -= dy
 
     draw_hud()
 

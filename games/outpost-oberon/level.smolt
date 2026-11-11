@@ -319,8 +319,15 @@ func level_update():
                 if b.countdown == 0:
                     level.data[b.i] = ' '
                     b.countdown = BOOM_BLOCK_RESPAWN
-                    audio_play_sfx(SFX_EXPLOSION)
+                    audio_play_sfx(SFX_BOOM)
+                    camera.shake = 20
+                    particle_spawn(PARTICLE_TYPE_BLAST, b.x + 8, b.y + 8)
                     particle_spawn(PARTICLE_TYPE_EXPLOSION, b.x + 8, b.y + 8)
+                    # the blast hurts everything within 4 pixels of the block
+                    var blast: Box = { b.x - 4, b.y - 4, TS + 8, TS + 8 }
+                    if hero_can_take_damage() and box_intersects(blast, hero.box): hero_set_state(HERO_STATE_DYING)
+                    for e in enemies:
+                        if e.state == ENEMY_STATE_NORMAL and box_intersects(blast, e.box): enemy_kill(e)
                     for k = 0, 16: particle_spawn(PARTICLE_TYPE_DEBRIS, b.x + rand(0, TS - 1), b.y + rand(0, TS - 1))
                     # chain reaction
                     level_light_boom_block(b.x - TS, b.y)

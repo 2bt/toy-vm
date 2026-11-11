@@ -2,6 +2,7 @@ const PARTICLE_TYPE_DEBRIS    = 1
 const PARTICLE_TYPE_FLASH     = 2
 const PARTICLE_TYPE_CHARGE    = 3
 const PARTICLE_TYPE_EXPLOSION = 4
+const PARTICLE_TYPE_BLAST     = 5  # boom block: big white circle
 
 
 struct Particle:
@@ -37,6 +38,9 @@ func particle_spawn(type, x, y) Particle*:
 
             elif type == PARTICLE_TYPE_EXPLOSION:
                 p.ttl = 2
+
+            elif type == PARTICLE_TYPE_BLAST:
+                p.ttl = 4
 
             return p
     return null
@@ -93,3 +97,6 @@ func particle_draw_all():
 
         elif p.type == PARTICLE_TYPE_EXPLOSION:
             camera_sprite(x - 9, y - 9, 18, 18, 0, 304, 0)
+
+        elif p.type == PARTICLE_TYPE_BLAST:
+            camera_sprite(x - 16, y - 16, 32, 32, 32, 304, 0)

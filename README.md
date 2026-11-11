@@ -7,7 +7,7 @@ Write games in a C-like language (`.smolt`), compile to bytecode, and run them o
 
 **[Play in the browser!](https://2bt.github.io/smolt/)**
 
-| | |
+| Feature | Details |
 |---|---|
 | Display | 320×180, 60 fps, true colour (no palette) |
 | Graphics | one blit call: any rectangle of `sprite.png`, with H/V flip |

@@ -571,12 +571,20 @@ class Parser:
             # check for recursive calls
             WHITE, GRAY, BLACK = 0, 1, 2
             color = {name: WHITE for name in self.funcs}
+            path = []
             def visit(name):
                 color[name] = GRAY
+                path.append(name)
                 for callee in self.funcs[name].calls:
                     c = color[callee]
-                    if c == GRAY: self.error("recursive call", self.funcs[name].loc)
+                    if c == GRAY:
+                        cycle = path[path.index(callee):] + [callee]
+                        msg = cycle[0]
+                        for a, b in zip(cycle, cycle[1:]):
+                            msg += f" -> {b}" if self.funcs[a].calls[b] else f" -> {b} (inside {a}'s arguments)"
+                        self.error("recursive call: " + msg + "; parameters are static", self.funcs[name].loc)
                     if c == WHITE: visit(callee)
+                path.pop()
                 color[name] = BLACK
             for name in self.funcs:
                 if color[name] == WHITE: visit(name)
@@ -1013,7 +1021,8 @@ class Parser:
                 if name == self.current_func.name: self.error("recursive call")
                 if any(f.name == name for f in self.call_stack):
                     self.error(f"can't call '{name}' inside its own arguments (parameters are static)")
-                for f in self.call_stack: f.calls[name] = None
+                # True: a real call; False: called while the arguments of f are pending
+                for f in self.call_stack: f.calls[name] = f.calls.get(name) or f is self.current_func
                 self.call_stack.append(func)
                 setup = []
                 n_args = 0

@@ -25,8 +25,8 @@
   #tagline { margin: 0.25rem 0 1.5rem; color: #b8a0c8; }
   a { color: #c4a8e0; }
   #games {
-    display: grid; gap: 1rem; justify-content: center; width: min(48rem, calc(100vw - 2rem));
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    display: grid; gap: 1rem; justify-content: center; width: min(1004px, calc(100vw - 2rem));
+    grid-template-columns: repeat(auto-fit, minmax(0, 324px));  /* 320px thumbnails at 1:1 plus border */
   }
   .card button, #exit {
     appearance: none; border: 2px solid #8b6bb0; background: #2d2d44; color: inherit;
@@ -789,7 +789,7 @@ fetch("../games/index.json")
       btn.append(img, g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));  // outpost-oberon -> Outpost Oberon
       btn.onclick = () => { ensureAudio(); startGame(g); };
       const src = document.createElement("a");
-      src.href = "https://github.com/2bt/smolt/blob/master/games/" + g + "/main.smolt";
+      src.href = "https://github.com/2bt/smolt/tree/master/games/" + g;
       src.textContent = "source";
       card.append(btn, src);
       gamesEl.appendChild(card);

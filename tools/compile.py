@@ -842,6 +842,7 @@ class Parser:
                 ta = INT
                 continue
             if op in CMP_TO_JMP and ta == tb and (is_int(ta) or is_ptr(ta)): ta = INT
+            elif op in ("==", "!=") and (is_ptr(ta) and b == Imm(0) or is_ptr(tb) and a == Imm(0)): ta = INT  # p == null
             elif op in ("and", "or") and is_cond(ta) and is_cond(tb):        ta = INT
             elif op in ("+", "-") and is_int(tb):
                 if is_array(ta):

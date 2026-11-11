@@ -78,6 +78,18 @@ class ExecTests(unittest.TestCase):
                 print_n(calls)
         """), "4\n1\n")
 
+    def test_pointer_compares_with_null(self):
+        self.assertEqual(self.run_smolt("""
+            const null = 0
+            var x = 5
+            func tick():
+                var p: int* = null
+                print_n(p == null)
+                p = &x
+                print_n(p != null)
+                print_n(null == p)
+        """), "1\n1\n0\n")
+
     def test_floor_division(self):
         # runtime and constant-folded results agree, both rounding down like Python
         self.assertEqual(self.run_smolt("""

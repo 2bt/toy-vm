@@ -1583,6 +1583,7 @@ class Codegen:
 def main(args):
     parser = Parser()
     parser.program(Path(args.src))
+    if "tick" not in parser.funcs: sys.exit(f"{Path(args.src).name}: no func tick() (the host calls it every frame)")
     asm = Codegen().compile(parser)
     path = Path(args.out) if args.out else Path(args.src).with_suffix(".asm")
     path.write_text(asm)

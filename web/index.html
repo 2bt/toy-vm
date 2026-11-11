@@ -55,7 +55,8 @@
   @supports (height: 100dvh) {
     #screen, #chin { width: min(100vw, calc(100dvh * 320 / 180)); }
   }
-  #hint { margin-top: 1.5rem; font-size: 0.8rem; color: #b8a0c8; }
+  #hint { margin-top: 1.5rem; font-size: 0.8rem; line-height: 2; color: #b8a0c8; }
+  kbd { font: inherit; color: #e8d5f2; border: 1px solid #8b6bb0; border-bottom-width: 2px; border-radius: 3px; padding: 0 0.3em; }
   #err { color: #fb7185; margin-top: 0.75rem; max-width: 36rem; }
   #padc { display: none; touch-action: none; width: 100%; height: 13rem; }
 
@@ -97,7 +98,7 @@
     <p id="tagline">A tiny fantasy console: a VM, a compiler and two hosts in about 3600 lines.</p>
     <div id="games"></div>
     <div id="hint">
-      arrows/WASD = move · X = A · Z/C = B · Enter = menu · Esc = exit<br>
+      move <kbd>arrows</kbd> <kbd>WASD</kbd> · A button <kbd>X</kbd> · B button <kbd>Z</kbd> <kbd>C</kbd> · menu <kbd>Enter</kbd> · exit <kbd>Esc</kbd><br>
       gamepads work too; on phones, touch controls appear below the screen
     </div>
     <footer><a href="https://github.com/2bt/smolt">source on GitHub</a> · MIT license</footer>

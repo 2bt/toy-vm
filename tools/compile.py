@@ -28,7 +28,7 @@ token_regex = re.compile(r"""
                        [+\-*/%{}()<>\[\]=,.:&|@?]  )|
     [ \t]*(?P<string>  "(?:[^"\\]|\\.)*"           )|
     [ \t]*(?P<char>    '(?:[^'\\]|\\.)'            )|
-    [ \t]*(?P<other>   [^ \t]+                     )
+    [ \t]*(?P<other>   [^ \t\n]                    )
 """, re.VERBOSE)
 
 Token = namedtuple("Token", "k v loc")
@@ -153,6 +153,10 @@ class Var:
 
 
 INT = Type("int", 0, None)
+
+def type_str(t):
+    """int, Vec*, int[4], int[] as in source"""
+    return t.base + "*" * t.ptr + ("" if t.array is None else "[]" if t.array == -1 else f"[{t.array}]")
 
 def is_int(t): return t == INT
 def is_struct(t): return t.array == None and t.ptr == 0 and t.base != "int"
@@ -289,6 +293,8 @@ class Parser:
         if tok := self.peek(k):
             self.head.i += 1
             return tok
+        tok = self.head.toks[self.head.i]
+        if tok.k == "other": self.error(f"unexpected '{tok.v.strip()}'", tok)
         need = f"{k or ''}".strip()
         self.error(f"expected {need}")
 
@@ -342,7 +348,7 @@ class Parser:
 
     def fit_arr(self, e, ty):
         """Pad/size-check an ArrLit for an int[N] destination. Returns (ArrLit, ty)."""
-        if not is_array(ty) or ty.base != "int" or ty.ptr != 0: self.error("type error")
+        if not is_array(ty) or ty.base != "int" or ty.ptr != 0: self.error(f"an array literal can't initialize {type_str(ty)}")
         if is_auto_array(ty): return e, Type(ty.base, ty.ptr, len(e.data))
         if len(e.data) > ty.array: self.error("array literal too long")
         return ArrLit(e.data + [0] * (ty.array - len(e.data))), ty
@@ -350,7 +356,7 @@ class Parser:
     def coerce(self, want, e, t):
         """Rewrite expr for assignment (decay/intern/pad); type-check. Returns (e, t)."""
         if is_auto_array(want) and is_array(t):
-            if want.base != t.base or want.ptr != t.ptr: self.error("type error")
+            if want.base != t.base or want.ptr != t.ptr: self.error(f"expected {type_str(want)}, got {type_str(t)}")
             want = Type(want.base, want.ptr, t.array)
         if is_ptr(want) and is_array(t):
             if isinstance(e, ArrLit): e = self.intern(e)
@@ -363,7 +369,7 @@ class Parser:
             e, want = self.fit_arr(e, want)
             return self.intern(e), want
         if want != t:
-            if not (is_ptr(want) and is_int(t) and e == Imm(0)): self.error("type error")
+            if not (is_ptr(want) and is_int(t) and e == Imm(0)): self.error(f"expected {type_str(want)}, got {type_str(t)}")
         return e, t
 
     def finish_type(self, annotated, inferred=None):
@@ -534,7 +540,8 @@ class Parser:
                 self.skip_block()
 
             else: assert False
-        self.eat("eof")
+        if not self.peek("eof"):
+            self.error("expected include, const, var, struct or func", self.head.toks[self.head.i])
         if root:
             for func in self.funcs.values():
                 self.head = func.head
@@ -620,7 +627,7 @@ class Parser:
 
     def after_if(self):
         cond, t = self.expr()
-        if not is_cond(t): self.error("bad type")
+        if not is_cond(t): self.error(f"condition must be int or pointer, not {type_str(t)}")
         then = self.block()
         if self.peek("elif"):
             self.eat()
@@ -631,10 +638,11 @@ class Parser:
         return If(cond, then, None)
 
     def stmt(self):
+        if self.peek("indent"): self.error("unexpected indent", self.peek())
         if self.peek("while"):
             self.eat()
             cond, t = self.expr()
-            if not is_cond(t): self.error("bad type")
+            if not is_cond(t): self.error(f"condition must be int or pointer, not {type_str(t)}")
             self.loop += 1
             body = self.block()
             self.loop -= 1
@@ -649,17 +657,17 @@ class Parser:
                 start, t = self.expr()
                 self.eat(",")
                 limit, t2 = self.expr()
-                if t != t2: self.error("bad type")
+                if t != t2: self.error(f"for bounds have different types: {type_str(t)} and {type_str(t2)}")
             else:
                 self.eat("in")
                 a, t = self.expr()
-                if not is_array(t): self.error("invalid statement")
+                if not is_array(t): self.error(f"'for … in' needs an array, not {type_str(t)}")
                 if isinstance(a, ArrLit): a = self.intern(a)
                 start = AddrOf(a)
                 offset = self.type_size(Type(t.base, t.ptr, None)) * t.array
                 limit = BinOp("+", start, Imm(offset))
                 t = Type(t.base, t.ptr + 1, None)
-            if not is_int(t) and not is_ptr(t): self.error("bad type")
+            if not is_int(t) and not is_ptr(t): self.error(f"loop variable must be int or pointer, not {type_str(t)}")
             saved = self.push_scope()
             unique = self.declare_local(name, t, bound=True)
             init = Assign("=", VarRef(unique), start)
@@ -741,10 +749,10 @@ class Parser:
                     if isinstance(b, Imm): b = Imm(b.value * elem_size)
                     else: b = BinOp("*", b, Imm(elem_size))
             else:
-                if not is_int(ta) or not is_int(tb): self.error("type error")
+                if not is_int(ta) or not is_int(tb): self.error(f"can't use '{op}' with {type_str(ta)} and {type_str(tb)}")
             return Assign(op, a, b)
 
-        self.error("invalid statement")
+        self.error("expected an assignment or a function call")
 
     def init_list(self):
         self.eat("{")
@@ -770,7 +778,7 @@ class Parser:
             types   = [elem] * ty.array
             offsets = [self.type_size(elem) * i for i in range(ty.array)]
         else:
-            self.error("type error")
+            self.error(f"{{…}} can't initialize {type_str(ty)}")
         expect = len(types)
         got = len(init.items)
         if got > expect: self.error("wrong number of initializers")
@@ -798,7 +806,7 @@ class Parser:
             if arr := self.init_list_as_arr_lit(ty, item):
                 e, _ = self.coerce(ty, arr, arr_type(arr))
                 return Assign("=", dst, e)
-            if not is_aggregate(ty): self.error("type error")
+            if not is_aggregate(ty): self.error(f"{{…}} can't initialize {type_str(ty)}")
             return self.lower_init(dst, ty, item)
         e, tb = self.coerce(ty, *item)
         if is_aggregate(ty): return Copy(dst, e, self.type_size(ty))
@@ -819,7 +827,7 @@ class Parser:
                 if dyn: self.error("const expression expected")
                 if sym: return [f"{sym}+{off}" if off else sym]
                 return [off]
-            if not is_aggregate(ty): self.error("type error")
+            if not is_aggregate(ty): self.error(f"{{…}} can't initialize {type_str(ty)}")
             return self.const_init_data(ty, item)
         e, tb = self.coerce(ty, *item)
         dyn, sym, off = split_add(e)
@@ -855,18 +863,19 @@ class Parser:
                         if isinstance(b, Imm): b = Imm(b.value * elem_size)
                         else: b = BinOp("*", b, Imm(elem_size))
                 elif not is_int(ta):
-                    self.error("type error", tok)
+                    self.error(f"can't apply '{op}' to {type_str(ta)} and {type_str(tb)}", tok)
             else:
-                if not is_int(ta) or not is_int(tb): self.error("type error", tok)
+                if not is_int(ta) or not is_int(tb): self.error(f"can't apply '{op}' to {type_str(ta)} and {type_str(tb)}", tok)
             a = BinOp(op, a, b)
         if minp <= PRECEDENCE["or"] and self.peek("?"):
-            if not is_cond(ta): self.error("bad type")
+            if not is_cond(ta): self.error(f"condition must be int or pointer, not {type_str(ta)}")
             self.eat()
             if self.peek(":"): b, tb = None, ta
             else:              b, tb = self.expr()
             self.eat(":")
             c, tc = self.expr()
-            if tb != tc or is_aggregate(tb): self.error("type error")
+            if is_aggregate(tb): self.error(f"'?' can't choose between {type_str(tb)} values")
+            if tb != tc: self.error(f"'?' branches have different types: {type_str(tb)} and {type_str(tc)}")
             if isinstance(a, Imm): return ((b if b is not None else a) if a.value else c), tb
             return Cond(a, b, c), tb
         return a, ta
@@ -887,13 +896,13 @@ class Parser:
         if self.peek("-"):
             self.eat()
             a, t = self.unary()
-            if not is_int(t): self.error("bad type")
+            if not is_int(t): self.error(f"'-' needs an int, not {type_str(t)}")
             if isinstance(a, Imm): return Imm(-a.value), INT
             return BinOp("*", a, Imm(-1)), INT
         if self.peek("not"):
             self.eat()
             a, t = self.unary()
-            if not is_cond(t): self.error("bad type")
+            if not is_cond(t): self.error(f"'not' needs int or pointer, not {type_str(t)}")
             if isinstance(a, Imm): return Imm(int(not a.value)), INT
             return Not(a), INT
         return self.primary()

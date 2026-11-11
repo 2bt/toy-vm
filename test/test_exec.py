@@ -1183,7 +1183,7 @@ class ExecTests(unittest.TestCase):
                 n = { 1 }
         """)
         self.assertNotEqual(compiled.returncode, 0)
-        self.assertIn("type error", compiled.stderr)
+        self.assertIn("expected int, got int[1]", compiled.stderr)
 
     def test_init_list_type_mismatch(self):
         compiled = self.compile_text("""
@@ -1196,7 +1196,7 @@ class ExecTests(unittest.TestCase):
                 b = { p, 1 }
         """)
         self.assertNotEqual(compiled.returncode, 0)
-        self.assertIn("type error", compiled.stderr)
+        self.assertIn("expected int, got int*", compiled.stderr)
 
     def test_assembler_mov_nxt_nxt(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as directory:

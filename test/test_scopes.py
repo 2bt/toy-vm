@@ -151,6 +151,20 @@ class ScopeTests(unittest.TestCase):
         """)
         self.assertIn("is a constant", msg)
 
+    def test_error_messages(self):
+        cases = [
+            ("fucn tick():\n    return\n", "expected include, const, var, struct or func"),
+            ("func tick():\n    var x = !1\n", "unexpected '!'"),
+            ("func tick():\n    var x = 1\n        x = 2\n", "unexpected indent"),
+            ("struct V:\n    x\nvar v: V\nfunc tick():\n    var x = v + 1\n", "can't apply '+' to V and int"),
+            ("var a: int[3]\nvar b: int[2]\nfunc tick():\n    a = b\n", "expected int[3], got int[2]"),
+            ("struct V:\n    x\nvar v: V\nfunc tick():\n    if v: return\n", "condition must be int or pointer, not V"),
+            ("func tick():\n    1 + 2\n", "expected an assignment or a function call"),
+        ]
+        for source, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertIn(expected, compile_fails(source))
+
     def test_include_lib_prefix_resolves_to_repo_lib(self):
         _, asm = compile_smolt("""
             include "lib/api.smolt"

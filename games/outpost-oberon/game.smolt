@@ -113,6 +113,8 @@ func game_set_state(s):
         game.tick      = 0
         load(&game.hiscore, 1)
         game_init_level(LEVEL_TITLE_DATA)
+        camera.box.x = 0
+        camera.box.y = 32
         audio_music_volume = 48
         audio_play_music(MUSIC_TITLE)
         hero.state = HERO_STATE_NORMAL
@@ -155,8 +157,6 @@ func game_update():
         enemy_update_all()
         enemy_bullet_update_all()
         particle_update_all()
-        camera.box.x = 0
-        camera.box.y = 32
 
         if btnp(BTN_A) or btnp(BTN_B):
             hero_init()

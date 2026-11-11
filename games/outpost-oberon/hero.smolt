@@ -94,7 +94,7 @@ func hero_init():
     hero = {}
     hero.box.w = 8
     hero.box.h = 14
-    hero.lives = 1
+    hero.lives = 5
 
 
 func hero_set_state(s):

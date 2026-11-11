@@ -1,6 +1,7 @@
-const PARTICLE_TYPE_DEBRIS = 1
-const PARTICLE_TYPE_FLASH  = 2
-const PARTICLE_TYPE_CHARGE = 3
+const PARTICLE_TYPE_DEBRIS    = 1
+const PARTICLE_TYPE_FLASH     = 2
+const PARTICLE_TYPE_CHARGE    = 3
+const PARTICLE_TYPE_EXPLOSION = 4
 
 
 struct Particle:
@@ -12,7 +13,7 @@ struct Particle:
     vy
     flip
 
-var particles: Particle[64]
+var particles: Particle[200]
 
 func particle_spawn(type, x, y) Particle*:
     for p in particles:
@@ -33,6 +34,9 @@ func particle_spawn(type, x, y) Particle*:
 
             elif type == PARTICLE_TYPE_CHARGE:
                 p.ttl = 10
+
+            elif type == PARTICLE_TYPE_EXPLOSION:
+                p.ttl = 2
 
             return p
     return null
@@ -64,21 +68,28 @@ func particle_draw_all():
     for p in particles:
         if p.ttl == 0: continue
 
+
+        var x = p.sx / SP
+        var y = p.sy / SP
+
         if p.type == PARTICLE_TYPE_DEBRIS:
             var frame = max(0, 9 - p.ttl / 8)
-            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
+            camera_sprite(x - 2, y - 2, 5, 5,
                           frame * 8,
                           256,
                           p.flip)
 
         elif p.type == PARTICLE_TYPE_FLASH:
-            camera_sprite(p.sx / SP - 2, p.sy / SP - 2, 5, 5,
+            camera_sprite(x - 2, y - 2, 5, 5,
                           0,
                           256 + 16,
                           0)
 
         elif p.type == PARTICLE_TYPE_CHARGE:
-            camera_sprite(p.sx / SP - 4, p.sy / SP - 4, 9, 9,
+            camera_sprite(x - 4, y - 4, 9, 9,
                           clamp(10 - p.ttl, 0, 5) * 16,
                           256 + 32,
                           0)
+
+        elif p.type == PARTICLE_TYPE_EXPLOSION:
+            camera_sprite(x - 9, y - 9, 18, 18, 0, 304, 0)

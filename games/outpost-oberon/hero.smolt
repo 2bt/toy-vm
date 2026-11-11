@@ -48,6 +48,7 @@ func hero_bullet_update_all():
         var o = level_test(b.x, b.y, dir)
         if o:
             b.alive = false
+            level_light_boom_block(b.x, b.y)
             particle_spawn(PARTICLE_TYPE_FLASH, b.x + o, b.y)
             audio_play_sfx(SFX_BULLET_WALL)
             continue
@@ -57,8 +58,7 @@ func hero_bullet_update_all():
             if box_has_point(e.box, b.x, b.y):
                 b.alive = false
                 enemy_hit(e)
-                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
-                particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
+                for i = 0, 3: particle_spawn(PARTICLE_TYPE_DEBRIS, b.x, b.y)
                 continue
 
 
@@ -94,7 +94,7 @@ func hero_init():
     hero = {}
     hero.box.w = 8
     hero.box.h = 14
-    hero.lives = 5
+    hero.lives = 1
 
 
 func hero_set_state(s):
@@ -107,6 +107,7 @@ func hero_set_state(s):
         hero.hit_countdown = 20
         hero.vx = 0
         hero.vy = 0
+        particle_spawn(PARTICLE_TYPE_EXPLOSION, box_center_x(hero.box), box_center_y(hero.box))
         audio_play_sfx(SFX_EXPLOSION)
     elif s == HERO_STATE_EXITING:
         audio_stop_music()
@@ -157,9 +158,10 @@ func hero_update():
 
     elif hero.state == HERO_STATE_DYING:
         if hero.hit_countdown > 5:
-            particle_spawn(PARTICLE_TYPE_DEBRIS,
-                            rand(hero.box.x, hero.box.x + hero.box.w - 1),
-                            rand(hero.box.y, hero.box.y + hero.box.h - 1))
+            for i = 0, 2:
+                particle_spawn(PARTICLE_TYPE_DEBRIS,
+                               rand(hero.box.x, hero.box.x + hero.box.w - 1),
+                               rand(hero.box.y, hero.box.y + hero.box.h - 1))
 
         hero.sy += hero.vy
         hero.box.y = hero.sy / SP

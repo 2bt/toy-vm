@@ -10,6 +10,20 @@ struct Platform:
     bottom
     wait    # frames to pause before moving on
 
+# boom block: a '#' tile. Standing on it or shooting it lights a fuse; it explodes,
+# lights its neighbours (chain reaction) and comes back later.
+# While gone, its tile in level.data is ' '.
+struct BoomBlock:
+    i           # index into level.data
+    x           # pixels
+    y
+    countdown   # while '#': frames until it explodes, 0 = fuse not lit; while gone: frames until it is back
+
+const BOOM_BLOCK_FUSE      = 90   # after the hero stands on it
+const BOOM_BLOCK_SHOT_FUSE = 6    # after it was shot or a neighbour exploded
+const BOOM_BLOCK_RESPAWN   = 240  # frames until it is back, including:
+const BOOM_BLOCK_GROW      = 24   # the last frames, where it grows back
+
 const PLATFORM_SPEED = 8   # subpixels per frame: half a pixel
 const PLATFORM_WAIT  = 60  # pause at each end, in frames
 
@@ -26,11 +40,15 @@ struct Level:
     checkpoint_tick
     platforms: Platform[8]
     platform_count
+    boom_blocks: BoomBlock[32]
+    boom_block_count
 
 var level: Level
 
 
 func level_init(data: int*):
+    # put back the boom blocks the previous level left exploded (level data is reused)
+    for i = 0, level.boom_block_count: level.data[level.boom_blocks[i].i] = '#'
     level.data = data
     level.w    = stridx(data, 'X') + 1
     level.h    = strlen(data) / level.w
@@ -50,37 +68,46 @@ func level_init(data: int*):
         level.spawn_x = i % level.w * TS - l  * TS / 2 + 8
         level.spawn_y = i / level.w * TS + 20
 
-    # set up checkpoints
+    # set up checkpoints, boom blocks and platforms
     level.active_checkpoint = null
     level.checkpoint_count = 0
+    level.boom_block_count = 0
+    level.platform_count = 0
     for r = 0, level.h:
         for c = 0, level.w:
             var t = level_get_tile_at_cr(c, r)
             if t == 'C':
-                if level.checkpoint_count >= level.checkpoints.len: print("error: not enough checkpoints")
+                if level.checkpoint_count >= level.checkpoints.len:
+                    print("error: not enough checkpoints")
+                    continue
                 level.checkpoints[level.checkpoint_count] = { c * TS, r * TS }
                 level.checkpoint_count += 1
-
-    # set up platforms
-    level.platform_count = 0
-    for r = 0, level.h:
-        for c = 0, level.w:
-            if level_get_tile_at_cr(c, r) != 'V' or level_get_tile_at_cr(c - 1, r) == 'V': continue
-            if level.platform_count >= level.platforms.len:
-                print("error: not enough platforms")
-                continue
-            var n = 1
-            while level_get_tile_at_cr(c + n, r) == 'V': n += 1
-            var p = &level.platforms[level.platform_count]
-            level.platform_count += 1
-            p.*  = {}
-            p.x  = c * TS
-            p.w  = n * TS
-            p.y  = r * TS
-            p.sy = p.y * SP
-            p.vy = -PLATFORM_SPEED
-            p.top    = level_platform_end(c, n, r, -1) * TS * SP
-            p.bottom = level_platform_end(c, n, r, 1) * TS * SP
+            elif t == '#':
+                if level.boom_block_count >= level.boom_blocks.len:
+                    print("error: not enough boom blocks")
+                    continue
+                var b = &level.boom_blocks[level.boom_block_count]
+                level.boom_block_count += 1
+                b.* = {}
+                b.i = c + r * level.w
+                b.x = c * TS
+                b.y = r * TS
+            elif t == 'V' and level_get_tile_at_cr(c - 1, r) != 'V':  # each run of V is one platform
+                if level.platform_count >= level.platforms.len:
+                    print("error: not enough platforms")
+                    continue
+                var n = 1
+                while level_get_tile_at_cr(c + n, r) == 'V': n += 1
+                var p = &level.platforms[level.platform_count]
+                level.platform_count += 1
+                p.*  = {}
+                p.x  = c * TS
+                p.w  = n * TS
+                p.y  = r * TS
+                p.sy = p.y * SP
+                p.vy = -PLATFORM_SPEED
+                p.top    = level_platform_end(c, n, r, -1) * TS * SP
+                p.bottom = level_platform_end(c, n, r, 1) * TS * SP
 
 
 # last row a platform at row r, columns c to c + n - 1, can reach going in direction dr
@@ -110,7 +137,15 @@ func level_get_tile(x, y):
     return level_get_tile_at_cr(x / TS, y / TS)
 
 func level_is_solid(t):
-    return t == '0' or t == 'X'
+    return t == '0' or t == 'X' or t == '#'
+
+# light the fuse of the boom block at (x, y), if there is one
+func level_light_boom_block(x, y):
+    var i = x / TS + y / TS * level.w
+    for k = 0, level.boom_block_count:
+        var b = &level.boom_blocks[k]
+        if b.i == i and level.data[i] == '#' and (b.countdown == 0 or b.countdown > BOOM_BLOCK_SHOT_FUSE):
+            b.countdown = BOOM_BLOCK_SHOT_FUSE
 
 
 func level_has_los(x0, y0, x1, y1):
@@ -164,7 +199,7 @@ const DIR_DOWN  = 4
 
 func level_test(x, y, dir) int:
     level_dot(x, y)
-    if level_get_tile(x, y) != '0': return 0
+    if not level_is_solid(level_get_tile(x, y)): return 0
     if dir == DIR_LEFT:  return TS - (x % TS)
     if dir == DIR_RIGHT: return -1 - (x % TS)
     if dir == DIR_UP:    return TS - (y % TS)
@@ -174,7 +209,7 @@ func level_test_down(x, y, py) int:
     level_dot(x, y)
     var o = 0
     var t = level_get_tile(x, y)
-    if (t == '0' or
+    if (level_is_solid(t) or
         t == '^' and (y / TS) > (py / TS)):
         o = -1 - (y % TS)
     # platforms are jump-through: only land when moving down from above.
@@ -271,6 +306,36 @@ func level_update():
                 e.box.y += dy
         p.y += dy
 
+    # boom blocks
+    for i = 0, level.boom_block_count:
+        var b = &level.boom_blocks[i]
+        var box: Box = { b.x, b.y, TS, TS }
+        if level.data[b.i] == '#':
+            if (b.countdown == 0 and hero.state == HERO_STATE_NORMAL and hero.on_ground
+                and hero.box.y + hero.box.h == b.y and hero.box.x < b.x + TS and hero.box.x + hero.box.w > b.x):
+                b.countdown = BOOM_BLOCK_FUSE
+            if b.countdown > 0:
+                b.countdown -= 1
+                if b.countdown == 0:
+                    level.data[b.i] = ' '
+                    b.countdown = BOOM_BLOCK_RESPAWN
+                    audio_play_sfx(SFX_EXPLOSION)
+                    particle_spawn(PARTICLE_TYPE_EXPLOSION, b.x + 8, b.y + 8)
+                    for k = 0, 16: particle_spawn(PARTICLE_TYPE_DEBRIS, b.x + rand(0, TS - 1), b.y + rand(0, TS - 1))
+                    # chain reaction
+                    level_light_boom_block(b.x - TS, b.y)
+                    level_light_boom_block(b.x + TS, b.y)
+                    level_light_boom_block(b.x, b.y - TS)
+                    level_light_boom_block(b.x, b.y + TS)
+        else:
+            b.countdown -= 1
+            if b.countdown == 0:
+                # back, fragging whatever is in the way
+                level.data[b.i] = '#'
+                if hero.state == HERO_STATE_NORMAL and box_intersects(box, hero.box): hero_set_state(HERO_STATE_DYING)
+                for e in enemies:
+                    if e.state == ENEMY_STATE_NORMAL and box_intersects(box, e.box): enemy_kill(e)
+
     if hero.state == HERO_STATE_NORMAL:
         for i = 0, level.checkpoint_count:
             var cp = &level.checkpoints[i]
@@ -366,8 +431,31 @@ func level_draw_walls():
                 if level_get_tile_at_cr(c, r - 1) != '0': sprite(x, y, TS, TS, 2 * TS, 48, 0)
                 if level_get_tile_at_cr(c, r + 1) != '0': sprite(x, y, TS, TS, 3 * TS, 48, 0)
 
+            elif t == '#':  # boom block: while the fuse burns, loop frames 1-3, faster and shaking at the end
+                var countdown = 0
+                for i = 0, level.boom_block_count:
+                    if level.boom_blocks[i].i == c + r * level.w:
+                        countdown = level.boom_blocks[i].countdown
+                        break
+                var f = 0
+                var dx = 0
+                if countdown >= 30: f = 3 - countdown / 6 % 3  # countdown runs down, so this plays 1, 2, 3
+                elif countdown > 0:
+                    f = 1 + countdown / 3 % 3
+                    dx = (countdown & 2) - 1
+                sprite(x + dx, y, TS, TS, f * TS, 64, 0)
+                if countdown > 0 and countdown <= 4: sprite(x + dx, y, TS, TS, 4 * TS, 64, 0)  # white flash
+
             elif t == 'L':  # lava
                 sprite(x, y, TS, TS, 5 * TS, 48, 0)
             elif t == 'l':  # lava surface
                 var f = (level.tick + c * 25) / 6 % 7
                 sprite(x, y, TS, TS, (6 + f) * TS, 48, 0)
+
+    # respawning boom blocks grow from the centre: 2x2, 4x4, ... 16x16
+    for i = 0, level.boom_block_count:
+        var b = &level.boom_blocks[i]
+        if level.data[b.i] == '#' or b.countdown > BOOM_BLOCK_GROW: continue
+        var h = TS / 2 - (b.countdown - 1) * TS / 2 / BOOM_BLOCK_GROW  # half the size: 1 to 8
+        var f = b.countdown / 2 % 2 * 4  # flash: alternate plain and white frame
+        camera_sprite(b.x + TS / 2 - h, b.y + TS / 2 - h, h * 2, h * 2, f * TS + TS / 2 - h, 64 + TS / 2 - h, 0)

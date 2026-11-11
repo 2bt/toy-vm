@@ -121,6 +121,9 @@ func game_set_state(s):
         if hero.score > game.hiscore:
             game.hiscore = hero.score
             save(&game.hiscore, 1)
+        if s == GAME_STATE_GAME_OVER:
+            audio_music_volume = 64
+            audio_play_music(MUSIC_GAME_OVER)
     elif s == GAME_STATE_LEVEL:
         game.countdown = LEVEL_CARD_FRAMES
         audio_stop_music()
@@ -132,9 +135,6 @@ func game_set_state(s):
     elif s == GAME_STATE_LEVEL_DONE:
         game.countdown = LEVEL_DONE_FRAMES
         audio_stop_music()
-    elif s == GAME_STATE_GAME_OVER:
-        audio_music_volume = 64
-        audio_play_music(MUSIC_GAME_OVER)
 
 
 func game_init_level(data: int*):

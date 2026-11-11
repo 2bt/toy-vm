@@ -71,8 +71,6 @@
     body.playing #chin {
       width: min(100vw, calc((100vh - 12rem) * 320 / 180));
     }
-  }
-  @media (max-width: 700px) {
     @supports (height: 100dvh) {
       body.playing #screen,
       body.playing #chin {
@@ -501,7 +499,6 @@ const FRAME_MS = 1000 / 60;
 
 let audioCtx = null;
 let apuNode = null;
-let audioReady = null;
 let running = false;
 let raf = 0;
 let mem = null;
@@ -522,11 +519,11 @@ function showError(msg) {
 function ensureAudio() {
   if (audioCtx) {
     if (audioCtx.state === "suspended") audioCtx.resume();
-    return audioReady;
+    return;
   }
   audioCtx = new AudioContext({ sampleRate: 48000 });
   audioCtx.resume();
-  audioReady = (async () => {
+  (async () => {
     try {
       await audioCtx.resume();
       const url = URL.createObjectURL(new Blob([APU_WORKLET], { type: "application/javascript" }));
@@ -538,10 +535,8 @@ function ensureAudio() {
       console.error(e);
       audioCtx = null;
       apuNode = null;
-      audioReady = null;
     }
   })();
-  return audioReady;
 }
 
 function interrupt(n) {

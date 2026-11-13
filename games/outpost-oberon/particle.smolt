@@ -77,7 +77,7 @@ func particle_draw_all():
         var y = p.sy / SP
 
         if p.type == PARTICLE_TYPE_DEBRIS:
-            var frame = max(0, 9 - p.ttl / 8)
+            var frame = max(0, 13 - p.ttl / 8)
             camera_sprite(x - 2, y - 2, 5, 5,
                           frame * 8,
                           256,

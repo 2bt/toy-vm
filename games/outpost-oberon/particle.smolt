@@ -25,9 +25,9 @@ func particle_spawn(type, x, y) Particle*:
             p.sy   = y * SP
 
             if type == PARTICLE_TYPE_DEBRIS:
-                p.ttl  = rand(5, 60)
-                p.vx   = rand(-15, 15)
-                p.vy   = rand(-25, 0)
+                p.ttl  = rand(0, 10) > 2 ? rand(5, 50) : rand(50, 90)
+                p.vx   = rand(-18, 18)
+                p.vy   = rand(-28, 3)
                 p.flip = rand(0, 3)
 
             elif type == PARTICLE_TYPE_FLASH:

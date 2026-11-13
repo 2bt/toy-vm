@@ -74,7 +74,7 @@ func enemy_bullet_update_all():
 
         if hero_can_take_damage() and box_intersects(b.box, hero.box):
             b.alive = false
-            hero_set_state(HERO_STATE_DYING)
+            hero_hurt()
             continue
 
 func enemy_bullet_draw_all():

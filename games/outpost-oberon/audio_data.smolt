@@ -9,7 +9,7 @@ var SFX_EXIT = "
 "
 var SFX_LAND         = "@1 v45 d1 N=38,=33,9"
 var SFX_HERO_JUMP    = "@1 v50 l3 s64r2 S=45,|f6,"
-var SFX_HERO_SHOOT   = "@0 d5 W128w4 P=76,=70,|f-18,,f16,"
+var SFX_HERO_SHOOT   = "@0 v50 d5 W128w4 P=76,=70,|f-18,,f16,"
 var SFX_BULLET_WALL  = "@2 d1 N=100,=70,10"
 var SFX_CHARGE       = "@3 l10a4s64 N=40|,+4"
 var SFX_PATROL_SHOOT = "@0 d5 W20w2 P=80|,+3,+3,+-3,+-3,"
@@ -21,6 +21,8 @@ var SFX_BOOM = "
 @1 d14 N|=40,+-3,+-3,+-3,+-3,+-3,,,
 @2 d9 T|=28,+-2,+-2,+-2,+-2,,
 "
+var SFX_SHIELD_LOST  = "@2 d10 N=80|,+-4,+-4,+-4,"
+var SFX_PICKUP       = "@3 d7 PW99=60,,,+5,,+7,,+-5,40"
 var SFX_CHECKPOINT   = "@3 v72 l99 a5d10 T=44|,,+7,,+8,,+-14"
 var SFX_GAME_OVER = "
 @1 d12 s64 r10 l4 T|=48,4=40,4=32,4=24,4

@@ -27,6 +27,14 @@ const BOOM_BLOCK_GROW      = 24   # the last frames, where it grows back
 const PLATFORM_SPEED = 8   # subpixels per frame: half a pixel
 const PLATFORM_WAIT  = 60  # pause at each end, in frames
 
+# shield pickup: a '+' tile. If the hero already has a shield, it's worth points.
+struct Pickup:
+    x
+    y
+    taken
+
+const PICKUP_SCORE = 100
+
 struct Level:
     data: int*
     w
@@ -42,6 +50,8 @@ struct Level:
     platform_count
     boom_blocks: BoomBlock[32]
     boom_block_count
+    pickups: Pickup[16]
+    pickup_count
 
 var level: Level
 
@@ -68,10 +78,11 @@ func level_init(data: int*):
         level.spawn_x = i % level.w * TS - l  * TS / 2 + 8
         level.spawn_y = i / level.w * TS + 20
 
-    # set up checkpoints, boom blocks and platforms
+    # set up checkpoints, boom blocks, pickups and platforms
     level.active_checkpoint = null
     level.checkpoint_count = 0
     level.boom_block_count = 0
+    level.pickup_count = 0
     level.platform_count = 0
     for r = 0, level.h:
         for c = 0, level.w:
@@ -92,6 +103,12 @@ func level_init(data: int*):
                 b.i = c + r * level.w
                 b.x = c * TS
                 b.y = r * TS
+            elif t == '+':
+                if level.pickup_count >= level.pickups.len:
+                    print("error: not enough pickups")
+                    continue
+                level.pickups[level.pickup_count] = { c * TS, r * TS, false }
+                level.pickup_count += 1
             elif t == 'V' and level_get_tile_at_cr(c - 1, r) != 'V':  # each run of V is one platform
                 if level.platform_count >= level.platforms.len:
                     print("error: not enough platforms")
@@ -320,12 +337,12 @@ func level_update():
                     level.data[b.i] = ' '
                     b.countdown = BOOM_BLOCK_RESPAWN
                     audio_play_sfx(SFX_BOOM)
-                    camera.shake = 20
+                    camera.shake = 40
                     particle_spawn(PARTICLE_TYPE_BLAST, b.x + 8, b.y + 8)
                     particle_spawn(PARTICLE_TYPE_EXPLOSION, b.x + 8, b.y + 8)
                     # the blast hurts everything within 4 pixels of the block
                     var blast: Box = { b.x - 4, b.y - 4, TS + 8, TS + 8 }
-                    if hero_can_take_damage() and box_intersects(blast, hero.box): hero_set_state(HERO_STATE_DYING)
+                    if hero_can_take_damage() and box_intersects(blast, hero.box): hero_hurt()
                     for e in enemies:
                         if e.state == ENEMY_STATE_NORMAL and box_intersects(blast, e.box): enemy_kill(e)
                     for k = 0, 16: particle_spawn(PARTICLE_TYPE_DEBRIS, b.x + rand(0, TS - 1), b.y + rand(0, TS - 1))
@@ -344,6 +361,15 @@ func level_update():
                     if e.state == ENEMY_STATE_NORMAL and box_intersects(box, e.box): enemy_kill(e)
 
     if hero.state == HERO_STATE_NORMAL:
+        for i = 0, level.pickup_count:
+            var p = &level.pickups[i]
+            var box: Box = { p.x + 3, p.y + 3, 10, 10 }
+            if p.taken or not box_intersects(box, hero.box): continue
+            p.taken = true
+            if hero.shield: hero.score += PICKUP_SCORE
+            hero.shield = true
+            audio_play_sfx(SFX_PICKUP)
+
         for i = 0, level.checkpoint_count:
             var cp = &level.checkpoints[i]
             if cp == level.active_checkpoint: continue
@@ -438,31 +464,29 @@ func level_draw_walls():
                 if level_get_tile_at_cr(c, r - 1) != '0': sprite(x, y, TS, TS, 2 * TS, 48, 0)
                 if level_get_tile_at_cr(c, r + 1) != '0': sprite(x, y, TS, TS, 3 * TS, 48, 0)
 
-            elif t == '#':  # boom block: while the fuse burns, loop frames 1-3, faster and shaking at the end
-                var countdown = 0
-                for i = 0, level.boom_block_count:
-                    if level.boom_blocks[i].i == c + r * level.w:
-                        countdown = level.boom_blocks[i].countdown
-                        break
-                var f = 0
-                var dx = 0
-                if countdown >= 30: f = 3 - countdown / 6 % 3  # countdown runs down, so this plays 1, 2, 3
-                elif countdown > 0:
-                    f = 1 + countdown / 3 % 3
-                    dx = (countdown & 2) - 1
-                sprite(x + dx, y, TS, TS, f * TS, 64, 0)
-                if countdown > 0 and countdown <= 4: sprite(x + dx, y, TS, TS, 4 * TS, 64, 0)  # white flash
-
             elif t == 'L':  # lava
                 sprite(x, y, TS, TS, 5 * TS, 48, 0)
             elif t == 'l':  # lava surface
                 var f = (level.tick + c * 25) / 6 % 7
                 sprite(x, y, TS, TS, (6 + f) * TS, 48, 0)
 
-    # respawning boom blocks grow from the centre: 2x2, 4x4, ... 16x16
+    for i = 0, level.pickup_count:
+        var p = &level.pickups[i]
+        if not p.taken: camera_sprite(p.x, p.y, TS, TS, level.tick / 6 % 8 * TS, 208, 0)
+
     for i = 0, level.boom_block_count:
         var b = &level.boom_blocks[i]
-        if level.data[b.i] == '#' or b.countdown > BOOM_BLOCK_GROW: continue
-        var h = TS / 2 - (b.countdown - 1) * TS / 2 / BOOM_BLOCK_GROW  # half the size: 1 to 8
-        var f = b.countdown / 2 % 2 * 4  # flash: alternate plain and white frame
-        camera_sprite(b.x + TS / 2 - h, b.y + TS / 2 - h, h * 2, h * 2, f * TS + TS / 2 - h, 64 + TS / 2 - h, 0)
+        if level.data[b.i] == '#':
+            var f = 0
+            var dx = 0
+            if b.countdown > 0:
+                # while the fuse burns, loop frames 1-4, shaking at the end
+                f = 4 - b.countdown / 6 % 4
+                if b.countdown <= 30: dx = (b.countdown & 2) - 1
+            camera_sprite(b.x + dx, b.y, TS, TS, f * TS, 64, 0)
+            if b.countdown > 0 and b.countdown <= 4: camera_sprite(b.x + dx, b.y, TS, TS, 5 * TS, 64, 0)  # white flash
+        elif b.countdown <= BOOM_BLOCK_GROW:
+            if b.countdown & 2:
+                # growing back from the centre: 2x2, 4x4, ... 16x16, flashing
+                var h = TS / 2 - (b.countdown - 1) * TS / 2 / BOOM_BLOCK_GROW  # half the size: 1 to 8
+                camera_sprite(b.x + TS / 2 - h, b.y + TS / 2 - h, h * 2, h * 2, 5 * TS + TS / 2 - h, 64 + TS / 2 - h, 0)

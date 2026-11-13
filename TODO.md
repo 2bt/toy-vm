@@ -1,5 +1,11 @@
 ## Outpost Oberon
 
+
++ [ ] exploding blocks should beep
++ [ ] cape ability
++ [ ] cape pickup
+
+
 + [ ] more enemies
 + [ ] more levels
 + [ ] high score

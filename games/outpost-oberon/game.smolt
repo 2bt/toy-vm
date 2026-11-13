@@ -243,7 +243,7 @@ func game_draw():
     var dx = 0
     var dy = 0
     if camera.shake > 0:
-        var s = camera.shake < 10 ? 1 : 2
+        var s = camera.shake < 25 ? 1 : 2
         dx = rand(-s, s)
         dy = rand(-s, s)
     camera.box.x += dx

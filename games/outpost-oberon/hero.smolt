@@ -85,6 +85,7 @@ struct Hero:
     run_tick
     shoot_countdown
     hit_countdown
+    shield      # absorbs one hit from an enemy or enemy bullet
 
 var hero: Hero
 
@@ -105,6 +106,7 @@ func hero_set_state(s):
         audio_play_sfx(SFX_SPAWN)
     elif s == HERO_STATE_DYING:
         hero.hit_countdown = 20
+        hero.shield = false
         hero.vx = 0
         hero.vy = 0
         particle_spawn(PARTICLE_TYPE_EXPLOSION, box_center_x(hero.box), box_center_y(hero.box))
@@ -140,6 +142,16 @@ func hero_set_state(s):
 
 func hero_can_take_damage():
     return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
+
+# hit by an enemy or enemy bullet: the shield takes it, if there is one
+func hero_hurt():
+    if not hero.shield:
+        hero_set_state(HERO_STATE_DYING)
+        return
+    hero.shield = false
+    hero.hit_countdown = HERO_IFRAMES
+    for k = 0, 16: particle_spawn(PARTICLE_TYPE_DEBRIS, box_center_x(hero.box), box_center_y(hero.box))
+    audio_play_sfx(SFX_SHIELD_LOST)
 
 
 
@@ -274,7 +286,7 @@ func hero_update():
             if not e.active: continue
             if e.state != ENEMY_STATE_NORMAL: continue
             if box_intersects(hero.box, e.box):
-                hero_set_state(HERO_STATE_DYING)
+                hero_hurt()
                 return
 
     # lava
@@ -294,13 +306,13 @@ func hero_draw():
     if hero.state == HERO_STATE_RETURNING: return
     if hero.hit_countdown & 2: return
 
-    var row = 0
-    if hero.state != HERO_STATE_NORMAL: row = 2
-    elif hero.shoot_countdown > 1: row = 1
+    var row = 2
+    if hero.state == HERO_STATE_NORMAL:
+         row = hero.shoot_countdown > 1 ? 1 : 0
+         if hero.shield: row -= 2
 
-    camera_sprite(hero.box.x - 4, hero.box.y - 2, 16, 16,
-                  hero.frame * 16,
-                  128 + row * 16,
-                  hero.facing_left)
+    var x = hero.box.x - 4
+    var y = hero.box.y - 2
+    camera_sprite(x, y, 16, 16, hero.frame * 16, 128 + row * 16, hero.facing_left)
 
     # camera_sprite(hero.box.x, hero.box.y, hero.box.w, hero.box.h, 0, 480, 0)

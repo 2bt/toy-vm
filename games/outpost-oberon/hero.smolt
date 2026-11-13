@@ -90,6 +90,97 @@ struct Hero:
 var hero: Hero
 
 
+# ---------------------------------------------------------------------------
+# cape (prototype): verlet chain hanging from the hero's back
+# ---------------------------------------------------------------------------
+
+
+struct CapePoint:
+    sx
+    sy
+    psx
+    psy
+
+var cape: CapePoint[4]
+var cape_facing_left
+const CAPE_SEG = 58
+
+# division rounding toward zero; plain / floors, which drifts the cape left and up
+func cape_div(a, b): return a >= 0 ? a / b : -(-a / b)
+
+func cape_update():
+    var ax = hero.sx + (hero.facing_left ? 4 : 2) * SP + SP / 2
+    var ay = hero.sy + 1 * SP + 8
+    if hero.state != HERO_STATE_NORMAL:
+        for i = 0, cape.len: cape[i] = { ax, ay + i * CAPE_SEG, ax, ay + i * CAPE_SEG }
+        cape_facing_left = hero.facing_left
+        return
+
+    # turning moves the anchor across the back; carry the cape along instead of yanking it
+    if hero.facing_left != cape_facing_left:
+        cape_facing_left = hero.facing_left
+        var d = (hero.facing_left ? 5 : -5) * SP
+        for p in cape:
+            p.sx  += d
+            p.psx += d
+
+    cape[0] = { ax, ay, ax, ay }
+    var speed = abs(hero.vx)
+    for i = 1, cape.len:
+        var p = &cape[i]
+        var vx = cape_div((p.sx - p.psx) * 5, 6)    # damping doubles as air drag
+        var vy = cape_div((p.sy - p.psy) * 5, 6)
+        p.psx = p.sx
+        p.psy = p.sy
+        # flutter: triangle wave travelling down the cape, stronger with speed
+        var t = (level.tick * 3 - i * 6) & 31
+        var w = (t < 16 ? t : 32 - t) - 8
+        p.sx += vx
+        p.sy += vy + w * speed * (i + 3) / 128
+        p.sy += GRAVITY
+    # keep segment lengths
+    for i = 1, cape.len:
+        var a = &cape[i - 1]
+        var p = &cape[i]
+        var dx = p.sx - a.sx
+        var dy = p.sy - a.sy
+        var d = sqrt(dx * dx + dy * dy)
+        if d > CAPE_SEG:
+            p.sx = a.sx + cape_div(dx * CAPE_SEG, d)
+            p.sy = a.sy + cape_div(dy * CAPE_SEG, d)
+
+func cape_draw():
+    # walk the chain in half-pixel steps; at each step draw a cross-section
+    # perpendicular to the segment, widening from 2 px at the shoulder to 6 px at the tip
+    var n = 0
+    var total = (cape.len - 1) * 8
+    for i = 1, cape.len:
+        var a = &cape[i - 1]
+        var b = &cape[i]
+        var dx = b.sx - a.sx
+        var dy = b.sy - a.sy
+        # direction at both ends, taken across the neighbours, so the cross-sections
+        # turn smoothly through a joint instead of fanning open on the outside of a bend
+        var a0 = &cape[max(0, i - 2)]
+        var b1 = &cape[min(cape.len - 1, i + 1)]
+        var tax = b.sx - a0.sx
+        var tay = b.sy - a0.sy
+        var tbx = b1.sx - a.sx
+        var tby = b1.sy - a.sy
+        for k = 0, 8:
+            var x = a.sx + dx * k / 8
+            var y = a.sy + dy * k / 8
+            var tx = tax * (8 - k) + tbx * k
+            var ty = tay * (8 - k) + tby * k
+            var d = max(1, sqrt(tx * tx + ty * ty))
+            # half width grows smoothly; in half-pixel steps the edge would saw up and down
+            var hw = SP + 2 * SP * n / total
+            var m = (hw + SP / 2 - 1) / (SP / 2)    # dots per side, at most half a pixel apart
+            for j = -m, m + 1:
+                var o = hw * j / m
+                camera_sprite((x - ty * o / d) / SP, (y + tx * o / d) / SP, 1, 1, 80, 48, 0)
+            n += 1
+
 
 func hero_init():
     hero = {}
@@ -187,6 +278,7 @@ func hero_update():
                 hero_set_state(HERO_STATE_RETURNING)
 
     if hero.state != HERO_STATE_NORMAL:
+        cape_update()
         if hero.state != HERO_STATE_RETURNING:
             camera_follow_hero()
         return
@@ -299,12 +391,15 @@ func hero_update():
     # level exit
     if t == 'E': hero_set_state(HERO_STATE_EXITING)
 
+    cape_update()
     camera_follow_hero()
 
 
 func hero_draw():
     if hero.state == HERO_STATE_RETURNING: return
     if hero.hit_countdown & 2: return
+
+    if hero.state == HERO_STATE_NORMAL: cape_draw()
 
     var row = 2
     if hero.state == HERO_STATE_NORMAL:

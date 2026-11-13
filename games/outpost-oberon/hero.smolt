@@ -85,7 +85,7 @@ struct Hero:
     run_tick
     shoot_countdown
     hit_countdown
-    shield      # absorbs one hit from an enemy or enemy bullet
+    helmet      # absorbs one hit from an enemy or enemy bullet
 
 var hero: Hero
 
@@ -106,7 +106,7 @@ func hero_set_state(s):
         audio_play_sfx(SFX_SPAWN)
     elif s == HERO_STATE_DYING:
         hero.hit_countdown = 20
-        hero.shield = false
+        hero.helmet = false
         hero.vx = 0
         hero.vy = 0
         particle_spawn(PARTICLE_TYPE_EXPLOSION, box_center_x(hero.box), box_center_y(hero.box))
@@ -143,15 +143,15 @@ func hero_set_state(s):
 func hero_can_take_damage():
     return hero.state == HERO_STATE_NORMAL and hero.hit_countdown == 0
 
-# hit by an enemy or enemy bullet: the shield takes it, if there is one
+# hit by an enemy or enemy bullet: the helmet takes it, if there is one
 func hero_hurt():
-    if not hero.shield:
+    if not hero.helmet:
         hero_set_state(HERO_STATE_DYING)
         return
-    hero.shield = false
+    hero.helmet = false
     hero.hit_countdown = HERO_IFRAMES
     for k = 0, 16: particle_spawn(PARTICLE_TYPE_DEBRIS, box_center_x(hero.box), box_center_y(hero.box))
-    audio_play_sfx(SFX_SHIELD_LOST)
+    audio_play_sfx(SFX_HELMET_LOST)
 
 
 
@@ -309,7 +309,7 @@ func hero_draw():
     var row = 2
     if hero.state == HERO_STATE_NORMAL:
          row = hero.shoot_countdown > 1 ? 1 : 0
-         if hero.shield: row -= 2
+         if hero.helmet: row -= 2
 
     var x = hero.box.x - 4
     var y = hero.box.y - 2

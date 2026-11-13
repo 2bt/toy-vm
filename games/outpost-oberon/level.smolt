@@ -27,7 +27,7 @@ const BOOM_BLOCK_GROW      = 24   # the last frames, where it grows back
 const PLATFORM_SPEED = 8   # subpixels per frame: half a pixel
 const PLATFORM_WAIT  = 60  # pause at each end, in frames
 
-# shield pickup: a '+' tile. If the hero already has a shield, it's worth points.
+# helmet pickup: a '+' tile. If the hero already has a helmet, it's worth points.
 struct Pickup:
     x
     y
@@ -366,8 +366,8 @@ func level_update():
             var box: Box = { p.x + 3, p.y + 3, 10, 10 }
             if p.taken or not box_intersects(box, hero.box): continue
             p.taken = true
-            if hero.shield: hero.score += PICKUP_SCORE
-            hero.shield = true
+            if hero.helmet: hero.score += PICKUP_SCORE
+            hero.helmet = true
             audio_play_sfx(SFX_PICKUP)
 
         for i = 0, level.checkpoint_count:

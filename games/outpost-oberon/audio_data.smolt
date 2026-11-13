@@ -21,7 +21,7 @@ var SFX_BOOM = "
 @1 d14 N|=40,+-3,+-3,+-3,+-3,+-3,,,
 @2 d9 T|=28,+-2,+-2,+-2,+-2,,
 "
-var SFX_SHIELD_LOST  = "@2 d10 N=80|,+-4,+-4,+-4,"
+var SFX_HELMET_LOST  = "@2 d10 N=80|,+-4,+-4,+-4,"
 var SFX_PICKUP       = "@3 d7 PW99=60,,,+5,,+7,,+-5,40"
 var SFX_CHECKPOINT   = "@3 v72 l99 a5d10 T=44|,,+7,,+8,,+-14"
 var SFX_GAME_OVER = "

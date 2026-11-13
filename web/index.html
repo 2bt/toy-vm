@@ -115,7 +115,6 @@
 
 const SCREEN_W = 320, SCREEN_H = 180;
 const MEM_SIZE = 1 << 24;
-const STEP_LIMIT = 1000000;
 const VOICES = 8;
 
 const BTN_UP = 0;
@@ -355,62 +354,151 @@ function loadProgram(bytes) {
   return { mem, code };
 }
 
-function runVM(mem, code) {
-  let pc = 0;
-  const stack = [];
-  let ai = 0, b = 0, c = 0, res = 0;
-  const next = () => {
-    if (pc < 0 || pc >= code.length) throw new Error("bad pc " + pc);
-    return code[pc++];
-  };
-  const at = (addr) => {
-    addr |= 0;
-    if (addr < 0 || addr >= MEM_SIZE) throw new Error("bad mem addr " + addr);
-    return addr;
-  };
-  for (let steps = 0; steps < STEP_LIMIT; steps++) {
-    const o = next();
-    if (o < 0 || o >= OPCODE_TABLE.length) throw new Error("illegal opcode " + o);
-    const [op, am, bm] = OPCODE_TABLE[o];
-    if (am === ABS) ai = at(next());
-    if (am === IND) ai = at(mem[at(next())]);
-    if (am === NXT) ai = (ai + 1) | 0;
-    if (am === IDX) { b = mem[at(next())]; ai = at((b + next()) | 0); }
-    if (bm === ZRO) b = 0;
-    if (bm === ONE) b = 1;
-    if (bm === NEG) b = -1;
-    if (bm === IMM) b = next();
-    if (bm === ABS) { c = at(next()); b = mem[c]; }
-    if (bm === IND) { c = at(mem[at(next())]); b = mem[c]; }
-    if (bm === IDX) { b = mem[at(next())]; c = at((b + next()) | 0); b = mem[c]; }
-    if (bm === NXT) { c = (c + 1) | 0; b = mem[at(c)]; }
-    switch (op) {
-      case MOV: res = mem[ai] = b; break;
-      case ADD: res = mem[ai] = (mem[ai] + b) | 0; break;
-      case SUB: res = mem[ai] = (mem[ai] - b) | 0; break;
-      case MUL: res = mem[ai] = Math.imul(mem[ai], b); break;
-      case DIV: { const d = b || 1; res = mem[ai] = Math.floor(mem[ai] / d) | 0; break; } // floor, like Python
-      case MOD: { const d = b || 1; let r = mem[ai] % d; if (r && (r < 0) !== (d < 0)) r += d; res = mem[ai] = r | 0; break; }
-      case AND: res = mem[ai] = mem[ai] & b; break;
-      case ORE: res = mem[ai] = mem[ai] | b; break;
-      case CMP: res = (mem[ai] - b) | 0; break;
-      case JLT: if (res < 0) pc = b; break;
-      case JLE: if (res <= 0) pc = b; break;
-      case JGT: if (res > 0) pc = b; break;
-      case JGE: if (res >= 0) pc = b; break;
-      case JEQ: if (res === 0) pc = b; break;
-      case JNE: if (res !== 0) pc = b; break;
-      case JMP: pc = b; break;
-      case JSR: stack.push(pc); pc = b; break;
-      case RET:
-        if (!stack.length) return;
-        pc = stack.pop();
-        break;
-      case INT: interrupt(b); break;
-      default: throw new Error("bad op " + op);
+// ---------------------------------------------------------------------------
+// Unlike the C++ VM (src/vm.cpp), which interprets the bytecode instruction by
+// instruction, runVM translates the whole program to JavaScript once and lets
+// the browser's JIT run that.
+//
+//  - Every JSR target becomes a JS function f<pc>. JSR is a JS call, RET a return.
+//  - Inside a function: `for (;;) switch (pc)`. Jump targets are case labels,
+//    straight-line code falls through from one label to the next, and a taken
+//    jump is `pc = target; continue`.
+//  - The VM registers a, b, c, res are locals of each JS function and start at 0.
+//    No register value crosses a JSR: the assembler (optimize() in tools/assemble.py)
+//    treats the state after a jsr and at a jsr target as unknown, so it never emits
+//    PDA/NXT there, and the compiler always does a cmp after a call. Tail calls
+//    (jsr f; ret -> jmp f) may carry registers into f, but a jmp is followed
+//    within the same JS function, so those stay in the same locals.
+//
+// The generated source of the running game is kept in globalThis.jsSource.
+// ---------------------------------------------------------------------------
+
+// operand words per address mode:   NIL ABS IND IDX ZRO ONE NEG IMM NXT
+const MODE_WORDS =                   [ 0,  1,  1,  2,  0,  0,  0,  1,  0 ];
+
+const JUMP_COND = { [JLT]: "res < 0", [JLE]: "res <= 0", [JGT]: "res > 0", [JGE]: "res >= 0", [JEQ]: "res === 0", [JNE]: "res !== 0", [JMP]: "true" };
+
+function decode(code, pc) {
+  if (pc < 0 || pc >= code.length) throw new Error("bad pc " + pc);
+  const o = code[pc];
+  if (o < 0 || o >= OPCODE_TABLE.length) throw new Error("illegal opcode " + o);
+  const [op, am, bm] = OPCODE_TABLE[o];
+  const na = MODE_WORDS[am];
+  const next = pc + 1 + na + MODE_WORDS[bm];
+  if (next > code.length) throw new Error("bad pc " + code.length);
+  // operand words of each side (unused ones are just ignored)
+  const a = [code[pc + 1], code[pc + 2]];
+  const b = [code[pc + 1 + na], code[pc + 2 + na]];
+  return { pc, op, am, bm, a, b, next };
+}
+
+// one JS function for the Smolt function starting at entry;
+// returns its source and the entries of the functions it calls
+function compileFunction(code, entry) {
+  // collect every instruction reachable from entry without following calls
+  const instrs = new Map();
+  const labels = new Set([entry]);
+  const calls = [];
+  const todo = [entry];
+  while (todo.length) {
+    let pc = todo.pop();
+    while (!instrs.has(pc)) {
+      const ins = decode(code, pc);
+      instrs.set(pc, ins);
+      if (ins.op === RET) break;
+      if (ins.op === JSR) calls.push(ins.b[0]);
+      if (ins.op in JUMP_COND) {
+        labels.add(ins.b[0]);
+        todo.push(ins.b[0]);
+        if (ins.op === JMP) break;
+      }
+      pc = ins.next;
     }
   }
-  throw new Error("step limit reached");
+
+  // emit them in address order, with a case label at each jump target;
+  // each instruction becomes one line: destination address, source value, operation
+  const sorted = [...instrs.values()].sort((x, y) => x.pc - y.pc);
+  const lines = [];
+  for (const ins of sorted) {
+    if (labels.has(ins.pc)) lines.push(`case ${ins.pc}:`);
+    const [a1, a2] = ins.a;
+    const [b1, b2] = ins.b;
+    let js = "  ";
+
+    switch (ins.am) {
+      case NXT: js += "a = (a + 1) | 0; "; break;
+      case ABS: js += `a = ${a1}; `; break;
+      case IND: js += `a = mem[${a1}]; `; break;
+      case IDX: js += `a = (mem[${a1}] + ${a2}) | 0; `; break;
+    }
+
+    switch (ins.bm) {
+      case ZRO: js += "b = 0; "; break;
+      case ONE: js += "b = 1; "; break;
+      case NEG: js += "b = -1; "; break;
+      case IMM: js += `b = ${b1}; `; break;
+      case ABS: js += `c = ${b1}; b = mem[c]; `; break;
+      case IND: js += `c = mem[${b1}]; b = mem[c]; `; break;
+      case IDX: js += `c = (mem[${b1}] + ${b2}) | 0; b = mem[c]; `; break;
+      case NXT: js += "c = (c + 1) | 0; b = mem[c]; "; break;
+    }
+
+    switch (ins.op) {
+      case MOV: js += "res = mem[a] = b;"; break;
+      case ADD: js += "res = mem[a] = (mem[a] + b) | 0;"; break;
+      case SUB: js += "res = mem[a] = (mem[a] - b) | 0;"; break;
+      case MUL: js += "res = mem[a] = Math.imul(mem[a], b);"; break;
+      case DIV: js += "{ const d = b || 1; res = mem[a] = Math.floor(mem[a] / d) | 0; }"; break; // floor, like Python
+      case MOD: js += "{ const d = b || 1; let r = mem[a] % d; if (r && (r < 0) !== (d < 0)) r += d; res = mem[a] = r | 0; }"; break;
+      case AND: js += "res = mem[a] = mem[a] & b;"; break;
+      case ORE: js += "res = mem[a] = mem[a] | b;"; break;
+      case CMP: js += "res = (mem[a] - b) | 0;"; break;
+      case JSR: js += `f${b1}();`; break;
+      case RET: js += "return;"; break;
+      case INT: js += "interrupt(b);"; break;
+      default:  js += `if (${JUMP_COND[ins.op]}) { pc = ${b1}; continue; }`; break;
+    }
+    lines.push(js);
+  }
+
+  const src = `function f${entry}() {
+  let a = 0, b = 0, c = 0, res = 0, pc = ${entry};
+  for (;;) switch (pc) {
+${lines.join("\n")}
+  }
+}`;
+  return { src, calls };
+}
+
+function compileProgram(mem, code) {
+  const parts = [];
+  const done = new Set();
+  const todo = [0];
+  while (todo.length) {
+    const entry = todo.pop();
+    if (done.has(entry)) continue;
+    done.add(entry);
+    const f = compileFunction(code, entry);
+    parts.push(f.src);
+    todo.push(...f.calls);
+  }
+  const src = `"use strict";
+${parts.join("\n\n")}
+return f0;`;
+  globalThis.jsSource = src;
+  return new Function("mem", "interrupt", src)(mem, interrupt);
+}
+
+let compiledCode = null;
+let run = null;
+
+function runVM(mem, code) {
+  if (code !== compiledCode) {
+    compiledCode = code;
+    run = compileProgram(mem, code);
+  }
+  run();
 }
 
 const APU_WORKLET = `
